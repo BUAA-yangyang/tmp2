@@ -13,7 +13,7 @@ cd /home/ros/Guoyulun/Competition/SimEnv
 - Gazebo Classic
 - Python >= 3.8
 - `python3-yaml`
-- `numpy` 和 `scipy`，用于评估脚本
+- `numpy`，用于评估脚本
 - CUDA >= 11.7
 - libtorch C++ 版本，用于 Unitree A1 控制器
 

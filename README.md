@@ -23,8 +23,9 @@
 - 危险源为红色球体。
 - 干扰源为红色方块和绿色球体。
 - 源只生成在房间内部，并避开墙体、家具、其他源和房间门口保留区。
-- 真值写入 `results/danger_truth.json`。
 - 参赛算法应输出 `results/detected_danger.json`。
+- 公开场景信息写入 `generated_building/team_scene_info.json`。
+- 真值文件仅供裁判评估使用，不作为参赛算法输入。
 
 ## 启动流程
 
@@ -43,10 +44,13 @@ source ./devel/setup.bash
 | 接口 | 类型 | 用途 |
 |------|------|------|
 | `/cmd_vel` | `geometry_msgs/Twist` | 机器人速度指令输入 |
-| `/Odometry_gazebo` | `nav_msgs/Odometry` | 仿真里程计 |
 | `/scan` | `sensor_msgs/PointCloud2` | Livox Mid-360 点云 |
-| `/camera/image_raw` | `sensor_msgs/Image` | 前视 RGB 图像 |
+| `/trunk_imu` | `sensor_msgs/Imu` | 机体 IMU |
+| `/livox/imu` | `sensor_msgs/Imu` | Livox 内置 IMU |
+| `/real_sense/rgb/image_raw` | `sensor_msgs/Image` | RealSense RGB 图像 |
 | `/real_sense/depth/points` | `sensor_msgs/PointCloud2` | 深度相机点云 |
+| `/set_door_state` | service | 门控制 |
+| `/call_elevator` | service | 电梯控制 |
 
 `junior_ctrl` 默认以前台方式启动。终端输入 `2` 进入站立状态，输入 `6` 切换到 RL 模式，随后控制器接收 `/cmd_vel`。完整接口见 [算法接入接口](docs/algorithm-interfaces.md)。
 
@@ -82,18 +86,21 @@ python3 ./src/building_obstacles/scripts/evaluate_danger.py \
 
 ## 关键文件
 
-| 文件 | 说明 |
-|------|------|
-| `generated_building/competition_scene.world` | Gazebo 使用的完整比赛世界 |
-| `generated_building/layout_metadata.json` | 楼栋布局、房间、门、电梯和目标点元数据 |
-| `generated_building/door_config.yaml` | 动态门控制配置 |
-| `generated_building/elevator_config.yaml` | 电梯控制配置 |
-| `generated_building/scene_manifest.json` | 本次随机场景 manifest |
-| `results/danger_truth.json` | 裁判真值文件 |
-| `results/detected_danger.json` | 参赛算法输出文件 |
-| `logs/competition_gazebo.log` | Gazebo/launch 日志 |
-| `logs/building_control.log` | 门/电梯控制服务日志 |
-| `logs/junior_ctrl.log` | 控制器日志 |
+| 文件 | 说明 | 是否可作为算法输入 |
+|------|------|--------------------|
+| `generated_building/team_scene_info.json` | 机器人起点、公开门/电梯 ID、允许接口和结果文件路径 | 是 |
+| `results/detected_danger.json` | 参赛算法输出文件 | 输出文件 |
+| `generated_building/competition_scene.world` | Gazebo 使用的完整比赛世界 | 否 |
+| `generated_building/layout_metadata.json` | 楼栋布局、房间、门、电梯和目标点元数据 | 否 |
+| `generated_building/door_config.yaml` | 动态门控制配置，由环境服务读取 | 否 |
+| `generated_building/elevator_config.yaml` | 电梯控制配置，由环境服务读取 | 否 |
+| `generated_building/building_config.json` | 兼容脚本使用的建筑配置 | 否 |
+| `generated_building/scene_manifest.json` | 本次随机场景 manifest | 否 |
+| `generated_building/danger_truth.json` | 裁判真值副本，本地调试时可能存在 | 否 |
+| `results/danger_truth.json` | 裁判真值文件 | 否 |
+| `logs/competition_gazebo.log` | Gazebo/launch 日志 | 否 |
+| `logs/building_control.log` | 门/电梯控制服务日志 | 否 |
+| `logs/junior_ctrl.log` | 控制器日志 | 否 |
 
 ## 文档维护说明
 

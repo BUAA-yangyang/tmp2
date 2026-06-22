@@ -59,80 +59,28 @@
         </sensor>
     </gazebo>
 
-    <!-- base_self position and orientation. -->
-    <gazebo>
-        <plugin name="p3d_base_trunk_pos_vel" filename="libgazebo_ros_p3d.so">
-            <alwaysOn>true</alwaysOn>
-            <update_rate>100</update_rate>
-            <bodyName>base</bodyName>
-            <topicName>ground_truth/base_trunk</topicName>
-            <frameName>trunk</frameName>
-            <xyzOffsets>0 0 0</xyzOffsets>
-            <rpyOffsets>0 0 0</rpyOffsets>
-        </plugin>
-    </gazebo>
+    <xacro:macro name="p3d_truth_plugin" params="plugin_name body_name topic_name frame_name">
+        <gazebo>
+            <plugin name="${plugin_name}" filename="libgazebo_ros_p3d.so">
+                <alwaysOn>true</alwaysOn>
+                <update_rate>100</update_rate>
+                <bodyName>${body_name}</bodyName>
+                <topicName>${topic_name}</topicName>
+                <frameName>${frame_name}</frameName>
+                <xyzOffsets>0 0 0</xyzOffsets>
+                <rpyOffsets>0 0 0</rpyOffsets>
+            </plugin>
+        </gazebo>
+    </xacro:macro>
 
-    <!-- base_w position and orientation. -->
-    <gazebo>
-        <plugin name="p3d_base_w_pos_vel" filename="libgazebo_ros_p3d.so">
-            <alwaysOn>true</alwaysOn>
-            <update_rate>100</update_rate>
-            <bodyName>base</bodyName>
-            <topicName>ground_truth/base_w</topicName>
-            <frameName>world</frameName>
-            <xyzOffsets>0 0 0</xyzOffsets>
-            <rpyOffsets>0 0 0</rpyOffsets>
-        </plugin>
-    </gazebo>
-
-    <!-- Foot position and vel. -->
-    <gazebo>
-        <plugin name="p3d_FL_foot_pos_vel" filename="libgazebo_ros_p3d.so">
-            <alwaysOn>true</alwaysOn>
-            <update_rate>100</update_rate>
-            <bodyName>FL_foot</bodyName>
-            <topicName>ground_truth/FL_foot</topicName>
-            <frameName>base</frameName>
-            <xyzOffsets>0 0 0</xyzOffsets>
-            <rpyOffsets>0 0 0</rpyOffsets>
-        </plugin>
-    </gazebo>
-
-    <gazebo>
-        <plugin name="p3d_FR_foot_pos_vel" filename="libgazebo_ros_p3d.so">
-            <alwaysOn>true</alwaysOn>
-            <update_rate>100</update_rate>
-            <bodyName>FR_foot</bodyName>
-            <topicName>ground_truth/FR_foot</topicName>
-            <frameName>base</frameName>
-            <xyzOffsets>0 0 0</xyzOffsets>
-            <rpyOffsets>0 0 0</rpyOffsets>
-        </plugin>
-    </gazebo>
-
-    <gazebo>
-        <plugin name="p3d_RL_foot_pos_vel" filename="libgazebo_ros_p3d.so">
-            <alwaysOn>true</alwaysOn>
-            <update_rate>100</update_rate>
-            <bodyName>RL_foot</bodyName>
-            <topicName>ground_truth/RL_foot</topicName>
-            <frameName>base</frameName>
-            <xyzOffsets>0 0 0</xyzOffsets>
-            <rpyOffsets>0 0 0</rpyOffsets>
-        </plugin>
-    </gazebo>
-
-    <gazebo>
-        <plugin name="p3d_RR_foot_pos_vel" filename="libgazebo_ros_p3d.so">
-            <alwaysOn>true</alwaysOn>
-            <update_rate>100</update_rate>
-            <bodyName>RR_foot</bodyName>
-            <topicName>ground_truth/RR_foot</topicName>
-            <frameName>base</frameName>
-            <xyzOffsets>0 0 0</xyzOffsets>
-            <rpyOffsets>0 0 0</rpyOffsets>
-        </plugin>
-    </gazebo>
+    <xacro:if value="$(arg ENABLE_GROUND_TRUTH)">
+        <xacro:p3d_truth_plugin plugin_name="p3d_base_trunk_pos_vel" body_name="base" topic_name="ground_truth/base_trunk" frame_name="trunk"/>
+        <xacro:p3d_truth_plugin plugin_name="p3d_base_w_pos_vel" body_name="base" topic_name="ground_truth/base_w" frame_name="world"/>
+        <xacro:p3d_truth_plugin plugin_name="p3d_FL_foot_pos_vel" body_name="FL_foot" topic_name="ground_truth/FL_foot" frame_name="base"/>
+        <xacro:p3d_truth_plugin plugin_name="p3d_FR_foot_pos_vel" body_name="FR_foot" topic_name="ground_truth/FR_foot" frame_name="base"/>
+        <xacro:p3d_truth_plugin plugin_name="p3d_RL_foot_pos_vel" body_name="RL_foot" topic_name="ground_truth/RL_foot" frame_name="base"/>
+        <xacro:p3d_truth_plugin plugin_name="p3d_RR_foot_pos_vel" body_name="RR_foot" topic_name="ground_truth/RR_foot" frame_name="base"/>
+    </xacro:if>
 
     <!-- Foot contacts. -->
     <gazebo reference="FR_calf">
@@ -340,115 +288,112 @@
 
 
 
-     <!-- gazebo livox mid360 plugins -->
-    <xacro:property name="M_PI" value="3.14159"/> 
-    <gazebo reference="laser_livox">
-        <sensor type="ray" name="laser_livox">
-            <pose>0 0 0 0 0 0</pose>
-            <visualize>true</visualize>
-            <update_rate>10</update_rate>
-            <plugin name="gazebo_ros_laser_controller" filename="liblivox_laser_simulation.so">
-                            <ray>
-                            <scan>
-                                    <horizontal>
-                                    <samples>100</samples>
-                                    <resolution>1</resolution>
-                                    <min_angle>${0}</min_angle>
-                                    <max_angle>${2*M_PI}</max_angle>
-                                    </horizontal>
-                                    <vertical>
-                                    <samples>360</samples>
-                                    <resolution>1</resolution>
-                                    <min_angle>${-5.22/180*M_PI}</min_angle>
-                                    <max_angle>${57.22/180*M_PI}</max_angle>
-                                    </vertical>
-                            </scan>
-                            <range>
-                                    <min>0.1</min>
-                                    <max>40</max>
-                                    <resolution>0.01</resolution>
-                            </range>
-                            <noise>
-                                    <type>gaussian</type>
-                                    <mean>0.0</mean>
-                                    <stddev>0.005</stddev>
-                            </noise>
-                            </ray>
-            <visualize>true</visualize>
+    <xacro:if value="$(arg ENABLE_SENSOR_DATA)">
+        <!-- gazebo livox mid360 plugins -->
+        <xacro:property name="M_PI" value="3.14159"/>
+        <gazebo reference="laser_livox">
+            <sensor type="ray" name="laser_livox">
+                <pose>0 0 0 0 0 0</pose>
+                <visualize>true</visualize>
+                <update_rate>10</update_rate>
+                <plugin name="gazebo_ros_laser_controller" filename="liblivox_laser_simulation.so">
+                    <ray>
+                        <scan>
+                            <horizontal>
+                                <samples>100</samples>
+                                <resolution>1</resolution>
+                                <min_angle>${0}</min_angle>
+                                <max_angle>${2*M_PI}</max_angle>
+                            </horizontal>
+                            <vertical>
+                                <samples>360</samples>
+                                <resolution>1</resolution>
+                                <min_angle>${-5.22/180*M_PI}</min_angle>
+                                <max_angle>${57.22/180*M_PI}</max_angle>
+                            </vertical>
+                        </scan>
+                        <range>
+                            <min>0.1</min>
+                            <max>40</max>
+                            <resolution>0.01</resolution>
+                        </range>
+                        <noise>
+                            <type>gaussian</type>
+                            <mean>0.0</mean>
+                            <stddev>0.005</stddev>
+                        </noise>
+                    </ray>
+                    <visualize>true</visualize>
                     <samples>24000</samples>
                     <downsample>1</downsample>
                     <csv_file_name>package://a1_description/scan_mode/mid360.csv</csv_file_name>
                     <ros_topic>/scan</ros_topic>
                     <frameName>laser_livox</frameName>
-            </plugin>
-        </sensor>
-    </gazebo>
-
-
-    <!-- gazebo livox imu-link plugins -->
-    <gazebo reference="livox_imu_link">
-    <gravity>true</gravity>
-    <sensor name="imu_sensor" type="imu">
-        <always_on>true</always_on>
-        <update_rate>1000</update_rate>
-        <visualize>true</visualize>
-        <topic>__default_topic__</topic>
-        <plugin filename="libgazebo_ros_imu_sensor.so" name="imu_plugin">
-            <topicName>/livox/imu</topicName>
-            <bodyName>livox_imu_link</bodyName>
-            <updateRateHZ>1000.0</updateRateHZ>
-            <gaussianNoise>0.0</gaussianNoise>
-            <xyzOffset>0 0 0</xyzOffset>
-            <rpyOffset>0 0 0</rpyOffset>
-            <frameName>livox_imu_link</frameName>
-        </plugin>
-        <pose>0 0 0 0 0 0</pose>
-    </sensor>
-    </gazebo>
-
-    <!-- camera 单目相机插件 -->
-    <gazebo reference="front_camera">
-    <material>Gazebo/Grey</material>
-        <sensor type="camera" name="camera">
-        <update_rate>30.0</update_rate>
-        <camera name="head">
-            <horizontal_fov>1.3962634</horizontal_fov>
-            <image>
-            <width>800</width>
-            <height>800</height>
-            <format>R8G8B8</format>
-            </image>
-            <clip>
-            <near>0.02</near>
-            <far>300</far>
-            </clip>
-            <noise>
-            <type>gaussian</type>
-            <!-- Noise is sampled independently per pixel on each frame.
-                That pixel's noise value is added to each of its color
-                channels, which at that point lie in the range [0,1]. -->
-            <mean>0.0</mean>
-            <stddev>0.007</stddev>
-            </noise>
-        </camera>
-        <plugin name="camera_controller" filename="libgazebo_ros_camera.so">
-            <alwaysOn>true</alwaysOn>
-            <updateRate>0.0</updateRate>
-            <cameraName>camera</cameraName>
-            <imageTopicName>image_raw</imageTopicName>
-            <cameraInfoTopicName>camera_info</cameraInfoTopicName>
-            <frameName>front_camera</frameName>
-            <hackBaseline>0.07</hackBaseline>
-            <distortionK1>0.0</distortionK1>
-            <distortionK2>0.0</distortionK2>
-            <distortionK3>0.0</distortionK3>
-            <distortionT1>0.0</distortionT1>
-            <distortionT2>0.0</distortionT2>
-        </plugin>
-        </sensor>
+                </plugin>
+            </sensor>
         </gazebo>
 
-        <!-- real_sense  深度相机(kinect)插件 -->
+        <!-- gazebo livox imu-link plugins -->
+        <gazebo reference="livox_imu_link">
+            <gravity>true</gravity>
+            <sensor name="imu_sensor" type="imu">
+                <always_on>true</always_on>
+                <update_rate>1000</update_rate>
+                <visualize>true</visualize>
+                <topic>__default_topic__</topic>
+                <plugin filename="libgazebo_ros_imu_sensor.so" name="imu_plugin">
+                    <topicName>/livox/imu</topicName>
+                    <bodyName>livox_imu_link</bodyName>
+                    <updateRateHZ>1000.0</updateRateHZ>
+                    <gaussianNoise>0.0</gaussianNoise>
+                    <xyzOffset>0 0 0</xyzOffset>
+                    <rpyOffset>0 0 0</rpyOffset>
+                    <frameName>livox_imu_link</frameName>
+                </plugin>
+                <pose>0 0 0 0 0 0</pose>
+            </sensor>
+        </gazebo>
+
+        <!-- camera 单目相机插件 -->
+        <gazebo reference="front_camera">
+            <material>Gazebo/Grey</material>
+            <sensor type="camera" name="camera">
+                <update_rate>30.0</update_rate>
+                <camera name="head">
+                    <horizontal_fov>1.3962634</horizontal_fov>
+                    <image>
+                        <width>800</width>
+                        <height>800</height>
+                        <format>R8G8B8</format>
+                    </image>
+                    <clip>
+                        <near>0.02</near>
+                        <far>300</far>
+                    </clip>
+                    <noise>
+                        <type>gaussian</type>
+                        <mean>0.0</mean>
+                        <stddev>0.007</stddev>
+                    </noise>
+                </camera>
+                <plugin name="camera_controller" filename="libgazebo_ros_camera.so">
+                    <alwaysOn>true</alwaysOn>
+                    <updateRate>0.0</updateRate>
+                    <cameraName>camera</cameraName>
+                    <imageTopicName>image_raw</imageTopicName>
+                    <cameraInfoTopicName>camera_info</cameraInfoTopicName>
+                    <frameName>front_camera</frameName>
+                    <hackBaseline>0.07</hackBaseline>
+                    <distortionK1>0.0</distortionK1>
+                    <distortionK2>0.0</distortionK2>
+                    <distortionK3>0.0</distortionK3>
+                    <distortionT1>0.0</distortionT1>
+                    <distortionT2>0.0</distortionT2>
+                </plugin>
+            </sensor>
+        </gazebo>
+
+        <!-- real_sense 深度相机(kinect)插件 -->
         <gazebo reference="real_sense">
             <sensor type="depth" name="real_sense">
                 <always_on>true</always_on>
@@ -485,5 +430,6 @@
                 </plugin>
             </sensor>
         </gazebo>
+    </xacro:if>
 
 </robot>

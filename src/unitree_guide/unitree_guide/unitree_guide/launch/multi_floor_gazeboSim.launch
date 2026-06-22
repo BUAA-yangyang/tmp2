@@ -10,6 +10,11 @@
     <arg name="headless" default="false"/>
     <arg name="debug" default="false"/>
     <arg name="user_debug" default="false"/>
+    <arg name="enable_sensor_data" default="true"/>
+    <arg name="enable_referee_odom" default="true"/>
+    <arg name="enable_ground_truth" default="true"/>
+    <arg name="enable_pointcloud_converter" default="true"/>
+    <arg name="pointcloud_use_ground_truth_odom" default="true"/>
 
     <arg name="world_file" default="$(optenv BUILDING_WORLD_FILE)"/>
     <arg name="robot_x" default="$(optenv COMPETITION_ROBOT_X 0.0)"/>
@@ -29,12 +34,14 @@
 
     <param name="robot_description"
            command="$(find xacro)/xacro --inorder '$(arg dollar)$(arg robot_path)/xacro/robot.xacro'
-           DEBUG:=$(arg user_debug)"/>
+           DEBUG:=$(arg user_debug)
+           ENABLE_SENSOR_DATA:=$(arg enable_sensor_data)
+           ENABLE_GROUND_TRUTH:=$(arg enable_ground_truth)"/>
 
     <node pkg="gazebo_ros" type="spawn_model" name="urdf_spawner" respawn="false" output="screen"
               args="-urdf -z $(arg robot_z) -y $(arg robot_y) -x $(arg robot_x) -Y $(arg robot_yaw) -model $(arg rname)_gazebo -param robot_description -unpause"/>
 
-    <node pkg="unitree_guide" type="state_from_gazebo" name="state_from_gazebo" args="0 0 0 0 0 0" output="screen">
+    <node if="$(arg enable_referee_odom)" pkg="unitree_guide" type="state_from_gazebo" name="state_from_gazebo" args="0 0 0 0 0 0" output="screen">
         <param name="robot_name" value="$(arg rname)" />
     </node>
 
@@ -62,9 +69,12 @@
         <arg name="rname" value="$(arg rname)"/>
     </include>
 
-    <node pkg="unitree_guide" type="pointcloud2livox.py" name="pointcloud2livox" output="screen">
-        <param name="laser_blind" value="0.5" />
-        <param name="min_angle" value="-7"/>
-        <param name="max_angle" value="55"/>
-    </node>
+    <group if="$(arg enable_sensor_data)">
+        <node if="$(arg enable_pointcloud_converter)" pkg="unitree_guide" type="pointcloud2livox.py" name="pointcloud2livox" output="screen">
+            <param name="laser_blind" value="0.5" />
+            <param name="min_angle" value="-7"/>
+            <param name="max_angle" value="55"/>
+            <param name="use_ground_truth_odom" value="$(arg pointcloud_use_ground_truth_odom)"/>
+        </node>
+    </group>
 </launch>

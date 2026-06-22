@@ -83,10 +83,10 @@ source ./devel/setup.bash
 
 ## 评估脚本缺少依赖
 
-评估脚本依赖 `numpy` 和 `scipy`。如报导入错误，请安装：
+评估脚本依赖 `numpy`。如报导入错误，请安装：
 
 ```bash
-sudo apt install python3-numpy python3-scipy
+sudo apt install python3-numpy
 ```
 
 ## 虚拟手柄权限问题

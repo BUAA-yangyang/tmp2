@@ -4,6 +4,14 @@ set -euo pipefail
 WORKSPACE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$WORKSPACE_DIR"
 
+as_ros_bool() {
+  case "$1" in
+    1|true|TRUE|True|yes|YES|on|ON) printf "true" ;;
+    0|false|FALSE|False|no|NO|off|OFF) printf "false" ;;
+    *) printf "%s" "$1" ;;
+  esac
+}
+
 SEED="${SEED:-}"
 FLOOR_COUNT="${FLOOR_COUNT:-3}"
 ROOMS_PER_FLOOR="${ROOMS_PER_FLOOR:-4}"
@@ -17,7 +25,16 @@ START_CONTROLLER="${START_CONTROLLER:-1}"
 START_VIRTUAL_JOY="${START_VIRTUAL_JOY:-0}"
 CONTROLLER_FOREGROUND="${CONTROLLER_FOREGROUND:-1}"
 START_BUILDING_CONTROL="${START_BUILDING_CONTROL:-1}"
+ENABLE_SENSOR_DATA_DEFAULT="${ENABLE_SENSORS:-1}"
+ENABLE_SENSOR_DATA="$(as_ros_bool "${ENABLE_SENSOR_DATA:-$ENABLE_SENSOR_DATA_DEFAULT}")"
+ENABLE_REFEREE_ODOM="$(as_ros_bool "${ENABLE_REFEREE_ODOM:-1}")"
+ENABLE_GROUND_TRUTH="$(as_ros_bool "${ENABLE_GROUND_TRUTH:-1}")"
+ENABLE_POINTCLOUD_CONVERTER="$(as_ros_bool "${ENABLE_POINTCLOUD_CONVERTER:-1}")"
+POINTCLOUD_USE_GROUND_TRUTH_ODOM="$(as_ros_bool "${POINTCLOUD_USE_GROUND_TRUTH_ODOM:-1}")"
+WRITE_GENERATED_TRUTH_COPY="$(as_ros_bool "${WRITE_GENERATED_TRUTH_COPY:-1}")"
 UNITREE_CTRL_DT="${UNITREE_CTRL_DT:-0.004}"
+UNITREE_ENABLE_REALTIME="${UNITREE_ENABLE_REALTIME:-auto}"
+UNITREE_LOG_WAIT_WARNINGS="$(as_ros_bool "${UNITREE_LOG_WAIT_WARNINGS:-0}")"
 ROBOT_X="${ROBOT_X:-0.0}"
 ROBOT_Y="${ROBOT_Y:--2.2}"
 ROBOT_Z="${ROBOT_Z:-0.6}"
@@ -25,6 +42,7 @@ ROBOT_YAW="${ROBOT_YAW:-1.5708}"
 
 echo "Terminating previous Gazebo, launch, controller, and optional joystick processes..."
 pkill -f "roslaunch unitree_guide multi_floor_gazeboSim.launch" 2>/dev/null || true
+pkill -f "roslaunch .*multi_floor_gazeboSim.launch" 2>/dev/null || true
 pkill -f "building_generator_classic_control" 2>/dev/null || true
 pkill -f "gzserver|gzclient|gazebo" 2>/dev/null || true
 pkill -f "junior_ctrl" 2>/dev/null || true
@@ -33,12 +51,26 @@ pkill -f "virtual_joy.py" 2>/dev/null || true
 echo "Sourcing ROS environment..."
 source /opt/ros/noetic/setup.bash
 source "$WORKSPACE_DIR/devel/setup.bash"
+export ROS_PACKAGE_PATH="$WORKSPACE_DIR/src:${ROS_PACKAGE_PATH:-}"
+export CMAKE_PREFIX_PATH="$WORKSPACE_DIR/devel:${CMAKE_PREFIX_PATH:-}"
 
-BUILDING_OBSTACLES_DIR="$(rospack find building_obstacles)"
-UNITREE_GAZEBO_MODELS="$(rospack find unitree_gazebo)/models"
+GENERATOR_SCRIPT="$WORKSPACE_DIR/src/building_obstacles/scripts/generate_competition_scene.py"
+if [ ! -f "$GENERATOR_SCRIPT" ]; then
+  GENERATOR_SCRIPT="$(rospack find building_obstacles)/scripts/generate_competition_scene.py"
+fi
+UNITREE_GAZEBO_MODELS="$WORKSPACE_DIR/src/unitree_guide/unitree_ros/unitree_gazebo/models"
+if [ ! -d "$UNITREE_GAZEBO_MODELS" ]; then
+  UNITREE_GAZEBO_MODELS="$(rospack find unitree_gazebo)/models"
+fi
+LAUNCH_FILE="$WORKSPACE_DIR/src/unitree_guide/unitree_guide/unitree_guide/launch/multi_floor_gazeboSim.launch"
+if [ ! -f "$LAUNCH_FILE" ]; then
+  LAUNCH_FILE="$(rospack find unitree_guide)/launch/multi_floor_gazeboSim.launch"
+fi
 SCENE_OUTPUT_DIR="$WORKSPACE_DIR/generated_building"
 RESULTS_DIR="$WORKSPACE_DIR/results"
-mkdir -p "$SCENE_OUTPUT_DIR" "$RESULTS_DIR" "$WORKSPACE_DIR/logs"
+REFEREE_RESULTS_DIR="${REFEREE_RESULTS_DIR:-$RESULTS_DIR}"
+TEAM_INFO_DIR="${TEAM_INFO_DIR:-$SCENE_OUTPUT_DIR}"
+mkdir -p "$SCENE_OUTPUT_DIR" "$RESULTS_DIR" "$REFEREE_RESULTS_DIR" "$TEAM_INFO_DIR" "$WORKSPACE_DIR/logs"
 
 echo "Generating competition scene..."
 GENERATOR_ARGS=(
@@ -58,7 +90,17 @@ GENERATOR_ARGS=(
 if [ -n "$SEED" ]; then
   GENERATOR_ARGS+=(--seed "$SEED")
 fi
-python3 "$BUILDING_OBSTACLES_DIR/scripts/generate_competition_scene.py" "${GENERATOR_ARGS[@]}" \
+GENERATOR_HELP="$(python3 "$GENERATOR_SCRIPT" --help 2>&1 || true)"
+if [[ "$GENERATOR_HELP" == *"--referee-results-dir"* ]]; then
+  GENERATOR_ARGS+=(--referee-results-dir "$REFEREE_RESULTS_DIR")
+fi
+if [[ "$GENERATOR_HELP" == *"--team-info-dir"* ]]; then
+  GENERATOR_ARGS+=(--team-info-dir "$TEAM_INFO_DIR")
+fi
+if [ "$WRITE_GENERATED_TRUTH_COPY" = "false" ] && [[ "$GENERATOR_HELP" == *"--no-generated-truth-copy"* ]]; then
+  GENERATOR_ARGS+=(--no-generated-truth-copy)
+fi
+python3 "$GENERATOR_SCRIPT" "${GENERATOR_ARGS[@]}" \
   > "$SCENE_OUTPUT_DIR/scene_manifest.stdout.json"
 
 export BUILDING_WORLD_FILE="$SCENE_OUTPUT_DIR/competition_scene.world"
@@ -67,14 +109,20 @@ export COMPETITION_ROBOT_Y="$ROBOT_Y"
 export COMPETITION_ROBOT_Z="$ROBOT_Z"
 export COMPETITION_ROBOT_YAW="$ROBOT_YAW"
 export UNITREE_CTRL_DT
+export UNITREE_ENABLE_REALTIME
+export UNITREE_LOG_WAIT_WARNINGS
 export GAZEBO_MODEL_PATH="${GAZEBO_MODEL_PATH:-}:$SCENE_OUTPUT_DIR:$UNITREE_GAZEBO_MODELS"
 
 echo "=========================================="
 echo "Competition scene is ready"
 echo "  World:   $BUILDING_WORLD_FILE"
-echo "  Truth:   $RESULTS_DIR/danger_truth.json"
+echo "  Truth:   $REFEREE_RESULTS_DIR/danger_truth.json"
+echo "  TeamInfo:$TEAM_INFO_DIR/team_scene_info.json"
 echo "  Manifest:$SCENE_OUTPUT_DIR/scene_manifest.json"
 echo "  Result:  $RESULTS_DIR/detected_danger.json"
+echo "  Sensor model: visible"
+echo "  Sensor data:  $ENABLE_SENSOR_DATA"
+echo "  Wait warning log: $UNITREE_LOG_WAIT_WARNINGS"
 echo "=========================================="
 
 if [ "$START_VIRTUAL_JOY" = "1" ]; then
@@ -84,7 +132,7 @@ if [ "$START_VIRTUAL_JOY" = "1" ]; then
 fi
 
 echo "Launching Gazebo, Unitree A1 model, sensors, and ROS interfaces..."
-roslaunch unitree_guide multi_floor_gazeboSim.launch \
+roslaunch "$LAUNCH_FILE" \
   gui:="$GUI" \
   paused:="$PAUSED" \
   user_debug:=False \
@@ -93,6 +141,11 @@ roslaunch unitree_guide multi_floor_gazeboSim.launch \
   robot_y:="$ROBOT_Y" \
   robot_z:="$ROBOT_Z" \
   robot_yaw:="$ROBOT_YAW" \
+  enable_sensor_data:="$ENABLE_SENSOR_DATA" \
+  enable_referee_odom:="$ENABLE_REFEREE_ODOM" \
+  enable_ground_truth:="$ENABLE_GROUND_TRUTH" \
+  enable_pointcloud_converter:="$ENABLE_POINTCLOUD_CONVERTER" \
+  pointcloud_use_ground_truth_odom:="$POINTCLOUD_USE_GROUND_TRUTH_ODOM" \
   > "$WORKSPACE_DIR/logs/competition_gazebo.log" 2>&1 &
 LAUNCH_PID=$!
 echo "$LAUNCH_PID" > "$WORKSPACE_DIR/logs/competition_gazebo.pid"

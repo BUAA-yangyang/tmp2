@@ -33,19 +33,19 @@
 
 ## 真值文件
 
-真值文件写入：
+本地自检时，裁判真值文件通常写入：
 
 ```text
 results/danger_truth.json
 ```
 
-同一份真值也会复制到：
+兼容旧流程时，同一份真值也可能出现在：
 
 ```text
 generated_building/danger_truth.json
 ```
 
-真值文件包含：
+这些文件用于裁判评估或本地自检，不是参赛算法输入。真值文件包含：
 
 - `building`：楼栋层数、层高和占地信息。
 - `source_rules`：危险源和干扰源描述。

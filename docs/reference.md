@@ -16,7 +16,9 @@
 - 源只允许生成在房间内部。
 - 源生成时避开墙体、家具、其他源以及房间门口保留区。
 - 源高度贴合对应楼层地面，不悬空，不嵌入地板。
-- 真值只写入 `results/danger_truth.json`，参赛算法应输出 `results/detected_danger.json`。
+- 公开场景信息写入 `generated_building/team_scene_info.json`。
+- 参赛算法应输出 `results/detected_danger.json`。
+- 真值文件仅供裁判评估和本地自检使用，不作为参赛算法输入。
 
 ## 运行要求
 
@@ -26,7 +28,7 @@
 - CUDA >= 11.7
 - Python >= 3.8
 - `python3-yaml`
-- `scipy` 和 `numpy`，用于评估脚本
+- `numpy`，用于评估脚本
 - libtorch C++ 版本，用于 Unitree A1 控制器
 
 libtorch 和 CUDA 路径在 `src/unitree_guide/unitree_guide/unitree_guide/CMakeLists.txt` 中配置。当前工程默认指向 `/home/ros/Guoyulun/Download/libtorch` 和 `/usr/local/cuda/bin/nvcc`，如部署路径不同，需要按实际机器调整。
@@ -59,19 +61,21 @@ cd /home/ros/Guoyulun/Competition/SimEnv
 
 启动后关键文件如下：
 
-| 文件 | 说明 |
-|------|------|
-| `generated_building/competition_scene.world` | Gazebo 使用的完整比赛世界，已包含楼栋和全部源模型 |
-| `generated_building/layout_metadata.json` | 楼栋布局、房间、门、电梯、目标点等元数据 |
-| `generated_building/door_config.yaml` | 动态门控制配置，由 `building_generator_classic` 读取 |
-| `generated_building/elevator_config.yaml` | 简化电梯控制配置，由 `building_generator_classic` 读取 |
-| `generated_building/scene_manifest.json` | 本次场景 manifest，记录 seed、文件路径、源数量、机器人出生点 |
-| `generated_building/building_config.json` | 兼容脚本使用的建筑配置 |
-| `results/danger_truth.json` | 裁判真值文件，包含危险源和干扰源列表 |
-| `results/detected_danger.json` | 参赛算法应输出的检测结果文件 |
-| `logs/competition_gazebo.log` | Gazebo/launch 日志 |
-| `logs/building_control.log` | 楼栋门/电梯控制服务日志 |
-| `logs/junior_ctrl.log` | 控制器日志 |
+| 文件 | 说明 | 是否可作为算法输入 |
+|------|------|--------------------|
+| `generated_building/team_scene_info.json` | 机器人起点、公开门/电梯 ID、允许接口和结果文件路径 | 是 |
+| `results/detected_danger.json` | 参赛算法应输出的检测结果文件 | 输出文件 |
+| `generated_building/competition_scene.world` | Gazebo 使用的完整比赛世界，已包含楼栋和全部源模型 | 否 |
+| `generated_building/layout_metadata.json` | 楼栋布局、房间、门、电梯、目标点等元数据 | 否 |
+| `generated_building/door_config.yaml` | 动态门控制配置，由 `building_generator_classic` 读取 | 否 |
+| `generated_building/elevator_config.yaml` | 简化电梯控制配置，由 `building_generator_classic` 读取 | 否 |
+| `generated_building/scene_manifest.json` | 本次场景 manifest，记录 seed、文件路径、源数量、机器人出生点 | 否 |
+| `generated_building/building_config.json` | 兼容脚本使用的建筑配置 | 否 |
+| `generated_building/danger_truth.json` | 裁判真值副本，本地调试时可能存在 | 否 |
+| `results/danger_truth.json` | 裁判真值文件，包含危险源和干扰源列表 | 否 |
+| `logs/competition_gazebo.log` | Gazebo/launch 日志 | 否 |
+| `logs/building_control.log` | 楼栋门/电梯控制服务日志 | 否 |
+| `logs/junior_ctrl.log` | 控制器日志 | 否 |
 
 ## 启动参数
 
@@ -190,14 +194,24 @@ GUI=false UNITREE_CTRL_DT=0.006 ./auto.sh
 | 接口 | 类型 | 说明 |
 |------|------|------|
 | `/cmd_vel` | `geometry_msgs/Twist` | 机器人速度指令输入 |
-| `/Odometry_gazebo` | `nav_msgs/Odometry` | 仿真里程计输出 |
 | `/scan` | `sensor_msgs/PointCloud2` | Livox Mid-360 点云数据 |
+| `/livox/Pointcloud2` | `sensor_msgs/PointCloud2` | 点云转换节点输出，开启时可用 |
+| `/livox/lidar2` | `unitree_guide/CustomMsg` | Livox 风格点云消息，开启时可用 |
 | `/livox/imu` | `sensor_msgs/Imu` | Livox 内置 IMU |
 | `/trunk_imu` | `sensor_msgs/Imu` | 机体 IMU |
-| `/camera/image_raw` | `sensor_msgs/Image` | 前视 RGB 图像 |
+| `/real_sense/rgb/image_raw` | `sensor_msgs/Image` | RealSense RGB 图像 |
+| `/real_sense/rgb/camera_info` | `sensor_msgs/CameraInfo` | RealSense RGB 相机标定 |
+| `/real_sense/depth/image_raw` | `sensor_msgs/Image` | RealSense 深度图像 |
+| `/real_sense/depth/camera_info` | `sensor_msgs/CameraInfo` | RealSense 深度相机标定 |
 | `/real_sense/depth/points` | `sensor_msgs/PointCloud2` | 深度相机点云 |
+| `/set_door_state` | `building_generator_interfaces/SetDoorState` | 设置动态门开关状态 |
+| `/call_elevator` | `building_generator_interfaces/CallElevator` | 呼叫电梯到目标楼层 |
 
-参赛算法不应读取 `results/danger_truth.json`。该文件用于裁判评估和环境自检。
+参赛算法可以读取 `generated_building/team_scene_info.json`。该文件只包含机器人起点、公开门/电梯 ID、允许话题、允许服务和结果文件路径。
+
+参赛算法不应读取 `results/danger_truth.json`、`generated_building/danger_truth.json`、`generated_building/layout_metadata.json`、`generated_building/building_config.json` 或 `generated_building/scene_manifest.json`。这些文件用于裁判评估、环境启动或本地自检。
+
+`/Odometry_gazebo`、`/ground_truth/base_w`、`/ground_truth/base_trunk` 和 `/ground_truth/*_foot` 是 Gazebo 真值通道，不作为正式比赛算法输入。即使本地调试时能够看到这些话题，参赛算法也不得订阅或读取。
 
 ## 门与电梯控制
 

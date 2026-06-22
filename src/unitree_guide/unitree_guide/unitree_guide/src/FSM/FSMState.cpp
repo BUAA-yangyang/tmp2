@@ -39,9 +39,11 @@ void FSMState::wait(long long startTime, long long waitTime){
 
 void FSMState::rosAbsoluteWait(long long startTime, long long waitTime){
     overtime = 0;
-    if(getRosTime() - startTime > waitTime){
+    long long elapsed = getRosTime() - startTime;
+    long long now = getSystemTime();
+    if(elapsed > waitTime && shouldLogAbsoluteWaitWarning(now)){
         std::cout << "[WARNING] The waitTime=" << waitTime << " of function absoluteWait is not enough!" << std::endl
-        << "The program has already cost " << getSystemTime() - startTime << "us." << std::endl;
+        << "The program has already cost " << elapsed << "us." << std::endl;
     }
     while((getRosTime() - startTime < waitTime) && (overtime < OVERTIME)){
 
@@ -68,5 +70,4 @@ void FSMState::cmdVelCallback(const geometry_msgs::Twist::ConstPtr& msg){
     // std::cout << "cmd_vel_linear_y"<< this->current_cmd_vel_.linear_y<< std::endl;
     // std::cout << "cmd_vel_angular_z"<< this->current_cmd_vel_.angular_z<< std::endl;
 }
-
 

@@ -19,11 +19,12 @@ import sensor_msgs.point_cloud2 as pc2
 from nav_msgs.msg import Odometry
 
 
-SENSOR_FRAME = "odom"    
-ODOM_TOPIC = "/Odometry_gazebo"           
+ODOM_FRAME = "odom"
+LOCAL_SENSOR_FRAME = "laser_livox"
+ODOM_TOPIC = "/Odometry_gazebo"
 m_buf = Lock()
 latest_odom = None
-latest_odom_time = None
+use_ground_truth_odom = True
 
 
 def _get_struct_fmt(pointcloud2):
@@ -88,10 +89,9 @@ def rotate_pointcloud_y(points, theta):
     return rotated.tolist()
 
 def odom_callback(odom_msg):
-    global latest_odom, latest_odom_time
+    global latest_odom
     with m_buf:
         latest_odom = odom_msg
-        latest_odom_time = odom_msg.header.stamp
 
 def quat_to_rot_matrix(q):
     """四元数 → 3x3 旋转矩阵 (numpy)"""
@@ -166,7 +166,7 @@ def filter_points_by_angle(points, min_angle_deg, max_angle_deg):
 
 
 def mmw_handler(mmw_cloud_msg):
-    global latest_odom, pub_laser_cloud,pub_laser_livox, laser_blind,min_angle,max_angle
+    global latest_odom, pub_laser_cloud,pub_laser_livox, laser_blind,min_angle,max_angle,use_ground_truth_odom
 
     with m_buf:
         odom_now = latest_odom
@@ -175,7 +175,8 @@ def mmw_handler(mmw_cloud_msg):
     # Step 1: 提取原始点云 (更快的方式)
     header = rospy.Header()
     header.stamp = stamp
-    header.frame_id = SENSOR_FRAME
+    output_frame = ODOM_FRAME if use_ground_truth_odom else LOCAL_SENSOR_FRAME
+    header.frame_id = output_frame
     x = np.fromiter((p.x for p in mmw_cloud_msg.points), dtype=np.float32)
     y = np.fromiter((p.y for p in mmw_cloud_msg.points), dtype=np.float32)
     z = np.fromiter((p.z for p in mmw_cloud_msg.points), dtype=np.float32)
@@ -196,16 +197,21 @@ def mmw_handler(mmw_cloud_msg):
     filtered_points = points_np[distances >= laser_blind].tolist()
 
     # Step 3.5 转为 CustomMsg 并发布
-    m_buf.acquire()
-    cloud_msg_ = pc2.create_cloud_xyz32(header, filtered_points)
-    custom_msg = pointcloud2_to_custommsg(cloud_msg_)
-    pub_laser_livox.publish(custom_msg)
-    m_buf.release()
+    with m_buf:
+        cloud_msg_ = pc2.create_cloud_xyz32(header, filtered_points)
+        custom_msg = pointcloud2_to_custommsg(cloud_msg_)
+        pub_laser_livox.publish(custom_msg)
 
-    # Step 4: 变换到 odom 坐标系
-    transformed_points = transform_points_to_odom(filtered_points, odom_now)
+    # Step 4: 可选地使用 Gazebo 真值里程计变换到 odom。正式比赛应关闭该选项。
+    if use_ground_truth_odom:
+        transformed_points = transform_points_to_odom(filtered_points, odom_now)
+        pointcloud2_frame = ODOM_FRAME
+    else:
+        transformed_points = filtered_points
+        pointcloud2_frame = LOCAL_SENSOR_FRAME
 
-    # Step 5: 创建 PointCloud2，frame_id = "odom"
+    # Step 5: 创建 PointCloud2
+    header.frame_id = pointcloud2_frame
     cloud_msg = pc2.create_cloud_xyz32(header, transformed_points)
     # 发布pocintcloud2消息
     pub_laser_cloud.publish(cloud_msg)
@@ -215,7 +221,7 @@ def mmw_handler(mmw_cloud_msg):
 
 
 def main():
-    global pub_laser_cloud,pub_laser_livox,laser_blind,min_angle,max_angle,tf_listener
+    global pub_laser_cloud,pub_laser_livox,laser_blind,min_angle,max_angle,tf_listener,use_ground_truth_odom
 
 
     rospy.init_node('pre_mmw_to_odom', anonymous=True)
@@ -231,17 +237,22 @@ def main():
     max_angle = rospy.get_param('~max_angle',60)   # 默认上限45度
     rospy.loginfo(f"Angle filter : {min_angle} ~ {max_angle} deg")
 
-    # 订阅原始点云和里程计
+    use_ground_truth_odom = rospy.get_param('~use_ground_truth_odom', True)
+    rospy.loginfo(f"Use ground-truth odom for /livox/Pointcloud2: {use_ground_truth_odom}")
+
+    # 订阅原始点云；真值里程计仅在显式开启时订阅。
     rospy.Subscriber('/scan', PointCloud, mmw_handler, queue_size=10)
-    rospy.Subscriber(ODOM_TOPIC, Odometry, odom_callback, queue_size=10)
+    if use_ground_truth_odom:
+        rospy.Subscriber(ODOM_TOPIC, Odometry, odom_callback, queue_size=10)
 
     pub_laser_livox = rospy.Publisher('/livox/lidar2', CustomMsg, queue_size=10)
 
     pub_laser_cloud = rospy.Publisher("/livox/Pointcloud2", PointCloud2, queue_size=10)
 
-    rospy.loginfo("=== Pointcloud2livox (published in odom) STARTED ===")
-    rospy.loginfo(f"Sensor frame: {SENSOR_FRAME}")
-    rospy.loginfo(f"Odom topic : {ODOM_TOPIC}")
+    rospy.loginfo("=== Pointcloud2livox STARTED ===")
+    rospy.loginfo(f"Local sensor frame: {LOCAL_SENSOR_FRAME}")
+    if use_ground_truth_odom:
+        rospy.loginfo(f"Odom topic : {ODOM_TOPIC}")
 
     rospy.spin()
 
