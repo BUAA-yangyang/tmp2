@@ -5,6 +5,7 @@
 
 #include "interface/IOROS.h"
 #include "interface/KeyBoard.h"
+#include <cmath>
 #include <iostream>
 #include <unistd.h>
 #include <csignal>
@@ -18,6 +19,10 @@ IOROS::IOROS():IOInterface(){
     std::cout << "The control interface for ROS Gazebo simulation" << std::endl;
     ros::param::get("/robot_name", _robot_name);
     std::cout << "robot_name: " << _robot_name << std::endl;
+    for(auto &received : _joint_state_received){
+        received.store(false);
+    }
+    _imu_received.store(false);
 
     // start subscriber
     initRecv();
@@ -43,6 +48,18 @@ void IOROS::sendRecv(const LowlevelCmd *cmd, LowlevelState *state){
 
     state->userCmd = cmdPanel->getUserCmd();
     state->userValue = cmdPanel->getUserValue();
+}
+
+bool IOROS::hasFullStateFeedback() const{
+    if(!_imu_received.load()){
+        return false;
+    }
+    for(const auto &received : _joint_state_received){
+        if(!received.load()){
+            return false;
+        }
+    }
+    return true;
 }
 
 void IOROS::sendCmd(const LowlevelCmd *lowCmd){
@@ -73,6 +90,19 @@ void IOROS::recvState(LowlevelState *state){
         state->imu.gyroscope[i] = _lowState.imu.gyroscope[i];
     }
     state->imu.quaternion[3] = _lowState.imu.quaternion[3];
+}
+
+void IOROS::updateMotorState(int index, const unitree_legged_msgs::MotorState& msg){
+    if(!std::isfinite(msg.q) ||
+       !std::isfinite(msg.dq) ||
+       !std::isfinite(msg.tauEst)){
+        return;
+    }
+    _lowState.motorState[index].mode = msg.mode;
+    _lowState.motorState[index].q = msg.q;
+    _lowState.motorState[index].dq = msg.dq;
+    _lowState.motorState[index].tauEst = msg.tauEst;
+    _joint_state_received[index].store(true);
 }
 
 void IOROS::initSend(){
@@ -213,6 +243,18 @@ void IOROS::RR_footCallback(const nav_msgs::Odometry& msg) {
 
 void IOROS::imuCallback(const sensor_msgs::Imu & msg)
 { 
+    if(!std::isfinite(msg.orientation.w) ||
+       !std::isfinite(msg.orientation.x) ||
+       !std::isfinite(msg.orientation.y) ||
+       !std::isfinite(msg.orientation.z) ||
+       !std::isfinite(msg.angular_velocity.x) ||
+       !std::isfinite(msg.angular_velocity.y) ||
+       !std::isfinite(msg.angular_velocity.z) ||
+       !std::isfinite(msg.linear_acceleration.x) ||
+       !std::isfinite(msg.linear_acceleration.y) ||
+       !std::isfinite(msg.linear_acceleration.z)){
+        return;
+    }
     _lowState.imu.quaternion[0] = msg.orientation.w;
     _lowState.imu.quaternion[1] = msg.orientation.x;
     _lowState.imu.quaternion[2] = msg.orientation.y;
@@ -225,102 +267,67 @@ void IOROS::imuCallback(const sensor_msgs::Imu & msg)
     _lowState.imu.accelerometer[0] = msg.linear_acceleration.x;
     _lowState.imu.accelerometer[1] = msg.linear_acceleration.y;
     _lowState.imu.accelerometer[2] = msg.linear_acceleration.z;
+    _imu_received.store(true);
 }
 
 void IOROS::FRhipCallback(const unitree_legged_msgs::MotorState& msg)
 {
-    _lowState.motorState[0].mode = msg.mode;
-    _lowState.motorState[0].q = msg.q;
-    _lowState.motorState[0].dq = msg.dq;
-    _lowState.motorState[0].tauEst = msg.tauEst;
+    updateMotorState(0, msg);
 }
 
 void IOROS::FRthighCallback(const unitree_legged_msgs::MotorState& msg)
 {
-    _lowState.motorState[1].mode = msg.mode;
-    _lowState.motorState[1].q = msg.q;
-    _lowState.motorState[1].dq = msg.dq;
-    _lowState.motorState[1].tauEst = msg.tauEst;
+    updateMotorState(1, msg);
 }
 
 void IOROS::FRcalfCallback(const unitree_legged_msgs::MotorState& msg)
 {
-    _lowState.motorState[2].mode = msg.mode;
-    _lowState.motorState[2].q = msg.q;
-    _lowState.motorState[2].dq = msg.dq;
-    _lowState.motorState[2].tauEst = msg.tauEst;
+    updateMotorState(2, msg);
 }
 
 void IOROS::FLhipCallback(const unitree_legged_msgs::MotorState& msg)
 {
-    _lowState.motorState[3].mode = msg.mode;
-    _lowState.motorState[3].q = msg.q;
-    _lowState.motorState[3].dq = msg.dq;
-    _lowState.motorState[3].tauEst = msg.tauEst;
+    updateMotorState(3, msg);
 }
 
 void IOROS::FLthighCallback(const unitree_legged_msgs::MotorState& msg)
 {
-    _lowState.motorState[4].mode = msg.mode;
-    _lowState.motorState[4].q = msg.q;
-    _lowState.motorState[4].dq = msg.dq;
-    _lowState.motorState[4].tauEst = msg.tauEst;
+    updateMotorState(4, msg);
 }
 
 void IOROS::FLcalfCallback(const unitree_legged_msgs::MotorState& msg)
 {
-    _lowState.motorState[5].mode = msg.mode;
-    _lowState.motorState[5].q = msg.q;
-    _lowState.motorState[5].dq = msg.dq;
-    _lowState.motorState[5].tauEst = msg.tauEst;
+    updateMotorState(5, msg);
 }
 
 void IOROS::RRhipCallback(const unitree_legged_msgs::MotorState& msg)
 {
-    _lowState.motorState[6].mode = msg.mode;
-    _lowState.motorState[6].q = msg.q;
-    _lowState.motorState[6].dq = msg.dq;
-    _lowState.motorState[6].tauEst = msg.tauEst;
+    updateMotorState(6, msg);
 }
 
 void IOROS::RRthighCallback(const unitree_legged_msgs::MotorState& msg)
 {
-    _lowState.motorState[7].mode = msg.mode;
-    _lowState.motorState[7].q = msg.q;
-    _lowState.motorState[7].dq = msg.dq;
-    _lowState.motorState[7].tauEst = msg.tauEst;
+    updateMotorState(7, msg);
 }
 
 void IOROS::RRcalfCallback(const unitree_legged_msgs::MotorState& msg)
 {
-    _lowState.motorState[8].mode = msg.mode;
-    _lowState.motorState[8].q = msg.q;
-    _lowState.motorState[8].dq = msg.dq;
-    _lowState.motorState[8].tauEst = msg.tauEst;
+    updateMotorState(8, msg);
 }
 
 void IOROS::RLhipCallback(const unitree_legged_msgs::MotorState& msg)
 {
-    _lowState.motorState[9].mode = msg.mode;
-    _lowState.motorState[9].q = msg.q;
-    _lowState.motorState[9].dq = msg.dq;
-    _lowState.motorState[9].tauEst = msg.tauEst;
+    updateMotorState(9, msg);
 }
 
 void IOROS::RLthighCallback(const unitree_legged_msgs::MotorState& msg)
 {
-    _lowState.motorState[10].mode = msg.mode;
-    _lowState.motorState[10].q = msg.q;
-    _lowState.motorState[10].dq = msg.dq;
-    _lowState.motorState[10].tauEst = msg.tauEst;
+    updateMotorState(10, msg);
 }
 
 void IOROS::RLcalfCallback(const unitree_legged_msgs::MotorState& msg)
 {
-    _lowState.motorState[11].mode = msg.mode;
-    _lowState.motorState[11].q = msg.q;
-    _lowState.motorState[11].dq = msg.dq;
-    _lowState.motorState[11].tauEst = msg.tauEst;
+    updateMotorState(11, msg);
 }
 
 

@@ -201,7 +201,8 @@ def main(argv: list[str] | None = None) -> int:
     sources = _place_sources(layout, obstacle_rng, danger_count, distractor_count)
 
     world_path = output_dir / "competition_scene.world"
-    _write_world_with_sources(Path(artifact_paths.world_sdf), world_path, sources)
+    physics_config = _physics_config_from_args(args)
+    _write_world_with_sources(Path(artifact_paths.world_sdf), world_path, sources, physics_config)
     # Keep world.sdf as the full competition world as well; model.sdf remains the bare building model.
     Path(artifact_paths.world_sdf).write_text(world_path.read_text(encoding="utf-8"), encoding="utf-8")
 
@@ -245,6 +246,7 @@ def main(argv: list[str] | None = None) -> int:
         "distractor_count": distractor_count,
         "source_count": len(sources),
         "robot_start": robot_start,
+        "gazebo_physics": physics_config,
         "competition_interfaces": {
             "velocity_command_topic": "/cmd_vel",
             "allowed_team_topics": ALLOWED_TEAM_TOPICS,
@@ -285,9 +287,13 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--danger-count", default="3:6", help="Exact value or min:max range.")
     parser.add_argument("--distractor-count", default="4:8", help="Exact value or min:max range.")
     parser.add_argument("--robot-x", type=float, default=0.0)
-    parser.add_argument("--robot-y", type=float, default=-2.2)
+    parser.add_argument("--robot-y", type=float, default=-3.2)
     parser.add_argument("--robot-z", type=float, default=0.6)
     parser.add_argument("--robot-yaw", type=float, default=1.5708)
+    parser.add_argument("--physics-max-step-size", type=float, default=0.001)
+    parser.add_argument("--physics-real-time-update-rate", type=int, default=1000)
+    parser.add_argument("--physics-ode-iters", type=int, default=50)
+    parser.add_argument("--physics-contact-max-correcting-vel", type=float, default=10.0)
     parser.add_argument(
         "--no-generated-truth-copy",
         dest="write_generated_truth_copy",
@@ -417,14 +423,56 @@ def _overlaps_existing_sources(candidate: PlacedSource, placed: list[PlacedSourc
     return False
 
 
-def _write_world_with_sources(source_world: Path, destination_world: Path, sources: list[PlacedSource]) -> None:
+def _physics_config_from_args(args: argparse.Namespace) -> dict[str, float | int]:
+    return {
+        "max_step_size": args.physics_max_step_size,
+        "real_time_factor": 1.0,
+        "real_time_update_rate": args.physics_real_time_update_rate,
+        "ode_iters": args.physics_ode_iters,
+        "contact_max_correcting_vel": args.physics_contact_max_correcting_vel,
+    }
+
+
+def _write_world_with_sources(
+    source_world: Path,
+    destination_world: Path,
+    sources: list[PlacedSource],
+    physics_config: dict[str, float | int],
+) -> None:
     root = ET.parse(source_world).getroot()
     world = root.find("world")
     if world is None:
         raise ValueError(f"world element not found in {source_world}")
+    _set_world_physics(world, physics_config)
     for source in sources:
         world.append(_build_source_model(source))
     destination_world.write_text(_to_pretty_xml(root), encoding="utf-8")
+
+
+def _set_world_physics(world: ET.Element, physics_config: dict[str, float | int]) -> None:
+    for existing in list(world.findall("physics")):
+        world.remove(existing)
+
+    physics = ET.Element("physics", {"name": "default_physics", "default": "0", "type": "ode"})
+    ET.SubElement(physics, "max_step_size").text = f"{float(physics_config['max_step_size']):.6f}"
+    ET.SubElement(physics, "real_time_factor").text = f"{float(physics_config['real_time_factor']):.6f}"
+    ET.SubElement(physics, "real_time_update_rate").text = str(int(physics_config["real_time_update_rate"]))
+    ET.SubElement(physics, "gravity").text = "0 0 -9.81"
+
+    ode = ET.SubElement(physics, "ode")
+    solver = ET.SubElement(ode, "solver")
+    ET.SubElement(solver, "type").text = "quick"
+    ET.SubElement(solver, "iters").text = str(int(physics_config["ode_iters"]))
+    ET.SubElement(solver, "sor").text = "1.3"
+    constraints = ET.SubElement(ode, "constraints")
+    ET.SubElement(constraints, "cfm").text = "0.0"
+    ET.SubElement(constraints, "erp").text = "0.2"
+    ET.SubElement(constraints, "contact_max_correcting_vel").text = (
+        f"{float(physics_config['contact_max_correcting_vel']):.6f}"
+    )
+    ET.SubElement(constraints, "contact_surface_layer").text = "0.001"
+
+    world.insert(0, physics)
 
 
 def _build_source_model(source: PlacedSource) -> ET.Element:

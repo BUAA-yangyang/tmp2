@@ -99,13 +99,14 @@ SEED=77 FLOOR_COUNT=3 ROOMS_PER_FLOOR=4 ./auto.sh
 | `GUI` | `true` | 是否启动 Gazebo GUI |
 | `PAUSED` | `true` | Gazebo 启动后是否暂停 |
 | `START_CONTROLLER` | `1` | 是否启动 `junior_ctrl` |
-| `CONTROLLER_FOREGROUND` | `1` | 是否在前台运行控制器。前台运行时可以在当前终端输入 `2`、`6` 切换状态 |
+| `CONTROLLER_FOREGROUND` | `1` | 是否在前台运行控制器。前台运行时可以在当前终端输入 `1`、`2`、`6` 切换状态 |
 | `START_BUILDING_CONTROL` | `1` | 是否启动楼栋门/电梯控制服务 |
-| `UNITREE_CTRL_DT` | `0.004` | `junior_ctrl` 控制周期，单位 s。默认 250 Hz，降低 Gazebo 大场景下控制循环超时 warning |
+| `UNITREE_CTRL_DT` | `0.002` | `junior_ctrl` 控制周期，单位 s。默认 500 Hz |
+| `UNITREE_STAND_DURATION` | `3.0` | 按 `2` 后从当前姿态平滑站立的时长，单位 s |
 | `START_VIRTUAL_JOY` | `0` | 是否启动虚拟手柄。该功能通常需要 `uinput` 权限 |
 | `ROBOT_X` | `0.0` | 机器人出生点 x |
-| `ROBOT_Y` | `-2.2` | 机器人出生点 y |
-| `ROBOT_Z` | `0.6` | 机器人出生点 z |
+| `ROBOT_Y` | `-3.2` | 机器人出生点 y |
+| `ROBOT_Z` | `0.09` | 机器人出生点 z |
 | `ROBOT_YAW` | `1.5708` | 机器人出生点 yaw |
 
 示例：
@@ -177,16 +178,16 @@ rosrun building_obstacles generate_multi_floor_building.py ./generated_building 
 The program has already cost 2435us.
 ```
 
-该提示表示单次控制循环耗时超过了 2 ms 目标周期，不代表场景生成失败。当前 `auto.sh` 默认设置 `UNITREE_CTRL_DT=0.004`，即 250 Hz，通常能减少该 warning，并保持仿真控制稳定。如机器性能充足或需要沿用 500 Hz，可显式启动：
+该提示表示单次控制循环耗时超过了 2 ms 目标周期，不代表场景生成失败。当前 `auto.sh` 默认设置 `UNITREE_CTRL_DT=0.002`，即 500 Hz，并默认关闭该 warning 的刷屏日志。
 
 ```bash
 UNITREE_CTRL_DT=0.002 ./auto.sh
 ```
 
-如仍持续刷屏，建议同时降低运行负载：
+如 GUI 下仍明显慢动作，建议无 GUI 启动：
 
 ```bash
-GUI=false UNITREE_CTRL_DT=0.006 ./auto.sh
+GUI=false ./auto.sh
 ```
 
 算法接入建议：

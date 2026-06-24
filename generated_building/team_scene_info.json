@@ -80,9 +80,9 @@
   },
   "robot_start": {
     "x": 0.0,
-    "y": -2.2,
+    "y": -3.2,
     "yaw": 1.5708,
-    "z": 0.6
+    "z": 0.09
   },
   "schema": "team_scene_info_v1"
 }

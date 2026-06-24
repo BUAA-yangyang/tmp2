@@ -29,15 +29,24 @@ ENABLE_SENSOR_DATA_DEFAULT="${ENABLE_SENSORS:-1}"
 ENABLE_SENSOR_DATA="$(as_ros_bool "${ENABLE_SENSOR_DATA:-$ENABLE_SENSOR_DATA_DEFAULT}")"
 ENABLE_REFEREE_ODOM="$(as_ros_bool "${ENABLE_REFEREE_ODOM:-1}")"
 ENABLE_GROUND_TRUTH="$(as_ros_bool "${ENABLE_GROUND_TRUTH:-1}")"
+ENABLE_FOOT_FORCE_VISUAL="$(as_ros_bool "${ENABLE_FOOT_FORCE_VISUAL:-0}")"
 ENABLE_POINTCLOUD_CONVERTER="$(as_ros_bool "${ENABLE_POINTCLOUD_CONVERTER:-1}")"
 POINTCLOUD_USE_GROUND_TRUTH_ODOM="$(as_ros_bool "${POINTCLOUD_USE_GROUND_TRUTH_ODOM:-1}")"
 WRITE_GENERATED_TRUTH_COPY="$(as_ros_bool "${WRITE_GENERATED_TRUTH_COPY:-1}")"
-UNITREE_CTRL_DT="${UNITREE_CTRL_DT:-0.004}"
+UNITREE_CTRL_DT="${UNITREE_CTRL_DT:-0.002}"
+UNITREE_STAND_DURATION="${UNITREE_STAND_DURATION:-3.0}"
+UNITREE_STAND_SETTLE_DURATION="${UNITREE_STAND_SETTLE_DURATION:-0.5}"
+UNITREE_SIM_PASSIVE_HOLD="$(as_ros_bool "${UNITREE_SIM_PASSIVE_HOLD:-1}")"
 UNITREE_ENABLE_REALTIME="${UNITREE_ENABLE_REALTIME:-auto}"
 UNITREE_LOG_WAIT_WARNINGS="$(as_ros_bool "${UNITREE_LOG_WAIT_WARNINGS:-0}")"
+UNITREE_ENABLE_AMP_LOG="$(as_ros_bool "${UNITREE_ENABLE_AMP_LOG:-0}")"
+GAZEBO_PHYSICS_MAX_STEP_SIZE="${GAZEBO_PHYSICS_MAX_STEP_SIZE:-0.002}"
+GAZEBO_PHYSICS_REAL_TIME_UPDATE_RATE="${GAZEBO_PHYSICS_REAL_TIME_UPDATE_RATE:-500}"
+GAZEBO_PHYSICS_ODE_ITERS="${GAZEBO_PHYSICS_ODE_ITERS:-40}"
+GAZEBO_PHYSICS_CONTACT_MAX_CORRECTING_VEL="${GAZEBO_PHYSICS_CONTACT_MAX_CORRECTING_VEL:-5.0}"
 ROBOT_X="${ROBOT_X:-0.0}"
-ROBOT_Y="${ROBOT_Y:--2.2}"
-ROBOT_Z="${ROBOT_Z:-0.6}"
+ROBOT_Y="${ROBOT_Y:--3.2}"
+ROBOT_Z="${ROBOT_Z:-0.09}"
 ROBOT_YAW="${ROBOT_YAW:-1.5708}"
 
 echo "Terminating previous Gazebo, launch, controller, and optional joystick processes..."
@@ -97,6 +106,18 @@ fi
 if [[ "$GENERATOR_HELP" == *"--team-info-dir"* ]]; then
   GENERATOR_ARGS+=(--team-info-dir "$TEAM_INFO_DIR")
 fi
+if [[ "$GENERATOR_HELP" == *"--physics-max-step-size"* ]]; then
+  GENERATOR_ARGS+=(--physics-max-step-size "$GAZEBO_PHYSICS_MAX_STEP_SIZE")
+fi
+if [[ "$GENERATOR_HELP" == *"--physics-real-time-update-rate"* ]]; then
+  GENERATOR_ARGS+=(--physics-real-time-update-rate "$GAZEBO_PHYSICS_REAL_TIME_UPDATE_RATE")
+fi
+if [[ "$GENERATOR_HELP" == *"--physics-ode-iters"* ]]; then
+  GENERATOR_ARGS+=(--physics-ode-iters "$GAZEBO_PHYSICS_ODE_ITERS")
+fi
+if [[ "$GENERATOR_HELP" == *"--physics-contact-max-correcting-vel"* ]]; then
+  GENERATOR_ARGS+=(--physics-contact-max-correcting-vel "$GAZEBO_PHYSICS_CONTACT_MAX_CORRECTING_VEL")
+fi
 if [ "$WRITE_GENERATED_TRUTH_COPY" = "false" ] && [[ "$GENERATOR_HELP" == *"--no-generated-truth-copy"* ]]; then
   GENERATOR_ARGS+=(--no-generated-truth-copy)
 fi
@@ -109,8 +130,12 @@ export COMPETITION_ROBOT_Y="$ROBOT_Y"
 export COMPETITION_ROBOT_Z="$ROBOT_Z"
 export COMPETITION_ROBOT_YAW="$ROBOT_YAW"
 export UNITREE_CTRL_DT
+export UNITREE_STAND_DURATION
+export UNITREE_STAND_SETTLE_DURATION
+export UNITREE_SIM_PASSIVE_HOLD
 export UNITREE_ENABLE_REALTIME
 export UNITREE_LOG_WAIT_WARNINGS
+export UNITREE_ENABLE_AMP_LOG
 export GAZEBO_MODEL_PATH="${GAZEBO_MODEL_PATH:-}:$SCENE_OUTPUT_DIR:$UNITREE_GAZEBO_MODELS"
 
 echo "=========================================="
@@ -122,6 +147,13 @@ echo "  Manifest:$SCENE_OUTPUT_DIR/scene_manifest.json"
 echo "  Result:  $RESULTS_DIR/detected_danger.json"
 echo "  Sensor model: visible"
 echo "  Sensor data:  $ENABLE_SENSOR_DATA"
+echo "  Foot force visual: $ENABLE_FOOT_FORCE_VISUAL"
+echo "  Controller dt: $UNITREE_CTRL_DT s"
+echo "  Stand duration: $UNITREE_STAND_DURATION s"
+echo "  Stand settle: $UNITREE_STAND_SETTLE_DURATION s"
+echo "  Passive hold: $UNITREE_SIM_PASSIVE_HOLD"
+echo "  AMP log: $UNITREE_ENABLE_AMP_LOG"
+echo "  Gazebo physics: max_step=$GAZEBO_PHYSICS_MAX_STEP_SIZE update_rate=$GAZEBO_PHYSICS_REAL_TIME_UPDATE_RATE ode_iters=$GAZEBO_PHYSICS_ODE_ITERS"
 echo "  Wait warning log: $UNITREE_LOG_WAIT_WARNINGS"
 echo "=========================================="
 
@@ -144,6 +176,7 @@ roslaunch "$LAUNCH_FILE" \
   enable_sensor_data:="$ENABLE_SENSOR_DATA" \
   enable_referee_odom:="$ENABLE_REFEREE_ODOM" \
   enable_ground_truth:="$ENABLE_GROUND_TRUTH" \
+  enable_foot_force_visual:="$ENABLE_FOOT_FORCE_VISUAL" \
   enable_pointcloud_converter:="$ENABLE_POINTCLOUD_CONVERTER" \
   pointcloud_use_ground_truth_odom:="$POINTCLOUD_USE_GROUND_TRUTH_ODOM" \
   > "$WORKSPACE_DIR/logs/competition_gazebo.log" 2>&1 &
@@ -164,7 +197,7 @@ if [ "$START_CONTROLLER" = "1" ]; then
   if [ "$CONTROLLER_FOREGROUND" = "1" ]; then
     echo "Starting junior_ctrl controller in the foreground."
     echo "UNITREE_CTRL_DT=$UNITREE_CTRL_DT seconds."
-    echo "Use keyboard input in this terminal: 2 = stand, 6 = RL mode."
+    echo "Use keyboard input in this terminal: 1 = passive/down, 2 = stand, 6 = RL mode."
     "$WORKSPACE_DIR/devel/lib/unitree_guide/junior_ctrl"
   else
     echo "Starting junior_ctrl controller in the background. Keyboard state switching may not be available."

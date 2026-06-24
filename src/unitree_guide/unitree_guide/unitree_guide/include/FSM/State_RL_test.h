@@ -90,10 +90,10 @@ private:
     torch::Tensor obs_history_tensor = torch::zeros({HISTORY_LEN, 45});
     long long dofPosSwitBeginTime = 0.0;//关节位置切换开始时间
     float motion_time = 0.0;
-    std::thread* infer_thread;
-    std::thread* amp_obs_thread;
-    uint8_t infer_thread_runnning=false;
-    uint8_t ampthreadRunning=false;
+    std::thread* infer_thread = nullptr;
+    std::thread* amp_obs_thread = nullptr;
+    uint8_t infer_thread_runnning = State_RL::STOP;
+    uint8_t ampthreadRunning = State_RL::STOP;
     float infer_duration = 0.02;
     float amp_duration = 0.005;
 };

@@ -65,10 +65,23 @@ void State_RL::run(){
 void State_RL::exit(){
     _percent = 0;
     ampthreadRunning = State_RL::STOP;
-    amp_obs_thread->join();
     infer_thread_runnning = State_RL::STOP;
-    infer_thread->join();
-    std::cout << "amp_obs_thread退出!" << std::endl;
+    if(amp_obs_thread != nullptr){
+        if(amp_obs_thread->joinable()){
+            amp_obs_thread->join();
+        }
+        delete amp_obs_thread;
+        amp_obs_thread = nullptr;
+        std::cout << "amp_obs_thread退出!" << std::endl;
+    }
+    if(infer_thread != nullptr){
+        if(infer_thread->joinable()){
+            infer_thread->join();
+        }
+        delete infer_thread;
+        infer_thread = nullptr;
+        std::cout << "infer_thread退出!" << std::endl;
+    }
     if (outfile.is_open()) {
         outfile.close();
         std::cout << "文件关闭成功!" << std::endl;

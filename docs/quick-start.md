@@ -84,11 +84,12 @@ START_CONTROLLER=0 ./auto.sh
 | `START_CONTROLLER` | `1` | 是否启动 `junior_ctrl` |
 | `CONTROLLER_FOREGROUND` | `1` | 是否在前台运行控制器 |
 | `START_BUILDING_CONTROL` | `1` | 是否启动楼栋门/电梯控制服务 |
-| `UNITREE_CTRL_DT` | `0.004` | `junior_ctrl` 控制周期，单位 s。默认 250 Hz |
+| `UNITREE_CTRL_DT` | `0.002` | `junior_ctrl` 控制周期，单位 s。默认 500 Hz |
+| `UNITREE_STAND_DURATION` | `3.0` | 按 `2` 后从当前姿态平滑站立的时长，单位 s |
 | `START_VIRTUAL_JOY` | `0` | 是否启动虚拟手柄，通常需要 `uinput` 权限 |
 | `ROBOT_X` | `0.0` | 机器人出生点 x |
-| `ROBOT_Y` | `-2.2` | 机器人出生点 y |
-| `ROBOT_Z` | `0.6` | 机器人出生点 z |
+| `ROBOT_Y` | `-3.2` | 机器人出生点 y |
+| `ROBOT_Z` | `0.09` | 机器人出生点 z |
 | `ROBOT_YAW` | `1.5708` | 机器人出生点 yaw |
 
 ## 单独生成场景

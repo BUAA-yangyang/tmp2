@@ -23,10 +23,17 @@
     "team_scene_info_file": "/home/ros/Guoyulun/Code/SimEnv/generated_building/team_scene_info.json",
     "velocity_command_topic": "/cmd_vel"
   },
-  "danger_count": 3,
+  "danger_count": 4,
   "distractor_count": 4,
   "door_config": "/home/ros/Guoyulun/Code/SimEnv/generated_building/door_config.yaml",
   "elevator_config": "/home/ros/Guoyulun/Code/SimEnv/generated_building/elevator_config.yaml",
+  "gazebo_physics": {
+    "contact_max_correcting_vel": 5.0,
+    "max_step_size": 0.002,
+    "ode_iters": 40,
+    "real_time_factor": 1.0,
+    "real_time_update_rate": 500
+  },
   "layout_metadata": "/home/ros/Guoyulun/Code/SimEnv/generated_building/layout_metadata.json",
   "output_truth_file": "/home/ros/Guoyulun/Code/SimEnv/generated_building/danger_truth.json",
   "referee_only": {
@@ -45,13 +52,13 @@
   },
   "robot_start": {
     "x": 0.0,
-    "y": -2.2,
+    "y": -3.2,
     "yaw": 1.5708,
-    "z": 0.6
+    "z": 0.09
   },
   "schema": "competition_scene_manifest_v1",
-  "seed": 465860715,
-  "source_count": 7,
+  "seed": 15086033,
+  "source_count": 8,
   "team_scene_info": "/home/ros/Guoyulun/Code/SimEnv/generated_building/team_scene_info.json",
   "truth_file": "/home/ros/Guoyulun/Code/SimEnv/results/danger_truth.json",
   "validation_report": "/home/ros/Guoyulun/Code/SimEnv/generated_building/generation_checks.json",

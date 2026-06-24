@@ -16,19 +16,19 @@ The program has already cost 2435us.
 当前 `auto.sh` 默认设置：
 
 ```bash
-UNITREE_CTRL_DT=0.004
+UNITREE_CTRL_DT=0.002
 ```
 
-即 250 Hz，通常能减少该 warning。仍持续刷屏时可降低 Gazebo 负载：
+即 500 Hz。默认启动脚本已关闭该 warning 的刷屏日志，并通过 Gazebo 物理参数降低 GUI 下的大场景负载。仍感觉明显慢动作时，可无 GUI 启动：
 
 ```bash
-GUI=false UNITREE_CTRL_DT=0.006 ./auto.sh
+GUI=false ./auto.sh
 ```
 
-如机器性能充足并需要沿用 500 Hz：
+确需降低控制频率时，可显式设置：
 
 ```bash
-UNITREE_CTRL_DT=0.002 ./auto.sh
+UNITREE_CTRL_DT=0.004 ./auto.sh
 ```
 
 ## Gazebo 没有正常退出或端口被占用

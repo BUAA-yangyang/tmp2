@@ -7,6 +7,7 @@
 #include "message/LowlevelCmd.h"
 #include "message/LowlevelState.h"
 #include "interface/CmdPanel.h"
+#include <array>
 #include <string>
 #include "ros/ros.h"
 #include <vector>
@@ -16,6 +17,7 @@ public:
 IOInterface(){}
 ~IOInterface(){delete cmdPanel;}
 virtual void sendRecv(const LowlevelCmd *cmd, LowlevelState *state) = 0;
+virtual bool hasFullStateFeedback() const { return true; }
 void zeroCmdPanel(){cmdPanel->setZero();}
 void setPassive(){cmdPanel->setPassive();}
 std::array<double, 3> _base_w_pos = {0.0, 0.0, 0.0};

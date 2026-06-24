@@ -64,14 +64,16 @@ generated_building/team_scene_info.json
 
 ## 控制周期
 
-`junior_ctrl` 原始控制周期为 `0.002 s`，即 500 Hz。当前 `auto.sh` 默认设置：
+`junior_ctrl` 默认控制周期为 `0.002 s`，即 500 Hz：
 
 ```bash
-UNITREE_CTRL_DT=0.004
+UNITREE_CTRL_DT=0.002
 ```
 
-默认值即 250 Hz，通常更适合 Gazebo GUI、随机楼栋、传感器和 RL 推理同时运行的比赛场景。如机器性能充足，可显式恢复 500 Hz：
+键盘 `1` 为 passive/down，`2` 为站立，`6` 为 RL 模式。按 `2` 站立时，控制器会等待 Gazebo 12 个关节状态反馈就绪，再从当前姿态平滑过渡到站立姿态。默认站立过渡时长为 3 秒。
+
+如机器性能较弱、GUI 下动作明显卡顿，可优先降低传感器数据负载或 Gazebo 物理负载；确需降低控制频率时可显式设置：
 
 ```bash
-UNITREE_CTRL_DT=0.002 ./auto.sh
+UNITREE_CTRL_DT=0.004 ./auto.sh
 ```

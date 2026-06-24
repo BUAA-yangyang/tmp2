@@ -11,7 +11,6 @@ FSM::FSM(CtrlComponents *ctrlComp)
     _stateList.passive = new State_Passive(_ctrlComp);
     _stateList.fixedStand = new State_FixedStand(_ctrlComp);
     _stateList.freeStand = new State_FreeStand(_ctrlComp);
-    _stateList.trotting = new State_Trotting(_ctrlComp);
     _stateList.balanceTest = new State_BalanceTest(_ctrlComp);
     _stateList.swingTest = new State_SwingTest(_ctrlComp);
     _stateList.stepTest = new State_StepTest(_ctrlComp);
@@ -37,6 +36,23 @@ void FSM::run(){
     _startTime = getSystemTime();
     _ctrlComp->sendRecv();
     _ctrlComp->ioInterFreeDog->sendRecv();
+    if(!_ctrlComp->ioInter->hasFullStateFeedback()){
+        if(!_waitingForStateFeedback){
+            std::cout << "[INFO] Waiting for Gazebo joint state feedback before accepting stand command." << std::endl;
+            _waitingForStateFeedback = true;
+        }
+        absoluteWait(_startTime, (long long)(_ctrlComp->dt * 1000000));
+        return;
+    }
+    if(_waitingForStateFeedback){
+        std::cout << "[INFO] Gazebo joint state feedback is ready." << std::endl;
+        _waitingForStateFeedback = false;
+    }
+    if(!_ctrlComp->lowState->isFinite()){
+        std::cout << "[WARNING] Gazebo state feedback is not finite; skipping control update." << std::endl;
+        absoluteWait(_startTime, (long long)(_ctrlComp->dt * 1000000));
+        return;
+    }
     _ctrlComp->runWaveGen();
     _ctrlComp->estimator->run();
     if(!checkSafty()){
@@ -80,7 +96,7 @@ FSMState* FSM::getNextState(FSMStateName stateName){
         return _stateList.freeStand;
         break;
     case FSMStateName::TROTTING:
-        return _stateList.trotting;
+        return _currentState;
         break;
     case FSMStateName::BALANCETEST:
         return _stateList.balanceTest;

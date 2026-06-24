@@ -120,35 +120,37 @@
         </sensor>
     </gazebo>
 
-    <!-- Visualization of Foot contacts. -->
-    <gazebo reference="FR_foot">
-        <visual>
-            <plugin name="drawForcePlugin" filename="libunitreeDrawForcePlugin.so">
-                <topicName>FR_foot_contact</topicName>
-            </plugin>
-        </visual>
-    </gazebo>
-    <gazebo reference="FL_foot">
-        <visual>
-            <plugin name="drawForcePlugin" filename="libunitreeDrawForcePlugin.so">
-                <topicName>FL_foot_contact</topicName>
-            </plugin>
-        </visual>
-    </gazebo>
-    <gazebo reference="RR_foot">
-        <visual>
-            <plugin name="drawForcePlugin" filename="libunitreeDrawForcePlugin.so">
-                <topicName>RR_foot_contact</topicName>
-            </plugin>
-        </visual>
-    </gazebo>
-    <gazebo reference="RL_foot">
-        <visual>
-            <plugin name="drawForcePlugin" filename="libunitreeDrawForcePlugin.so">
-                <topicName>RL_foot_contact</topicName>
-            </plugin>
-        </visual>
-    </gazebo>
+    <xacro:if value="$(arg ENABLE_FOOT_FORCE_VISUAL)">
+        <!-- Visualization of foot contacts. Disabled by default for competition scenes. -->
+        <gazebo reference="FR_foot">
+            <visual>
+                <plugin name="drawForcePlugin" filename="libunitreeDrawForcePlugin.so">
+                    <topicName>FR_foot_contact</topicName>
+                </plugin>
+            </visual>
+        </gazebo>
+        <gazebo reference="FL_foot">
+            <visual>
+                <plugin name="drawForcePlugin" filename="libunitreeDrawForcePlugin.so">
+                    <topicName>FL_foot_contact</topicName>
+                </plugin>
+            </visual>
+        </gazebo>
+        <gazebo reference="RR_foot">
+            <visual>
+                <plugin name="drawForcePlugin" filename="libunitreeDrawForcePlugin.so">
+                    <topicName>RR_foot_contact</topicName>
+                </plugin>
+            </visual>
+        </gazebo>
+        <gazebo reference="RL_foot">
+            <visual>
+                <plugin name="drawForcePlugin" filename="libunitreeDrawForcePlugin.so">
+                    <topicName>RL_foot_contact</topicName>
+                </plugin>
+            </visual>
+        </gazebo>
+    </xacro:if>
 
     <gazebo reference="base">
         <material>Gazebo/Green</material>
