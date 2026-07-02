@@ -34,7 +34,7 @@ generated_building/team_scene_info.json
 
 | 接口 | 类型 | 说明 |
 |------|------|------|
-| `/scan` | `sensor_msgs/PointCloud2` | Livox Mid-360 点云数据 |
+| `/scan` | `sensor_msgs/PointCloud` | Livox Mid-360 原始点云 |
 | `/livox/Pointcloud2` | `sensor_msgs/PointCloud2` | 点云转换节点输出，开启时可用 |
 | `/livox/lidar2` | `unitree_guide/CustomMsg` | Livox 风格点云消息，开启时可用 |
 | `/livox/imu` | `sensor_msgs/Imu` | Livox 内置 IMU |
@@ -64,16 +64,16 @@ generated_building/team_scene_info.json
 
 ## 控制周期
 
-`junior_ctrl` 默认控制周期为 `0.002 s`，即 500 Hz：
+当前启动脚本默认控制周期为 `0.004 s`：
 
 ```bash
-UNITREE_CTRL_DT=0.002
+UNITREE_CTRL_DT=0.004
 ```
 
-键盘 `1` 为 passive/down，`2` 为站立，`6` 为 RL 模式。按 `2` 站立时，控制器会等待 Gazebo 12 个关节状态反馈就绪，再从当前姿态平滑过渡到站立姿态。默认站立过渡时长为 3 秒。
+键盘 `2` 为站立，`6` 为 RL 模式。进入 RL 模式后，参赛算法可发布 `/cmd_vel` 控制机器人移动。
 
-如机器性能较弱、GUI 下动作明显卡顿，可优先降低传感器数据负载或 Gazebo 物理负载；确需降低控制频率时可显式设置：
+如机器性能较弱、GUI 下动作明显卡顿，可优先使用无 GUI 启动：
 
 ```bash
-UNITREE_CTRL_DT=0.004 ./auto.sh
+GUI=false ./auto.sh
 ```

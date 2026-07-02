@@ -77,50 +77,50 @@ so3_control_nodelet_OBJECTS = \
 # External object files for target so3_control_nodelet
 so3_control_nodelet_EXTERNAL_OBJECTS =
 
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: uav_simulator/so3_control/CMakeFiles/so3_control_nodelet.dir/src/so3_control_nodelet.cpp.o
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: uav_simulator/so3_control/CMakeFiles/so3_control_nodelet.dir/build.make
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /home/ros/Guoyulun/Competition/SimEnv/devel/lib/libencode_msgs.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /home/ros/Guoyulun/Competition/SimEnv/devel/lib/libdecode_msgs.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/libtf.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/libtf2_ros.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/libactionlib.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/libmessage_filters.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/libtf2.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/libnodeletlib.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/libbondcpp.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /usr/lib/x86_64-linux-gnu/libuuid.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/libclass_loader.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /usr/lib/x86_64-linux-gnu/libPocoFoundation.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /usr/lib/x86_64-linux-gnu/libdl.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/libroslib.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/librospack.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /usr/lib/x86_64-linux-gnu/libpython3.8.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /usr/lib/x86_64-linux-gnu/libboost_program_options.so.1.71.0
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /usr/lib/x86_64-linux-gnu/libtinyxml2.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/libroscpp.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /usr/lib/x86_64-linux-gnu/libpthread.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /usr/lib/x86_64-linux-gnu/libboost_chrono.so.1.71.0
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /usr/lib/x86_64-linux-gnu/libboost_filesystem.so.1.71.0
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/librosconsole.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/librosconsole_log4cxx.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/librosconsole_backend_interface.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /usr/lib/x86_64-linux-gnu/liblog4cxx.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /usr/lib/x86_64-linux-gnu/libboost_regex.so.1.71.0
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/libxmlrpcpp.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/libroscpp_serialization.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/librostime.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /usr/lib/x86_64-linux-gnu/libboost_date_time.so.1.71.0
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/libcpp_common.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /usr/lib/x86_64-linux-gnu/libboost_system.so.1.71.0
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /usr/lib/x86_64-linux-gnu/libboost_thread.so.1.71.0
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /usr/lib/x86_64-linux-gnu/libconsole_bridge.so.0.4
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: /home/ros/Guoyulun/Competition/SimEnv/devel/lib/libSO3Control.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so: uav_simulator/so3_control/CMakeFiles/so3_control_nodelet.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/ros/Guoyulun/Competition/SimEnv/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Linking CXX shared library /home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so"
+devel/lib/libso3_control_nodelet.so: uav_simulator/so3_control/CMakeFiles/so3_control_nodelet.dir/src/so3_control_nodelet.cpp.o
+devel/lib/libso3_control_nodelet.so: uav_simulator/so3_control/CMakeFiles/so3_control_nodelet.dir/build.make
+devel/lib/libso3_control_nodelet.so: devel/lib/libencode_msgs.so
+devel/lib/libso3_control_nodelet.so: devel/lib/libdecode_msgs.so
+devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/libtf.so
+devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/libtf2_ros.so
+devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/libactionlib.so
+devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/libmessage_filters.so
+devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/libtf2.so
+devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/libnodeletlib.so
+devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/libbondcpp.so
+devel/lib/libso3_control_nodelet.so: /usr/lib/x86_64-linux-gnu/libuuid.so
+devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/libclass_loader.so
+devel/lib/libso3_control_nodelet.so: /usr/lib/x86_64-linux-gnu/libPocoFoundation.so
+devel/lib/libso3_control_nodelet.so: /usr/lib/x86_64-linux-gnu/libdl.so
+devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/libroslib.so
+devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/librospack.so
+devel/lib/libso3_control_nodelet.so: /usr/lib/x86_64-linux-gnu/libpython3.8.so
+devel/lib/libso3_control_nodelet.so: /usr/lib/x86_64-linux-gnu/libboost_program_options.so.1.71.0
+devel/lib/libso3_control_nodelet.so: /usr/lib/x86_64-linux-gnu/libtinyxml2.so
+devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/libroscpp.so
+devel/lib/libso3_control_nodelet.so: /usr/lib/x86_64-linux-gnu/libpthread.so
+devel/lib/libso3_control_nodelet.so: /usr/lib/x86_64-linux-gnu/libboost_chrono.so.1.71.0
+devel/lib/libso3_control_nodelet.so: /usr/lib/x86_64-linux-gnu/libboost_filesystem.so.1.71.0
+devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/librosconsole.so
+devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/librosconsole_log4cxx.so
+devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/librosconsole_backend_interface.so
+devel/lib/libso3_control_nodelet.so: /usr/lib/x86_64-linux-gnu/liblog4cxx.so
+devel/lib/libso3_control_nodelet.so: /usr/lib/x86_64-linux-gnu/libboost_regex.so.1.71.0
+devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/libxmlrpcpp.so
+devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/libroscpp_serialization.so
+devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/librostime.so
+devel/lib/libso3_control_nodelet.so: /usr/lib/x86_64-linux-gnu/libboost_date_time.so.1.71.0
+devel/lib/libso3_control_nodelet.so: /opt/ros/noetic/lib/libcpp_common.so
+devel/lib/libso3_control_nodelet.so: /usr/lib/x86_64-linux-gnu/libboost_system.so.1.71.0
+devel/lib/libso3_control_nodelet.so: /usr/lib/x86_64-linux-gnu/libboost_thread.so.1.71.0
+devel/lib/libso3_control_nodelet.so: /usr/lib/x86_64-linux-gnu/libconsole_bridge.so.0.4
+devel/lib/libso3_control_nodelet.so: devel/lib/libSO3Control.so
+devel/lib/libso3_control_nodelet.so: uav_simulator/so3_control/CMakeFiles/so3_control_nodelet.dir/link.txt
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/ros/Guoyulun/Competition/SimEnv/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Linking CXX shared library ../../devel/lib/libso3_control_nodelet.so"
 	cd /home/ros/Guoyulun/Competition/SimEnv/build/uav_simulator/so3_control && $(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/so3_control_nodelet.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.
-uav_simulator/so3_control/CMakeFiles/so3_control_nodelet.dir/build: /home/ros/Guoyulun/Competition/SimEnv/devel/lib/libso3_control_nodelet.so
+uav_simulator/so3_control/CMakeFiles/so3_control_nodelet.dir/build: devel/lib/libso3_control_nodelet.so
 
 .PHONY : uav_simulator/so3_control/CMakeFiles/so3_control_nodelet.dir/build
 

@@ -54,7 +54,7 @@ CMAKE_BINARY_DIR = /home/ros/Guoyulun/Competition/SimEnv/build
 include uav_simulator/Utils/quadrotor_msgs/CMakeFiles/_quadrotor_msgs_generate_messages_check_deps_Odometry.dir/progress.make
 
 uav_simulator/Utils/quadrotor_msgs/CMakeFiles/_quadrotor_msgs_generate_messages_check_deps_Odometry:
-	cd /home/ros/Guoyulun/Competition/SimEnv/build/uav_simulator/Utils/quadrotor_msgs && ../../../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/genmsg/cmake/../../../lib/genmsg/genmsg_check_deps.py quadrotor_msgs /home/ros/Guoyulun/Competition/SimEnv/src/uav_simulator/Utils/quadrotor_msgs/msg/Odometry.msg geometry_msgs/TwistWithCovariance:geometry_msgs/Quaternion:geometry_msgs/Pose:geometry_msgs/Point:geometry_msgs/Twist:geometry_msgs/PoseWithCovariance:nav_msgs/Odometry:geometry_msgs/Vector3:std_msgs/Header
+	cd /home/ros/Guoyulun/Competition/SimEnv/build/uav_simulator/Utils/quadrotor_msgs && ../../../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/genmsg/cmake/../../../lib/genmsg/genmsg_check_deps.py quadrotor_msgs /home/ros/Guoyulun/Competition/SimEnv/src/uav_simulator/Utils/quadrotor_msgs/msg/Odometry.msg geometry_msgs/Twist:geometry_msgs/Vector3:geometry_msgs/Pose:std_msgs/Header:geometry_msgs/TwistWithCovariance:nav_msgs/Odometry:geometry_msgs/PoseWithCovariance:geometry_msgs/Point:geometry_msgs/Quaternion
 
 _quadrotor_msgs_generate_messages_check_deps_Odometry: uav_simulator/Utils/quadrotor_msgs/CMakeFiles/_quadrotor_msgs_generate_messages_check_deps_Odometry
 _quadrotor_msgs_generate_messages_check_deps_Odometry: uav_simulator/Utils/quadrotor_msgs/CMakeFiles/_quadrotor_msgs_generate_messages_check_deps_Odometry.dir/build.make

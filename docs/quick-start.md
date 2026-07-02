@@ -42,6 +42,8 @@ source ./devel/setup.bash
 5. 启动 `building_generator_classic` 门/电梯控制服务。
 6. 启动 `devel/lib/unitree_guide/junior_ctrl`。
 
+Livox 点云插件启动时会读取扫描模式 CSV 文件，启动后前十几秒可能出现 `rostopic hz /scan` 暂时显示 `no new messages`。请等待 `auto.sh` 完成并再等待数秒后检查传感器话题。
+
 ## 常用启动方式
 
 固定随机种子，便于复现实验：
@@ -80,17 +82,28 @@ START_CONTROLLER=0 ./auto.sh
 | `DANGER_COUNT` | `3:6` | 危险源数量，支持 `min:max` |
 | `DISTRACTOR_COUNT` | `4:8` | 干扰源数量，支持 `min:max` |
 | `GUI` | `true` | 是否启动 Gazebo GUI |
-| `PAUSED` | `true` | Gazebo 启动后是否暂停 |
+| `PAUSED` | `false` | Gazebo 启动后是否暂停 |
 | `START_CONTROLLER` | `1` | 是否启动 `junior_ctrl` |
 | `CONTROLLER_FOREGROUND` | `1` | 是否在前台运行控制器 |
 | `START_BUILDING_CONTROL` | `1` | 是否启动楼栋门/电梯控制服务 |
-| `UNITREE_CTRL_DT` | `0.002` | `junior_ctrl` 控制周期，单位 s。默认 500 Hz |
-| `UNITREE_STAND_DURATION` | `3.0` | 按 `2` 后从当前姿态平滑站立的时长，单位 s |
+| `UNITREE_CTRL_DT` | `0.004` | `junior_ctrl` 控制周期，单位 s |
 | `START_VIRTUAL_JOY` | `0` | 是否启动虚拟手柄，通常需要 `uinput` 权限 |
 | `ROBOT_X` | `0.0` | 机器人出生点 x |
-| `ROBOT_Y` | `-3.2` | 机器人出生点 y |
-| `ROBOT_Z` | `0.09` | 机器人出生点 z |
+| `ROBOT_Y` | `-2.2` | 机器人出生点 y |
+| `ROBOT_Z` | `0.6` | 机器人出生点 z |
 | `ROBOT_YAW` | `1.5708` | 机器人出生点 yaw |
+
+性能较弱时建议优先使用：
+
+```bash
+GUI=false ./auto.sh
+```
+
+如只需要测试感知链路，可暂时不启动控制器：
+
+```bash
+START_CONTROLLER=0 ./auto.sh
+```
 
 ## 单独生成场景
 

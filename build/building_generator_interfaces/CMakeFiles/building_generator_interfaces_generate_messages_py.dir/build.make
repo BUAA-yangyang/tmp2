@@ -53,31 +53,31 @@ CMAKE_BINARY_DIR = /home/ros/Guoyulun/Competition/SimEnv/build
 # Include the progress variables for this target.
 include building_generator_interfaces/CMakeFiles/building_generator_interfaces_generate_messages_py.dir/progress.make
 
-building_generator_interfaces/CMakeFiles/building_generator_interfaces_generate_messages_py: /home/ros/Guoyulun/Competition/SimEnv/devel/lib/python3/dist-packages/building_generator_interfaces/srv/_CallElevator.py
-building_generator_interfaces/CMakeFiles/building_generator_interfaces_generate_messages_py: /home/ros/Guoyulun/Competition/SimEnv/devel/lib/python3/dist-packages/building_generator_interfaces/srv/_SetDoorState.py
-building_generator_interfaces/CMakeFiles/building_generator_interfaces_generate_messages_py: /home/ros/Guoyulun/Competition/SimEnv/devel/lib/python3/dist-packages/building_generator_interfaces/srv/__init__.py
+building_generator_interfaces/CMakeFiles/building_generator_interfaces_generate_messages_py: devel/lib/python3/dist-packages/building_generator_interfaces/srv/_CallElevator.py
+building_generator_interfaces/CMakeFiles/building_generator_interfaces_generate_messages_py: devel/lib/python3/dist-packages/building_generator_interfaces/srv/_SetDoorState.py
+building_generator_interfaces/CMakeFiles/building_generator_interfaces_generate_messages_py: devel/lib/python3/dist-packages/building_generator_interfaces/srv/__init__.py
 
 
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/python3/dist-packages/building_generator_interfaces/srv/_CallElevator.py: /opt/ros/noetic/lib/genpy/gensrv_py.py
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/python3/dist-packages/building_generator_interfaces/srv/_CallElevator.py: /home/ros/Guoyulun/Competition/SimEnv/src/building_generator_interfaces/srv/CallElevator.srv
+devel/lib/python3/dist-packages/building_generator_interfaces/srv/_CallElevator.py: /opt/ros/noetic/lib/genpy/gensrv_py.py
+devel/lib/python3/dist-packages/building_generator_interfaces/srv/_CallElevator.py: /home/ros/Guoyulun/Competition/SimEnv/src/building_generator_interfaces/srv/CallElevator.srv
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --blue --bold --progress-dir=/home/ros/Guoyulun/Competition/SimEnv/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Generating Python code from SRV building_generator_interfaces/CallElevator"
-	cd /home/ros/Guoyulun/Competition/SimEnv/build/building_generator_interfaces && ../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/genpy/cmake/../../../lib/genpy/gensrv_py.py /home/ros/Guoyulun/Competition/SimEnv/src/building_generator_interfaces/srv/CallElevator.srv -p building_generator_interfaces -o /home/ros/Guoyulun/Competition/SimEnv/devel/lib/python3/dist-packages/building_generator_interfaces/srv
+	cd /home/ros/Guoyulun/Competition/SimEnv/build/building_generator_interfaces && ../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/genpy/cmake/../../../lib/genpy/gensrv_py.py /home/ros/Guoyulun/Competition/SimEnv/src/building_generator_interfaces/srv/CallElevator.srv -p building_generator_interfaces -o /home/ros/Guoyulun/Competition/SimEnv/build/devel/lib/python3/dist-packages/building_generator_interfaces/srv
 
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/python3/dist-packages/building_generator_interfaces/srv/_SetDoorState.py: /opt/ros/noetic/lib/genpy/gensrv_py.py
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/python3/dist-packages/building_generator_interfaces/srv/_SetDoorState.py: /home/ros/Guoyulun/Competition/SimEnv/src/building_generator_interfaces/srv/SetDoorState.srv
+devel/lib/python3/dist-packages/building_generator_interfaces/srv/_SetDoorState.py: /opt/ros/noetic/lib/genpy/gensrv_py.py
+devel/lib/python3/dist-packages/building_generator_interfaces/srv/_SetDoorState.py: /home/ros/Guoyulun/Competition/SimEnv/src/building_generator_interfaces/srv/SetDoorState.srv
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --blue --bold --progress-dir=/home/ros/Guoyulun/Competition/SimEnv/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Generating Python code from SRV building_generator_interfaces/SetDoorState"
-	cd /home/ros/Guoyulun/Competition/SimEnv/build/building_generator_interfaces && ../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/genpy/cmake/../../../lib/genpy/gensrv_py.py /home/ros/Guoyulun/Competition/SimEnv/src/building_generator_interfaces/srv/SetDoorState.srv -p building_generator_interfaces -o /home/ros/Guoyulun/Competition/SimEnv/devel/lib/python3/dist-packages/building_generator_interfaces/srv
+	cd /home/ros/Guoyulun/Competition/SimEnv/build/building_generator_interfaces && ../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/genpy/cmake/../../../lib/genpy/gensrv_py.py /home/ros/Guoyulun/Competition/SimEnv/src/building_generator_interfaces/srv/SetDoorState.srv -p building_generator_interfaces -o /home/ros/Guoyulun/Competition/SimEnv/build/devel/lib/python3/dist-packages/building_generator_interfaces/srv
 
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/python3/dist-packages/building_generator_interfaces/srv/__init__.py: /opt/ros/noetic/lib/genpy/genmsg_py.py
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/python3/dist-packages/building_generator_interfaces/srv/__init__.py: /home/ros/Guoyulun/Competition/SimEnv/devel/lib/python3/dist-packages/building_generator_interfaces/srv/_CallElevator.py
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/python3/dist-packages/building_generator_interfaces/srv/__init__.py: /home/ros/Guoyulun/Competition/SimEnv/devel/lib/python3/dist-packages/building_generator_interfaces/srv/_SetDoorState.py
+devel/lib/python3/dist-packages/building_generator_interfaces/srv/__init__.py: /opt/ros/noetic/lib/genpy/genmsg_py.py
+devel/lib/python3/dist-packages/building_generator_interfaces/srv/__init__.py: devel/lib/python3/dist-packages/building_generator_interfaces/srv/_CallElevator.py
+devel/lib/python3/dist-packages/building_generator_interfaces/srv/__init__.py: devel/lib/python3/dist-packages/building_generator_interfaces/srv/_SetDoorState.py
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --blue --bold --progress-dir=/home/ros/Guoyulun/Competition/SimEnv/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Generating Python srv __init__.py for building_generator_interfaces"
-	cd /home/ros/Guoyulun/Competition/SimEnv/build/building_generator_interfaces && ../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/genpy/cmake/../../../lib/genpy/genmsg_py.py -o /home/ros/Guoyulun/Competition/SimEnv/devel/lib/python3/dist-packages/building_generator_interfaces/srv --initpy
+	cd /home/ros/Guoyulun/Competition/SimEnv/build/building_generator_interfaces && ../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/genpy/cmake/../../../lib/genpy/genmsg_py.py -o /home/ros/Guoyulun/Competition/SimEnv/build/devel/lib/python3/dist-packages/building_generator_interfaces/srv --initpy
 
 building_generator_interfaces_generate_messages_py: building_generator_interfaces/CMakeFiles/building_generator_interfaces_generate_messages_py
-building_generator_interfaces_generate_messages_py: /home/ros/Guoyulun/Competition/SimEnv/devel/lib/python3/dist-packages/building_generator_interfaces/srv/_CallElevator.py
-building_generator_interfaces_generate_messages_py: /home/ros/Guoyulun/Competition/SimEnv/devel/lib/python3/dist-packages/building_generator_interfaces/srv/_SetDoorState.py
-building_generator_interfaces_generate_messages_py: /home/ros/Guoyulun/Competition/SimEnv/devel/lib/python3/dist-packages/building_generator_interfaces/srv/__init__.py
+building_generator_interfaces_generate_messages_py: devel/lib/python3/dist-packages/building_generator_interfaces/srv/_CallElevator.py
+building_generator_interfaces_generate_messages_py: devel/lib/python3/dist-packages/building_generator_interfaces/srv/_SetDoorState.py
+building_generator_interfaces_generate_messages_py: devel/lib/python3/dist-packages/building_generator_interfaces/srv/__init__.py
 building_generator_interfaces_generate_messages_py: building_generator_interfaces/CMakeFiles/building_generator_interfaces_generate_messages_py.dir/build.make
 
 .PHONY : building_generator_interfaces_generate_messages_py

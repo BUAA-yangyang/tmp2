@@ -72,7 +72,9 @@ Livox 内置 IMU `livox_imu_link`：
 
 | 话题名称 | 消息类型 | 发布频率 | 说明 |
 |---------|---------|---------|------|
-| `/scan` | `sensor_msgs/PointCloud2` | 10 Hz | Livox Mid-360 点云数据 |
+| `/scan` | `sensor_msgs/PointCloud` | 10 Hz | Livox Mid-360 原始点云，Gazebo 插件直接发布 |
+| `/livox/Pointcloud2` | `sensor_msgs/PointCloud2` | 约 10 Hz | 转换后的点云，便于 RViz 和常见点云算法使用 |
+| `/livox/lidar2` | `unitree_guide/CustomMsg` | 约 10 Hz | Livox 风格自定义点云消息 |
 | `/livox/imu` | `sensor_msgs/Imu` | 1000 Hz | 雷达内置 IMU |
 
 雷达参数：
@@ -82,6 +84,13 @@ Livox 内置 IMU `livox_imu_link`：
 - 测距范围：0.1 m 到 40 m
 - 分辨率：0.01 m
 - 噪声：高斯噪声，标准差 0.005
+
+说明：
+
+- `rostopic hz /scan` 统计的是整帧点云消息频率，不是每秒点数。
+- 当前配置每帧约 24000 个点，10 Hz 时点率约 24 万点/s，接近 Mid-360 量级。
+- 仿真刚启动时 Livox 插件需要读取扫描模式文件，前十几秒可能暂时没有点云消息。
+- 如果 Gazebo 实时因子低于 1.0，传感器话题也会表现为卡顿或低频，优先使用无 GUI 启动排查。
 
 ## 视觉传感器
 
@@ -142,9 +151,9 @@ RealSense D415 深度相机：
 # 查看 IMU 数据
 rostopic echo /trunk_imu
 
-# 可视化点云
+# 可视化 Livox 点云
 rosrun rviz rviz
-# 添加 PointCloud2 显示，订阅 /scan
+# 添加 PointCloud2 显示，订阅 /livox/Pointcloud2
 
 # 查看深度图像
 rosrun image_view image_view image:=/real_sense/depth/image_raw

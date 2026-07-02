@@ -1,4 +1,4 @@
-prefix=/home/ros/Guoyulun/Competition/SimEnv/install
+prefix=/usr/local
 
 Name: livox_laser_simulation
 Description: Description of livox_laser_simulation

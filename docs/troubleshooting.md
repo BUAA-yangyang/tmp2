@@ -16,20 +16,78 @@ The program has already cost 2435us.
 当前 `auto.sh` 默认设置：
 
 ```bash
-UNITREE_CTRL_DT=0.002
+UNITREE_CTRL_DT=0.004
 ```
 
-即 500 Hz。默认启动脚本已关闭该 warning 的刷屏日志，并通过 Gazebo 物理参数降低 GUI 下的大场景负载。仍感觉明显慢动作时，可无 GUI 启动：
+仍感觉明显慢动作时，可无 GUI 启动：
 
 ```bash
 GUI=false ./auto.sh
 ```
 
-确需降低控制频率时，可显式设置：
+确需进一步降低控制频率时，可显式设置：
 
 ```bash
-UNITREE_CTRL_DT=0.004 ./auto.sh
+UNITREE_CTRL_DT=0.006 ./auto.sh
 ```
+
+## `/scan` 一开始显示 `no new messages`
+
+Livox 插件启动时会读取扫描模式 CSV 文件，启动后前十几秒可能暂时没有点云。请等待 `auto.sh` 完成并再等待数秒后检查：
+
+```bash
+rostopic info /scan
+rostopic hz /scan
+rostopic hz /livox/Pointcloud2
+```
+
+正常情况下：
+
+- `/scan` 类型为 `sensor_msgs/PointCloud`，publisher 为 `/gazebo`。
+- `/livox/Pointcloud2` 类型为 `sensor_msgs/PointCloud2`，publisher 为 `/pointcloud2livox`。
+- 频率约 10 Hz。
+
+## 点云频率低或 RViz 看起来卡顿
+
+`rostopic hz` 统计的是整帧点云消息频率，不是雷达点率。当前 Livox 仿真默认约 24000 点/帧、10 Hz，点率约 24 万点/s。
+
+如果看起来明显卡顿，先检查 Gazebo 是否跑满实时：
+
+```bash
+gz topic -e /gazebo/performance_metrics
+```
+
+若 `real_time_factor` 明显低于 1.0，通常是 CPU/GPU 性能不足或 GUI 负载较高。优先尝试：
+
+```bash
+GUI=false ./auto.sh
+```
+
+也可以在调试导航或控制时暂时关闭点云转换节点，直接使用 `/scan`：
+
+```bash
+ENABLE_POINTCLOUD_CONVERTER=0 ./auto.sh
+```
+
+## `rospack` 提示 too many positional options
+
+现象：
+
+```text
+[rospack] Error: failed to parse command-line options: too many positional options have been specified on the command line
+```
+
+通常是命令中多写了位置参数，或 shell 没有正确展开 `$(rospack find pkg)`。先确认工作空间已 source：
+
+```bash
+source /opt/ros/noetic/setup.bash
+source ./devel/setup.bash
+rospack find a1_description
+rospack find unitree_guide
+rospack find livox_laser_simulation
+```
+
+如果单独执行正常，请检查报错前一条命令或 launch 文件参数。
 
 ## Gazebo 没有正常退出或端口被占用
 

@@ -4,6 +4,7 @@
 
     <xacro:arg name="DEBUG" default="false"/>
     <xacro:arg name="ENABLE_SENSOR_DATA" default="true"/>
+    <xacro:arg name="ENABLE_FRONT_CAMERA" default="false"/>
     <xacro:arg name="ENABLE_GROUND_TRUTH" default="true"/>
     <xacro:arg name="ENABLE_FOOT_FORCE_VISUAL" default="false"/>
 
@@ -20,7 +21,7 @@
     <xacro:property name="rolloverProtection" value="false"/>
 
     <!-- Debug mode will hung up the robot, use "true" or "false" to switch it. -->
-    <xacro:if value="$(arg DEBUG)">
+    <xacro:if value="${'$(arg DEBUG)' == 'true'}">
         <link name="world"/>
         <joint name="base_static_joint" type="fixed">
             <origin rpy="0 0 0" xyz="0 0 0"/>
@@ -208,6 +209,74 @@
             <child link="real_sense"/>
             <axis xyz="0 0 1"/>
     </joint>
+
+    <link name="real_sense_optical_frame"/>
+    <joint name="real_sense_optical_joint" type="fixed">
+            <parent link="real_sense"/>
+            <child link="real_sense_optical_frame"/>
+            <!-- ROS optical frame: X right, Y down, Z forward. -->
+            <origin xyz="0 0 0" rpy="-1.57079632679 0 -1.57079632679"/>
+    </joint>
+
+    <xacro:if value="${'$(arg ENABLE_FRONT_CAMERA)' == 'true'}">
+        <!-- optional front monocular camera -->
+        <link name="front_camera">
+            <inertial>
+                <mass value="0.001"/>
+                <origin rpy="0 0 0" xyz="0 0 0"/>
+                <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+            </inertial>
+            <visual>
+                <origin rpy="0 0 0" xyz="0 0 0"/>
+                <geometry>
+                    <box size="0.02 0.02 0.02"/>
+                </geometry>
+                <material name="black"/>
+            </visual>
+        </link>
+        <joint name="front_camera_joint" type="fixed">
+            <origin xyz="0.30 0 0.08" rpy="0 0 0"/>
+            <parent link="base"/>
+            <child link="front_camera"/>
+        </joint>
+        <gazebo reference="front_camera">
+            <material>Gazebo/Grey</material>
+            <sensor type="camera" name="camera">
+                <update_rate>30.0</update_rate>
+                <camera name="head">
+                    <horizontal_fov>1.3962634</horizontal_fov>
+                    <image>
+                        <width>800</width>
+                        <height>800</height>
+                        <format>R8G8B8</format>
+                    </image>
+                    <clip>
+                        <near>0.02</near>
+                        <far>300</far>
+                    </clip>
+                    <noise>
+                        <type>gaussian</type>
+                        <mean>0.0</mean>
+                        <stddev>0.007</stddev>
+                    </noise>
+                </camera>
+                <plugin name="camera_controller" filename="libgazebo_ros_camera.so">
+                    <alwaysOn>true</alwaysOn>
+                    <updateRate>0.0</updateRate>
+                    <cameraName>camera</cameraName>
+                    <imageTopicName>image_raw</imageTopicName>
+                    <cameraInfoTopicName>camera_info</cameraInfoTopicName>
+                    <frameName>front_camera</frameName>
+                    <hackBaseline>0.07</hackBaseline>
+                    <distortionK1>0.0</distortionK1>
+                    <distortionK2>0.0</distortionK2>
+                    <distortionK3>0.0</distortionK3>
+                    <distortionT1>0.0</distortionT1>
+                    <distortionT2>0.0</distortionT2>
+                </plugin>
+            </sensor>
+        </gazebo>
+    </xacro:if>
 
 
     <xacro:leg name="FR" mirror="-1" mirror_dae="False" front_hind="1" front_hind_dae="True">

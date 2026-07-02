@@ -1,6 +1,6 @@
 {
   "allowed_interfaces": {
-    "result_file": "/home/ros/Guoyulun/Code/SimEnv/results/detected_danger.json",
+    "result_file": "/home/ros/Guoyulun/Competition/SimEnv/results/detected_danger.json",
     "services": [
       "/set_door_state",
       "/call_elevator"
@@ -80,9 +80,9 @@
   },
   "robot_start": {
     "x": 0.0,
-    "y": -3.2,
+    "y": -2.2,
     "yaw": 1.5708,
-    "z": 0.09
+    "z": 0.6
   },
   "schema": "team_scene_info_v1"
 }

@@ -23,7 +23,10 @@ void callback_BASE(const gazebo_msgs::LinkStates::ConstPtr &msg) {
             break;
         ++index;
     }
-    ros::Rate rate(500);//延迟至100hz发布，避免重复发布
+    if (index >= static_cast<int>(msg->name.size())) {
+        ROS_WARN_THROTTLE(5.0, "Could not find link '%s_gazebo::base' in /gazebo/link_states", robot_name.c_str());
+        return;
+    }
 
     //map到odom的tf变换
     static tf::TransformBroadcaster bf1;
@@ -57,13 +60,13 @@ void callback_BASE(const gazebo_msgs::LinkStates::ConstPtr &msg) {
         msg->twist[index].linear.x,
         msg->twist[index].linear.y,
         msg->twist[index].linear.z);
-    tf::Vector3 transformed_linear_vel = transform_map2odom * linear_vel;
+    tf::Vector3 transformed_linear_vel = transform_map2odom.getBasis() * linear_vel;
 
     tf::Vector3 angular_vel(
         msg->twist[index].angular.x,
         msg->twist[index].angular.y,
         msg->twist[index].angular.z);
-    tf::Vector3 transformed_angular_vel = transform_map2odom * angular_vel;
+    tf::Vector3 transformed_angular_vel = transform_map2odom.getBasis() * angular_vel;
     
     //发布base到odom的tf变换
     static tf::TransformBroadcaster bf2;
@@ -89,18 +92,17 @@ void callback_BASE(const gazebo_msgs::LinkStates::ConstPtr &msg) {
 
 
     // set the velocity
-    Odom.twist.twist.linear.x= transformed_linear_vel.x();
-    Odom.twist.twist.linear.x= transformed_linear_vel.y();
-    Odom.twist.twist.linear.x= transformed_linear_vel.z();
+    Odom.twist.twist.linear.x = transformed_linear_vel.x();
+    Odom.twist.twist.linear.y = transformed_linear_vel.y();
+    Odom.twist.twist.linear.z = transformed_linear_vel.z();
 
 
     Odom.twist.twist.angular.x = transformed_angular_vel.x();
-    Odom.twist.twist.angular.x = transformed_angular_vel.y();
-    Odom.twist.twist.angular.x = transformed_angular_vel.z();
+    Odom.twist.twist.angular.y = transformed_angular_vel.y();
+    Odom.twist.twist.angular.z = transformed_angular_vel.z();
 
 
     robotVelocity_BASE_frame_pub.publish(Odom);
-    rate.sleep();
 }
 
 
@@ -122,9 +124,9 @@ int main(int argc, char **argv) {
     y = atof(argv[2]);
     z = atof(argv[3]);
 
-    double yaw   = atof(argv[4]);
-    double pitch = atof(argv[5]);
-    double roll  = atof(argv[6]);
+    yaw   = atof(argv[4]);
+    pitch = atof(argv[5]);
+    roll  = atof(argv[6]);
   
     nh.param<std::string>("robot_name", robot_name, string("a1"));
     tfState_BASE_sub = node.subscribe<gazebo_msgs::LinkStates>("/gazebo/link_states", 10, callback_BASE);
@@ -133,6 +135,5 @@ int main(int argc, char **argv) {
     ros::spin();
     return 0;
 }
-
 
 

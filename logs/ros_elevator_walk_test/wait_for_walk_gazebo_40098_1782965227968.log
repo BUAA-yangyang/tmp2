@@ -1,0 +1,17 @@
+[rospy.client][INFO] 2026-07-02 12:07:07,987: init_node, name[/wait_for_walk_gazebo_40098_1782965227968], pid[40098]
+[xmlrpc][INFO] 2026-07-02 12:07:07,987: XML-RPC server binding to 0.0.0.0:0
+[xmlrpc][INFO] 2026-07-02 12:07:07,988: Started XML-RPC server [http://LAPTOP-4NHCRNJ5:41265/]
+[rospy.init][INFO] 2026-07-02 12:07:07,988: ROS Slave URI: [http://LAPTOP-4NHCRNJ5:41265/]
+[rospy.impl.masterslave][INFO] 2026-07-02 12:07:07,988: _ready: http://LAPTOP-4NHCRNJ5:41265/
+[rospy.registration][INFO] 2026-07-02 12:07:07,989: Registering with master node http://localhost:11311
+[xmlrpc][INFO] 2026-07-02 12:07:07,989: xml rpc node: starting XML-RPC server
+[rospy.init][INFO] 2026-07-02 12:07:08,088: registered with master
+[rospy.rosout][INFO] 2026-07-02 12:07:08,088: initializing /rosout core topic
+[rospy.registration][ERROR] 2026-07-02 12:07:08,090: [Errno 111] Connection refused
+Unable to register with master node [http://localhost:11311]: master may not be running yet. Will keep trying.
+[rospy.rosout][INFO] 2026-07-02 12:07:08,695: connected to core topic /rosout
+[rospy.simtime][INFO] 2026-07-02 12:07:08,696: /use_sim_time is not set, will not subscribe to simulated time [/clock] topic
+[rospy.internal][INFO] 2026-07-02 12:07:09,060: topic[/rosout] adding connection to [/rosout], count 0
+[rospy.core][INFO] 2026-07-02 12:07:16,838: signal_shutdown [atexit]
+[rospy.internal][INFO] 2026-07-02 12:07:16,840: topic[/rosout] removing connection to /rosout
+[rospy.impl.masterslave][INFO] 2026-07-02 12:07:16,840: atexit

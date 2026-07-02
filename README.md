@@ -44,7 +44,8 @@ source ./devel/setup.bash
 | 接口 | 类型 | 用途 |
 |------|------|------|
 | `/cmd_vel` | `geometry_msgs/Twist` | 机器人速度指令输入 |
-| `/scan` | `sensor_msgs/PointCloud2` | Livox Mid-360 点云 |
+| `/scan` | `sensor_msgs/PointCloud` | Livox Mid-360 原始点云 |
+| `/livox/Pointcloud2` | `sensor_msgs/PointCloud2` | 转换后的 Livox 点云 |
 | `/trunk_imu` | `sensor_msgs/Imu` | 机体 IMU |
 | `/livox/imu` | `sensor_msgs/Imu` | Livox 内置 IMU |
 | `/real_sense/rgb/image_raw` | `sensor_msgs/Image` | RealSense RGB 图像 |
@@ -102,6 +103,6 @@ python3 ./src/building_obstacles/scripts/evaluate_danger.py \
 | `logs/building_control.log` | 门/电梯控制服务日志 | 否 |
 | `logs/junior_ctrl.log` | 控制器日志 | 否 |
 
-## 文档维护说明
+## 参赛注意事项
 
-此文档用于西南技术物理研究所揭榜挂帅赛题，仅用作比赛用途。
+正式算法应只使用公开接口、传感器话题和 `generated_building/team_scene_info.json`。不要读取真值文件、完整 world 文件或布局元数据作为算法输入。

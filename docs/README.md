@@ -11,4 +11,4 @@
 | [结果格式与评估方法](evaluation.md) | `detected_danger.json`、一对一匹配、识别概率、虚警率和客观分 |
 | [传感器与 ROS 话题](sensors-and-topics.md) | 传感器位姿、话题、频率和坐标系 |
 | [常见问题](troubleshooting.md) | 控制周期 warning、服务异常、依赖缺失等问题 |
-| [完整参考文档](reference.md) | 拆分前的完整说明，保留用于交叉核对 |
+| [完整参考文档](reference.md) | 旧版归档说明；以本索引中的专题文档为准 |

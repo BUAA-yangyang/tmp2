@@ -4,6 +4,12 @@ project(unitree_guide)
 # 确保 CMake 可以加载 libtorch 附带的 cmake 模块（例如 CheckLinkerFlag）
 list(APPEND CMAKE_MODULE_PATH "/home/ros/Guoyulun/Download/libtorch/share/cmake/Caffe2/public")
 list(APPEND CMAKE_MODULE_PATH "/home/ros/Guoyulun/Download/libtorch/share/cmake")
+if(NOT DEFINED TORCH_CUDA_ARCH_LIST)
+    set(TORCH_CUDA_ARCH_LIST "5.2" CACHE STRING "CUDA architectures for libtorch")
+endif()
+if(NOT CMAKE_CUDA_FLAGS MATCHES "-arch=sm_")
+    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_52" CACHE STRING "CUDA flags" FORCE)
+endif()
 find_package(Torch REQUIRED PATHS "/home/ros/Guoyulun/Download/libtorch")
 
 set(ROBOT_TYPE A1)         # The type of robot, support Go1 and A1 currently
@@ -74,6 +80,7 @@ if(CATKIN_MAKE)
         message_generation
         roscpp
         rospy
+        sensor_msgs
         std_msgs
         tf
         geometry_msgs
@@ -181,6 +188,7 @@ endif()
 
 catkin_install_python(PROGRAMS
   scripts/virtual_joy.py
+  scripts/keyboard_teleop.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

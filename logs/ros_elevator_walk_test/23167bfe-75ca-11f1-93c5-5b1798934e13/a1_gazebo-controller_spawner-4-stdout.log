@@ -1,0 +1,20 @@
+[INFO] [1782964647.096105, 0.000000]: Controller Spawner: Waiting for service controller_manager/load_controller
+[INFO] [1782964652.218119, 0.202000]: Controller Spawner: Waiting for service controller_manager/switch_controller
+[INFO] [1782964652.220456, 0.202000]: Controller Spawner: Waiting for service controller_manager/unload_controller
+[INFO] [1782964652.222610, 0.202000]: Loading controller: joint_state_controller
+[INFO] [1782964652.246078, 0.206000]: Loading controller: FL_hip_controller
+[INFO] [1782964653.253858, 0.324000]: Loading controller: FL_thigh_controller
+[INFO] [1782964654.260332, 0.422000]: Loading controller: FL_calf_controller
+[INFO] [1782964655.268256, 0.488000]: Loading controller: FR_hip_controller
+[INFO] [1782964656.279978, 0.552000]: Loading controller: FR_thigh_controller
+[INFO] [1782964657.285664, 0.630000]: Loading controller: FR_calf_controller
+[INFO] [1782964658.292132, 0.700000]: Loading controller: RL_hip_controller
+[INFO] [1782964659.299095, 0.774000]: Loading controller: RL_thigh_controller
+[INFO] [1782964663.487658, 0.846000]: Loading controller: RL_calf_controller
+[INFO] [1782964664.494559, 0.914000]: Loading controller: RR_hip_controller
+[INFO] [1782964665.501047, 0.984000]: Loading controller: RR_thigh_controller
+[INFO] [1782964666.506706, 1.056000]: Loading controller: RR_calf_controller
+[INFO] [1782964667.512292, 1.134000]: Controller Spawner: Loaded controllers: joint_state_controller
+[INFO] [1782964667.519565, 1.136000]: Started controllers: joint_state_controller
+[INFO] [1782964872.054636, 19.500000]: Shutting down spawner. Stopping and unloading controllers...
+[INFO] [1782964872.056009, 19.500000]: Stopping all controllers...

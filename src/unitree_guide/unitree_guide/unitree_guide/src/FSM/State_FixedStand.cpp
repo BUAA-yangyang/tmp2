@@ -161,6 +161,9 @@ FSMStateName State_FixedStand::checkChange(){
     else if(_lowState->userCmd == UserCommand::L1_Y){
         return FSMStateName::STEPTEST;
     }
+    else if(_lowState->userCmd == UserCommand::START){
+        return FSMStateName::TROTTING;
+    }
 #ifdef COMPILE_WITH_MOVE_BASE
     else if(_lowState->userCmd == UserCommand::L2_Y){
         return FSMStateName::MOVE_BASE;

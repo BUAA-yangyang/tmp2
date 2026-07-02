@@ -1,4 +1,4 @@
-prefix=/home/ros/Guoyulun/Competition/SimEnv/install
+prefix=/usr/local
 
 Name: unitree_motor_ctrl
 Description: Description of unitree_motor_ctrl

@@ -6,30 +6,6 @@
 
 #IncludeRegexTransform: 
 
-/home/ros/Guoyulun/Competition/SimEnv/devel/include/quadrotor_msgs/PositionCommand.h
-string
--
-vector
--
-memory
--
-ros/types.h
--
-ros/serialization.h
--
-ros/builtin_message_traits.h
--
-ros/message_operations.h
--
-std_msgs/Header.h
--
-geometry_msgs/Point.h
--
-geometry_msgs/Vector3.h
--
-geometry_msgs/Vector3.h
--
-
 /home/ros/Guoyulun/Competition/SimEnv/src/uav_simulator/so3_control/src/control_example.cpp
 Eigen/Eigen
 -
@@ -2151,4 +2127,28 @@ lapacke_mangling.h
 /usr/include/eigen3/Eigen/src/plugins/MatrixCwiseBinaryOps.h
 
 /usr/include/eigen3/Eigen/src/plugins/MatrixCwiseUnaryOps.h
+
+devel/include/quadrotor_msgs/PositionCommand.h
+string
+-
+vector
+-
+memory
+-
+ros/types.h
+-
+ros/serialization.h
+-
+ros/builtin_message_traits.h
+-
+ros/message_operations.h
+-
+std_msgs/Header.h
+-
+geometry_msgs/Point.h
+-
+geometry_msgs/Vector3.h
+-
+geometry_msgs/Vector3.h
+-
 

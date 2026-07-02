@@ -1,4 +1,4 @@
-prefix=/home/ros/Guoyulun/Competition/SimEnv/install
+prefix=/usr/local
 
 Name: building_generator_core
 Description: Description of building_generator_core

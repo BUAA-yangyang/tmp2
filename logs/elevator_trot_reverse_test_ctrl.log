@@ -1,0 +1,10 @@
+[INFO] Realtime scheduler disabled. Set UNITREE_ENABLE_REALTIME=1 to request SCHED_FIFO.
+The control interface for ROS Gazebo simulation
+robot_name: a1
+controller dt: 0.004 s, frequency: 250.000 Hz
+src/unitree_guide/logs/policy_act_inference_stair.pt
+cuda::is_available():1
+load model is successed!
+load model to device!
+Switched from passive to fixed stand
+Switched from fixed stand to trotting

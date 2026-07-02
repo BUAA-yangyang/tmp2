@@ -1,6 +1,6 @@
 # 比赛场景规则
 
-本文说明随机场景、危险源和干扰源的生成语义。参赛算法应基于传感器和机器人状态完成探索，不应读取真值文件。
+本文说明随机场景、危险源和干扰源的生成语义。参赛算法应基于公开接口、传感器和机器人状态完成探索，不应读取真值或内部布局文件。
 
 ## 楼栋
 
@@ -31,7 +31,17 @@
 - 球体中心高度为楼层高度加半径。
 - 方块中心高度为楼层高度加半高。
 
-## 真值文件
+## 允许读取的信息
+
+参赛算法可以读取：
+
+```text
+generated_building/team_scene_info.json
+```
+
+该文件只包含机器人起点、公开门/电梯 ID、允许话题、允许服务和结果文件路径。
+
+## 不允许作为算法输入的信息
 
 本地自检时，裁判真值文件通常写入：
 
@@ -53,3 +63,10 @@ generated_building/danger_truth.json
 - `distraction_sources`：干扰源列表。
 
 参赛算法不应读取 `results/danger_truth.json` 或 `generated_building/danger_truth.json`。
+
+同样，不应读取以下内部文件作为算法输入：
+
+- `generated_building/layout_metadata.json`
+- `generated_building/competition_scene.world`
+- `generated_building/building_config.json`
+- `generated_building/scene_manifest.json`

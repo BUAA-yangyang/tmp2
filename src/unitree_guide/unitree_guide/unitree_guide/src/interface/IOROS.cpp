@@ -5,10 +5,36 @@
 
 #include "interface/IOROS.h"
 #include "interface/KeyBoard.h"
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <unistd.h>
 #include <csignal>
+
+namespace {
+float axisAt(const std::vector<float>& axes, std::size_t index){
+    if(index >= axes.size() || !std::isfinite(axes[index])){
+        return 0.0f;
+    }
+    return std::max(-1.0f, std::min(1.0f, axes[index]));
+}
+
+int buttonAt(const std::vector<int>& buttons, std::size_t index){
+    return index < buttons.size() ? buttons[index] : 0;
+}
+
+UserCommand joyCommandFromButtons(const std::vector<int>& buttons){
+    if(buttonAt(buttons, 0)) return UserCommand::L2_B;      // passive/down
+    if(buttonAt(buttons, 1)) return UserCommand::L2_A;      // fixed stand
+    if(buttonAt(buttons, 2)) return UserCommand::START;     // trotting
+    if(buttonAt(buttons, 3)) return UserCommand::RL;        // RL
+    if(buttonAt(buttons, 6)) return UserCommand::L2_X;      // free stand
+    if(buttonAt(buttons, 7)) return UserCommand::L1_X;      // balance test
+    if(buttonAt(buttons, 8)) return UserCommand::L1_A;      // swing test
+    if(buttonAt(buttons, 9)) return UserCommand::L1_Y;      // step test
+    return UserCommand::NONE;
+}
+}
 
 void RosShutDown(int sig){
 	ROS_INFO("ROS interface shutting down!");
@@ -38,7 +64,6 @@ IOROS::IOROS():IOInterface(){
 }
 
 IOROS::~IOROS(){
-    delete cmdPanel;
     ros::shutdown();
 }
 
@@ -147,6 +172,21 @@ void IOROS::initRecv(){
 void IOROS::joyCallback(const sensor_msgs::Joy::ConstPtr& msg) {
     axes = msg->axes;          // 更新 axes 数据
     buttons = msg->buttons;    // 更新 buttons 数据
+    if(axes.size() < 6){
+        axes.resize(6, 0.0f);
+    }
+    if(buttons.size() < 10){
+        buttons.resize(10, 0);
+    }
+
+    UserValue joyValue;
+    joyValue.lx = axisAt(axes, 0);
+    joyValue.ly = axisAt(axes, 1);
+    joyValue.L2 = axisAt(axes, 2);
+    joyValue.rx = axisAt(axes, 3);
+    joyValue.ry = axisAt(axes, 4);
+    cmdPanel->setUserValue(joyValue);
+    cmdPanel->setUserCmd(joyCommandFromButtons(buttons));
     // 打印数据
     // ROS_INFO("Axes: ");
     // for (float axis : axes) {

@@ -68,13 +68,13 @@ set(unitree_motor_ctrl_CONFIG_INCLUDED TRUE)
 # set variables for source/devel/install prefixes
 if("FALSE" STREQUAL "TRUE")
   set(unitree_motor_ctrl_SOURCE_PREFIX /home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_guide/unitree_actuator_sdk/unitree_motor_ctrl)
-  set(unitree_motor_ctrl_DEVEL_PREFIX /home/ros/Guoyulun/Competition/SimEnv/devel)
+  set(unitree_motor_ctrl_DEVEL_PREFIX /home/ros/Guoyulun/Competition/SimEnv/build/devel)
   set(unitree_motor_ctrl_INSTALL_PREFIX "")
   set(unitree_motor_ctrl_PREFIX ${unitree_motor_ctrl_DEVEL_PREFIX})
 else()
   set(unitree_motor_ctrl_SOURCE_PREFIX "")
   set(unitree_motor_ctrl_DEVEL_PREFIX "")
-  set(unitree_motor_ctrl_INSTALL_PREFIX /home/ros/Guoyulun/Competition/SimEnv/install)
+  set(unitree_motor_ctrl_INSTALL_PREFIX /usr/local)
   set(unitree_motor_ctrl_PREFIX ${unitree_motor_ctrl_INSTALL_PREFIX})
 endif()
 
@@ -156,7 +156,7 @@ foreach(library ${libraries})
     set(lib_path "")
     set(lib "${library}-NOTFOUND")
     # since the path where the library is found is returned we have to iterate over the paths manually
-    foreach(path /home/ros/Guoyulun/Competition/SimEnv/install/lib;/home/ros/Guoyulun/Competition/SimEnv/devel/lib;/opt/ros/noetic/lib)
+    foreach(path /usr/local/lib;/opt/ros/noetic/lib)
       find_library(lib ${library}
         PATHS ${path}
         NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)

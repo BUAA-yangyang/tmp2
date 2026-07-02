@@ -76,6 +76,14 @@ def pointcloud2_to_custommsg(pointcloud2):
 
     return custom_msg
 
+
+def publish_custom_livox(stamp, points):
+    header = rospy.Header()
+    header.stamp = stamp
+    header.frame_id = LOCAL_SENSOR_FRAME
+    cloud_msg = pc2.create_cloud_xyz32(header, points)
+    pub_laser_livox.publish(pointcloud2_to_custommsg(cloud_msg))
+
 def rotate_pointcloud_y(points, theta):
     # theta = np.deg2rad(theta_deg)
     cos_t, sin_t = np.cos(theta), np.sin(theta)
@@ -154,6 +162,7 @@ def filter_points_by_angle(points, min_angle_deg, max_angle_deg):
     points_np = np.array(points, dtype=np.float32)
     if points_np.size == 0:
         return []
+    points_np = points_np.reshape((-1, 3))
     
     # 计算每个点的垂直角度
     distances = np.linalg.norm(points_np[:, :2], axis=1)  # xy平面距离
@@ -173,10 +182,6 @@ def mmw_handler(mmw_cloud_msg):
         stamp = mmw_cloud_msg.header.stamp
 
     # Step 1: 提取原始点云 (更快的方式)
-    header = rospy.Header()
-    header.stamp = stamp
-    output_frame = ODOM_FRAME if use_ground_truth_odom else LOCAL_SENSOR_FRAME
-    header.frame_id = output_frame
     x = np.fromiter((p.x for p in mmw_cloud_msg.points), dtype=np.float32)
     y = np.fromiter((p.y for p in mmw_cloud_msg.points), dtype=np.float32)
     z = np.fromiter((p.z for p in mmw_cloud_msg.points), dtype=np.float32)
@@ -193,14 +198,20 @@ def mmw_handler(mmw_cloud_msg):
 
     # Step 3: 盲区过滤
     points_np = np.array(angle_filtered_points, dtype=np.float32)
+    if points_np.size == 0:
+        publish_custom_livox(stamp, [])
+        header = rospy.Header()
+        header.stamp = stamp
+        header.frame_id = ODOM_FRAME if use_ground_truth_odom else LOCAL_SENSOR_FRAME
+        pub_laser_cloud.publish(pc2.create_cloud_xyz32(header, []))
+        return
+    points_np = points_np.reshape((-1, 3))
     distances = np.linalg.norm(points_np, axis=1)
     filtered_points = points_np[distances >= laser_blind].tolist()
 
     # Step 3.5 转为 CustomMsg 并发布
     with m_buf:
-        cloud_msg_ = pc2.create_cloud_xyz32(header, filtered_points)
-        custom_msg = pointcloud2_to_custommsg(cloud_msg_)
-        pub_laser_livox.publish(custom_msg)
+        publish_custom_livox(stamp, filtered_points)
 
     # Step 4: 可选地使用 Gazebo 真值里程计变换到 odom。正式比赛应关闭该选项。
     if use_ground_truth_odom:
@@ -211,6 +222,8 @@ def mmw_handler(mmw_cloud_msg):
         pointcloud2_frame = LOCAL_SENSOR_FRAME
 
     # Step 5: 创建 PointCloud2
+    header = rospy.Header()
+    header.stamp = stamp
     header.frame_id = pointcloud2_frame
     cloud_msg = pc2.create_cloud_xyz32(header, transformed_points)
     # 发布pocintcloud2消息

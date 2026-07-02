@@ -77,61 +77,61 @@ unitree_move_kinetic_OBJECTS = \
 # External object files for target unitree_move_kinetic
 unitree_move_kinetic_EXTERNAL_OBJECTS =
 
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: unitree_guide/unitree_ros/unitree_controller/CMakeFiles/unitree_move_kinetic.dir/src/move_publisher.cpp.o
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: unitree_guide/unitree_ros/unitree_controller/CMakeFiles/unitree_move_kinetic.dir/build.make
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libcontroller_manager.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libjoint_state_controller.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/librealtime_tools.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/librobot_state_publisher_solver.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libjoint_state_listener.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libkdl_parser.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/liburdf.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/liburdfdom_sensor.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/liburdfdom_model_state.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/liburdfdom_model.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/liburdfdom_world.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libclass_loader.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/libPocoFoundation.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/libdl.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/librosconsole_bridge.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/liborocos-kdl.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libgazebo_ros_api_plugin.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libgazebo_ros_paths_plugin.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/libtinyxml.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libroslib.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/librospack.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/libpython3.8.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/libboost_program_options.so.1.71.0
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/libtinyxml2.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libdynamic_reconfigure_config_init_mutex.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libtf.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libtf2_ros.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libactionlib.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libmessage_filters.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libroscpp.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/libpthread.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/libboost_chrono.so.1.71.0
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/libboost_filesystem.so.1.71.0
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libxmlrpcpp.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libtf2.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/librosconsole.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/librosconsole_log4cxx.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/librosconsole_backend_interface.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/liblog4cxx.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/libboost_regex.so.1.71.0
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libroscpp_serialization.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/librostime.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/libboost_date_time.so.1.71.0
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libcpp_common.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/libboost_system.so.1.71.0
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/libboost_thread.so.1.71.0
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/libconsole_bridge.so.0.4
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic: unitree_guide/unitree_ros/unitree_controller/CMakeFiles/unitree_move_kinetic.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/ros/Guoyulun/Competition/SimEnv/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Linking CXX executable /home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic"
+devel/lib/unitree_controller/unitree_move_kinetic: unitree_guide/unitree_ros/unitree_controller/CMakeFiles/unitree_move_kinetic.dir/src/move_publisher.cpp.o
+devel/lib/unitree_controller/unitree_move_kinetic: unitree_guide/unitree_ros/unitree_controller/CMakeFiles/unitree_move_kinetic.dir/build.make
+devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libcontroller_manager.so
+devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libjoint_state_controller.so
+devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/librealtime_tools.so
+devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/librobot_state_publisher_solver.so
+devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libjoint_state_listener.so
+devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libkdl_parser.so
+devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/liburdf.so
+devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/liburdfdom_sensor.so
+devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/liburdfdom_model_state.so
+devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/liburdfdom_model.so
+devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/liburdfdom_world.so
+devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libclass_loader.so
+devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/libPocoFoundation.so
+devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/libdl.so
+devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/librosconsole_bridge.so
+devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/liborocos-kdl.so
+devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libgazebo_ros_api_plugin.so
+devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libgazebo_ros_paths_plugin.so
+devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/libtinyxml.so
+devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libroslib.so
+devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/librospack.so
+devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/libpython3.8.so
+devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/libboost_program_options.so.1.71.0
+devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/libtinyxml2.so
+devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libdynamic_reconfigure_config_init_mutex.so
+devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libtf.so
+devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libtf2_ros.so
+devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libactionlib.so
+devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libmessage_filters.so
+devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libroscpp.so
+devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/libpthread.so
+devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/libboost_chrono.so.1.71.0
+devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/libboost_filesystem.so.1.71.0
+devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libxmlrpcpp.so
+devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libtf2.so
+devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/librosconsole.so
+devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/librosconsole_log4cxx.so
+devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/librosconsole_backend_interface.so
+devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/liblog4cxx.so
+devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/libboost_regex.so.1.71.0
+devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libroscpp_serialization.so
+devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/librostime.so
+devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/libboost_date_time.so.1.71.0
+devel/lib/unitree_controller/unitree_move_kinetic: /opt/ros/noetic/lib/libcpp_common.so
+devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/libboost_system.so.1.71.0
+devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/libboost_thread.so.1.71.0
+devel/lib/unitree_controller/unitree_move_kinetic: /usr/lib/x86_64-linux-gnu/libconsole_bridge.so.0.4
+devel/lib/unitree_controller/unitree_move_kinetic: unitree_guide/unitree_ros/unitree_controller/CMakeFiles/unitree_move_kinetic.dir/link.txt
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/ros/Guoyulun/Competition/SimEnv/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Linking CXX executable ../../../devel/lib/unitree_controller/unitree_move_kinetic"
 	cd /home/ros/Guoyulun/Competition/SimEnv/build/unitree_guide/unitree_ros/unitree_controller && $(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/unitree_move_kinetic.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.
-unitree_guide/unitree_ros/unitree_controller/CMakeFiles/unitree_move_kinetic.dir/build: /home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_controller/unitree_move_kinetic
+unitree_guide/unitree_ros/unitree_controller/CMakeFiles/unitree_move_kinetic.dir/build: devel/lib/unitree_controller/unitree_move_kinetic
 
 .PHONY : unitree_guide/unitree_ros/unitree_controller/CMakeFiles/unitree_move_kinetic.dir/build
 

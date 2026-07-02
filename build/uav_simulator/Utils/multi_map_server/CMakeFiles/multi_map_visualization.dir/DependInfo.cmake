@@ -17,7 +17,7 @@ set(CMAKE_TARGET_DEFINITIONS_CXX
 
 # The include file search paths:
 set(CMAKE_CXX_TARGET_INCLUDE_PATH
-  "/home/ros/Guoyulun/Competition/SimEnv/devel/include"
+  "devel/include"
   "/home/ros/Guoyulun/Competition/SimEnv/src/uav_simulator/Utils/multi_map_server/include"
   "/home/ros/Guoyulun/Competition/SimEnv/src/uav_simulator/Utils/pose_utils/include"
   "/opt/ros/noetic/include"

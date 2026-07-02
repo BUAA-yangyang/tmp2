@@ -77,49 +77,49 @@ control_example_OBJECTS = \
 # External object files for target control_example
 control_example_EXTERNAL_OBJECTS =
 
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: uav_simulator/so3_control/CMakeFiles/control_example.dir/src/control_example.cpp.o
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: uav_simulator/so3_control/CMakeFiles/control_example.dir/build.make
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /home/ros/Guoyulun/Competition/SimEnv/devel/lib/libencode_msgs.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /home/ros/Guoyulun/Competition/SimEnv/devel/lib/libdecode_msgs.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /opt/ros/noetic/lib/libtf.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /opt/ros/noetic/lib/libtf2_ros.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /opt/ros/noetic/lib/libactionlib.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /opt/ros/noetic/lib/libmessage_filters.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /opt/ros/noetic/lib/libtf2.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /opt/ros/noetic/lib/libnodeletlib.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /opt/ros/noetic/lib/libbondcpp.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /usr/lib/x86_64-linux-gnu/libuuid.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /opt/ros/noetic/lib/libclass_loader.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /usr/lib/x86_64-linux-gnu/libPocoFoundation.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /usr/lib/x86_64-linux-gnu/libdl.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /opt/ros/noetic/lib/libroslib.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /opt/ros/noetic/lib/librospack.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /usr/lib/x86_64-linux-gnu/libpython3.8.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /usr/lib/x86_64-linux-gnu/libboost_program_options.so.1.71.0
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /usr/lib/x86_64-linux-gnu/libtinyxml2.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /opt/ros/noetic/lib/libroscpp.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /usr/lib/x86_64-linux-gnu/libpthread.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /usr/lib/x86_64-linux-gnu/libboost_chrono.so.1.71.0
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /usr/lib/x86_64-linux-gnu/libboost_filesystem.so.1.71.0
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /opt/ros/noetic/lib/librosconsole.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /opt/ros/noetic/lib/librosconsole_log4cxx.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /opt/ros/noetic/lib/librosconsole_backend_interface.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /usr/lib/x86_64-linux-gnu/liblog4cxx.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /usr/lib/x86_64-linux-gnu/libboost_regex.so.1.71.0
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /opt/ros/noetic/lib/libxmlrpcpp.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /opt/ros/noetic/lib/libroscpp_serialization.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /opt/ros/noetic/lib/librostime.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /usr/lib/x86_64-linux-gnu/libboost_date_time.so.1.71.0
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /opt/ros/noetic/lib/libcpp_common.so
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /usr/lib/x86_64-linux-gnu/libboost_system.so.1.71.0
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /usr/lib/x86_64-linux-gnu/libboost_thread.so.1.71.0
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: /usr/lib/x86_64-linux-gnu/libconsole_bridge.so.0.4
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example: uav_simulator/so3_control/CMakeFiles/control_example.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/ros/Guoyulun/Competition/SimEnv/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Linking CXX executable /home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example"
+devel/lib/so3_control/control_example: uav_simulator/so3_control/CMakeFiles/control_example.dir/src/control_example.cpp.o
+devel/lib/so3_control/control_example: uav_simulator/so3_control/CMakeFiles/control_example.dir/build.make
+devel/lib/so3_control/control_example: devel/lib/libencode_msgs.so
+devel/lib/so3_control/control_example: devel/lib/libdecode_msgs.so
+devel/lib/so3_control/control_example: /opt/ros/noetic/lib/libtf.so
+devel/lib/so3_control/control_example: /opt/ros/noetic/lib/libtf2_ros.so
+devel/lib/so3_control/control_example: /opt/ros/noetic/lib/libactionlib.so
+devel/lib/so3_control/control_example: /opt/ros/noetic/lib/libmessage_filters.so
+devel/lib/so3_control/control_example: /opt/ros/noetic/lib/libtf2.so
+devel/lib/so3_control/control_example: /opt/ros/noetic/lib/libnodeletlib.so
+devel/lib/so3_control/control_example: /opt/ros/noetic/lib/libbondcpp.so
+devel/lib/so3_control/control_example: /usr/lib/x86_64-linux-gnu/libuuid.so
+devel/lib/so3_control/control_example: /opt/ros/noetic/lib/libclass_loader.so
+devel/lib/so3_control/control_example: /usr/lib/x86_64-linux-gnu/libPocoFoundation.so
+devel/lib/so3_control/control_example: /usr/lib/x86_64-linux-gnu/libdl.so
+devel/lib/so3_control/control_example: /opt/ros/noetic/lib/libroslib.so
+devel/lib/so3_control/control_example: /opt/ros/noetic/lib/librospack.so
+devel/lib/so3_control/control_example: /usr/lib/x86_64-linux-gnu/libpython3.8.so
+devel/lib/so3_control/control_example: /usr/lib/x86_64-linux-gnu/libboost_program_options.so.1.71.0
+devel/lib/so3_control/control_example: /usr/lib/x86_64-linux-gnu/libtinyxml2.so
+devel/lib/so3_control/control_example: /opt/ros/noetic/lib/libroscpp.so
+devel/lib/so3_control/control_example: /usr/lib/x86_64-linux-gnu/libpthread.so
+devel/lib/so3_control/control_example: /usr/lib/x86_64-linux-gnu/libboost_chrono.so.1.71.0
+devel/lib/so3_control/control_example: /usr/lib/x86_64-linux-gnu/libboost_filesystem.so.1.71.0
+devel/lib/so3_control/control_example: /opt/ros/noetic/lib/librosconsole.so
+devel/lib/so3_control/control_example: /opt/ros/noetic/lib/librosconsole_log4cxx.so
+devel/lib/so3_control/control_example: /opt/ros/noetic/lib/librosconsole_backend_interface.so
+devel/lib/so3_control/control_example: /usr/lib/x86_64-linux-gnu/liblog4cxx.so
+devel/lib/so3_control/control_example: /usr/lib/x86_64-linux-gnu/libboost_regex.so.1.71.0
+devel/lib/so3_control/control_example: /opt/ros/noetic/lib/libxmlrpcpp.so
+devel/lib/so3_control/control_example: /opt/ros/noetic/lib/libroscpp_serialization.so
+devel/lib/so3_control/control_example: /opt/ros/noetic/lib/librostime.so
+devel/lib/so3_control/control_example: /usr/lib/x86_64-linux-gnu/libboost_date_time.so.1.71.0
+devel/lib/so3_control/control_example: /opt/ros/noetic/lib/libcpp_common.so
+devel/lib/so3_control/control_example: /usr/lib/x86_64-linux-gnu/libboost_system.so.1.71.0
+devel/lib/so3_control/control_example: /usr/lib/x86_64-linux-gnu/libboost_thread.so.1.71.0
+devel/lib/so3_control/control_example: /usr/lib/x86_64-linux-gnu/libconsole_bridge.so.0.4
+devel/lib/so3_control/control_example: uav_simulator/so3_control/CMakeFiles/control_example.dir/link.txt
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/ros/Guoyulun/Competition/SimEnv/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Linking CXX executable ../../devel/lib/so3_control/control_example"
 	cd /home/ros/Guoyulun/Competition/SimEnv/build/uav_simulator/so3_control && $(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/control_example.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.
-uav_simulator/so3_control/CMakeFiles/control_example.dir/build: /home/ros/Guoyulun/Competition/SimEnv/devel/lib/so3_control/control_example
+uav_simulator/so3_control/CMakeFiles/control_example.dir/build: devel/lib/so3_control/control_example
 
 .PHONY : uav_simulator/so3_control/CMakeFiles/control_example.dir/build
 

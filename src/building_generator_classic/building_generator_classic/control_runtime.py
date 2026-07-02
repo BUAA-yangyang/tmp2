@@ -23,6 +23,7 @@ class ElevatorState:
     current_floor: int
     served_floors: list[int]
     floor_poses: dict[int, list[float]]
+    car_size: list[float]
     state: str = "idle"
     doors_open: bool = False
 
@@ -57,6 +58,7 @@ class BuildingControlRuntime:
                     int(key): [float(value) for value in pose]
                     for key, pose in (spec.get("floor_poses", {}) or {}).items()
                 },
+                car_size=[float(value) for value in spec.get("car_size", [0.0, 0.0, 0.0])],
             )
             for spec in elevator_specs
         }
@@ -73,6 +75,7 @@ class BuildingControlRuntime:
         state.is_open = bool(open_state)
         start_suffix = "open" if previous_is_open else "closed"
         target_suffix = "open" if state.is_open else "closed"
+        motion_duration = 0.0 if previous_is_open == state.is_open else state.motion_duration
         return {
             "accepted": True,
             "state": "open" if state.is_open else "closed",
@@ -82,7 +85,7 @@ class BuildingControlRuntime:
             "model_name": state.model_name,
             "target_pose": state.closed_pose,
             "model_pose": state.closed_pose,
-            "motion_duration": state.motion_duration,
+            "motion_duration": motion_duration,
             "start_panel_poses": {
                 "left_panel": state.panel_poses.get(f"left_{start_suffix}"),
                 "right_panel": state.panel_poses.get(f"right_{start_suffix}"),
@@ -110,6 +113,8 @@ class BuildingControlRuntime:
                 "message": f"floor {target_floor} is not served by '{elevator_id}'",
             }
 
+        previous_floor = state.current_floor
+        previous_pose = state.floor_poses.get(previous_floor)
         state.state = "moving" if target_floor != state.current_floor else "idle"
         state.current_floor = target_floor
         state.doors_open = bool(open_doors)
@@ -117,8 +122,12 @@ class BuildingControlRuntime:
         return {
             "accepted": True,
             "current_floor": state.current_floor,
+            "previous_floor": previous_floor,
             "state": state.state,
             "message": f"elevator '{elevator_id}' moved to floor {target_floor}",
             "model_name": state.model_name,
+            "previous_pose": previous_pose,
             "target_pose": state.floor_poses.get(state.current_floor),
+            "car_size": state.car_size,
+            "target_door_id": f"elevator_floor_{state.current_floor}",
         }

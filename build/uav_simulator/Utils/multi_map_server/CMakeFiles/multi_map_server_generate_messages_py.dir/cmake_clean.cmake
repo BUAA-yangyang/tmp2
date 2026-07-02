@@ -1,9 +1,9 @@
 file(REMOVE_RECURSE
-  "/home/ros/Guoyulun/Competition/SimEnv/devel/lib/python3/dist-packages/multi_map_server/msg/_MultiOccupancyGrid.py"
-  "/home/ros/Guoyulun/Competition/SimEnv/devel/lib/python3/dist-packages/multi_map_server/msg/_MultiSparseMap3D.py"
-  "/home/ros/Guoyulun/Competition/SimEnv/devel/lib/python3/dist-packages/multi_map_server/msg/_SparseMap3D.py"
-  "/home/ros/Guoyulun/Competition/SimEnv/devel/lib/python3/dist-packages/multi_map_server/msg/_VerticalOccupancyGridList.py"
-  "/home/ros/Guoyulun/Competition/SimEnv/devel/lib/python3/dist-packages/multi_map_server/msg/__init__.py"
+  "../../../devel/lib/python3/dist-packages/multi_map_server/msg/_MultiOccupancyGrid.py"
+  "../../../devel/lib/python3/dist-packages/multi_map_server/msg/_MultiSparseMap3D.py"
+  "../../../devel/lib/python3/dist-packages/multi_map_server/msg/_SparseMap3D.py"
+  "../../../devel/lib/python3/dist-packages/multi_map_server/msg/_VerticalOccupancyGridList.py"
+  "../../../devel/lib/python3/dist-packages/multi_map_server/msg/__init__.py"
   "CMakeFiles/multi_map_server_generate_messages_py"
 )
 

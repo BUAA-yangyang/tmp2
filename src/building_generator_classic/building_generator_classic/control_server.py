@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import os
 from pathlib import Path
 import time
 
@@ -9,11 +10,16 @@ from building_generator_classic.control_runtime import BuildingControlRuntime
 import yaml
 
 DEFAULT_DOOR_ANIMATION_RATE_HZ = 10.0
+DEFAULT_PASSENGER_MODELS = ("a1_gazebo",)
+ELEVATOR_CAR_FLOOR_THICKNESS = 0.12
+ELEVATOR_PASSENGER_XY_MARGIN = 0.35
+ELEVATOR_PASSENGER_BELOW_FLOOR_TOLERANCE = 0.25
+ELEVATOR_PASSENGER_ABOVE_FLOOR_TOLERANCE = 1.60
 
 
 def main(argv: list[str] | None = None) -> int:
     import rospy
-    from gazebo_msgs.srv import SetLinkState, SetModelState
+    from gazebo_msgs.srv import GetModelState, SetLinkState, SetModelState
     from building_generator_interfaces.srv import (
         CallElevator,
         CallElevatorResponse,
@@ -25,14 +31,25 @@ def main(argv: list[str] | None = None) -> int:
     runtime = _load_runtime(args.door_config, args.elevator_config)
 
     rospy.init_node("building_generator_classic_control")
+    rospy.wait_for_service("/gazebo/get_model_state")
     rospy.wait_for_service("/gazebo/set_model_state")
     rospy.wait_for_service("/gazebo/set_link_state")
+    get_model_state = rospy.ServiceProxy("/gazebo/get_model_state", GetModelState)
     set_model_state = rospy.ServiceProxy("/gazebo/set_model_state", SetModelState)
     set_link_state = rospy.ServiceProxy("/gazebo/set_link_state", SetLinkState)
+    passenger_models = _passenger_models(args.passenger_model)
     rospy.Service(
         "call_elevator",
         CallElevator,
-        lambda request: _handle_call_elevator(runtime, request, CallElevatorResponse, set_model_state),
+        lambda request: _handle_call_elevator(
+            runtime,
+            request,
+            CallElevatorResponse,
+            get_model_state,
+            set_model_state,
+            set_link_state,
+            passenger_models,
+        ),
     )
     rospy.Service(
         "set_door_state",
@@ -48,6 +65,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Building generator Gazebo Classic control server")
     parser.add_argument("--door-config", required=True)
     parser.add_argument("--elevator-config", required=True)
+    parser.add_argument(
+        "--passenger-model",
+        action="append",
+        help="Gazebo model to carry when it is standing inside the elevator car. "
+        "Can be repeated, or set ELEVATOR_PASSENGER_MODELS as a comma-separated list.",
+    )
     return parser
 
 
@@ -60,14 +83,37 @@ def _load_runtime(door_config_path: str, elevator_config_path: str) -> BuildingC
     )
 
 
-def _handle_call_elevator(runtime: BuildingControlRuntime, request, response_type, set_model_state):
+def _handle_call_elevator(
+    runtime: BuildingControlRuntime,
+    request,
+    response_type,
+    get_model_state,
+    set_model_state,
+    set_link_state,
+    passenger_models: tuple[str, ...],
+):
     result = runtime.call_elevator(
         request.elevator_id,
         request.target_floor,
         request.open_doors,
     )
     if result.get("accepted") and result.get("target_pose"):
+        passenger_states = _find_elevator_passengers(
+            get_model_state,
+            passenger_models,
+            result.get("previous_pose"),
+            result.get("car_size"),
+        )
         _apply_model_pose(set_model_state, result["model_name"], result["target_pose"])
+        _move_elevator_passengers(
+            set_model_state,
+            passenger_states,
+            result.get("previous_pose"),
+            result["target_pose"],
+        )
+        if request.open_doors and result.get("target_door_id"):
+            door_result = runtime.set_door_state(result["target_door_id"], True)
+            _apply_door_result(door_result, set_model_state, set_link_state)
     return response_type(
         accepted=bool(result["accepted"]),
         current_floor=int(result["current_floor"]),
@@ -78,6 +124,15 @@ def _handle_call_elevator(runtime: BuildingControlRuntime, request, response_typ
 
 def _handle_set_door_state(runtime: BuildingControlRuntime, request, response_type, set_model_state, set_link_state):
     result = runtime.set_door_state(request.door_id, request.open)
+    _apply_door_result(result, set_model_state, set_link_state)
+    return response_type(
+        accepted=bool(result["accepted"]),
+        state=str(result["state"]),
+        message=str(result["message"]),
+    )
+
+
+def _apply_door_result(result: dict, set_model_state, set_link_state) -> None:
     if result.get("accepted") and result.get("panel_poses"):
         _apply_model_pose(set_model_state, result["model_name"], result["model_pose"])
         motion_duration = float(result.get("motion_duration", 0.0) or 0.0)
@@ -99,11 +154,6 @@ def _handle_set_door_state(runtime: BuildingControlRuntime, request, response_ty
             )
     elif result.get("accepted") and result.get("target_pose"):
         _apply_model_pose(set_model_state, result["model_name"], result["target_pose"])
-    return response_type(
-        accepted=bool(result["accepted"]),
-        state=str(result["state"]),
-        message=str(result["message"]),
-    )
 
 
 def _apply_panel_poses(
@@ -191,6 +241,105 @@ def _apply_model_pose(set_model_state, model_name: str, pose_values: list[float]
     model_state.pose.orientation.y = qy
     model_state.pose.orientation.z = qz
     model_state.pose.orientation.w = qw
+    set_model_state(model_state)
+
+
+def _passenger_models(cli_values: list[str] | None) -> tuple[str, ...]:
+    raw_values: list[str] = []
+    raw_values.extend(cli_values or [])
+    env_value = os.environ.get("ELEVATOR_PASSENGER_MODELS", "")
+    if env_value:
+        raw_values.extend(env_value.split(","))
+    cleaned = tuple(value.strip() for value in raw_values if value.strip())
+    return cleaned or DEFAULT_PASSENGER_MODELS
+
+
+def _find_elevator_passengers(
+    get_model_state,
+    passenger_models: tuple[str, ...],
+    elevator_pose: list[float] | None,
+    car_size: list[float] | None,
+) -> list[tuple[str, object]]:
+    if not elevator_pose or not car_size or len(car_size) < 3:
+        return []
+
+    passengers: list[tuple[str, object]] = []
+    for model_name in passenger_models:
+        try:
+            model_state = get_model_state(model_name, "world")
+        except Exception:
+            continue
+        if not getattr(model_state, "success", False):
+            continue
+        if _pose_inside_elevator_car(model_state.pose, elevator_pose, car_size):
+            passengers.append((model_name, model_state))
+    return passengers
+
+
+def _pose_inside_elevator_car(pose, elevator_pose: list[float], car_size: list[float]) -> bool:
+    local_x, local_y = _world_xy_to_local(
+        pose.position.x - float(elevator_pose[0]),
+        pose.position.y - float(elevator_pose[1]),
+        float(elevator_pose[5]),
+    )
+    half_x = float(car_size[0]) / 2.0 + ELEVATOR_PASSENGER_XY_MARGIN
+    half_y = float(car_size[1]) / 2.0 + ELEVATOR_PASSENGER_XY_MARGIN
+    floor_z = _elevator_floor_z(elevator_pose, car_size)
+    relative_z = float(pose.position.z) - floor_z
+    return (
+        abs(local_x) <= half_x
+        and abs(local_y) <= half_y
+        and -ELEVATOR_PASSENGER_BELOW_FLOOR_TOLERANCE <= relative_z <= ELEVATOR_PASSENGER_ABOVE_FLOOR_TOLERANCE
+    )
+
+
+def _world_xy_to_local(dx: float, dy: float, yaw: float) -> tuple[float, float]:
+    cos_yaw = math.cos(yaw)
+    sin_yaw = math.sin(yaw)
+    return (
+        dx * cos_yaw + dy * sin_yaw,
+        -dx * sin_yaw + dy * cos_yaw,
+    )
+
+
+def _elevator_floor_z(elevator_pose: list[float], car_size: list[float]) -> float:
+    return float(elevator_pose[2]) - float(car_size[2]) / 2.0 + ELEVATOR_CAR_FLOOR_THICKNESS
+
+
+def _move_elevator_passengers(
+    set_model_state,
+    passenger_states: list[tuple[str, object]],
+    previous_pose: list[float] | None,
+    target_pose: list[float],
+) -> None:
+    if not passenger_states or not previous_pose:
+        return
+    delta_x = float(target_pose[0]) - float(previous_pose[0])
+    delta_y = float(target_pose[1]) - float(previous_pose[1])
+    delta_z = float(target_pose[2]) - float(previous_pose[2])
+    for model_name, model_state in passenger_states:
+        _apply_existing_model_state(
+            set_model_state,
+            model_name,
+            model_state.pose,
+            model_state.twist,
+            delta_x,
+            delta_y,
+            delta_z,
+        )
+
+
+def _apply_existing_model_state(set_model_state, model_name: str, pose, twist, dx: float, dy: float, dz: float) -> None:
+    from gazebo_msgs.msg import ModelState
+
+    model_state = ModelState()
+    model_state.model_name = model_name
+    model_state.reference_frame = "world"
+    model_state.pose = pose
+    model_state.pose.position.x += dx
+    model_state.pose.position.y += dy
+    model_state.pose.position.z += dz
+    model_state.twist = twist
     set_model_state(model_state)
 
 

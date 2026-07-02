@@ -53,25 +53,25 @@ CMAKE_BINARY_DIR = /home/ros/Guoyulun/Competition/SimEnv/build
 # Include the progress variables for this target.
 include unitree_guide/unitree_guide/unitree_guide/CMakeFiles/unitree_guide_generate_messages_lisp.dir/progress.make
 
-unitree_guide/unitree_guide/unitree_guide/CMakeFiles/unitree_guide_generate_messages_lisp: /home/ros/Guoyulun/Competition/SimEnv/devel/share/common-lisp/ros/unitree_guide/msg/CustomPoint.lisp
-unitree_guide/unitree_guide/unitree_guide/CMakeFiles/unitree_guide_generate_messages_lisp: /home/ros/Guoyulun/Competition/SimEnv/devel/share/common-lisp/ros/unitree_guide/msg/CustomMsg.lisp
+unitree_guide/unitree_guide/unitree_guide/CMakeFiles/unitree_guide_generate_messages_lisp: devel/share/common-lisp/ros/unitree_guide/msg/CustomPoint.lisp
+unitree_guide/unitree_guide/unitree_guide/CMakeFiles/unitree_guide_generate_messages_lisp: devel/share/common-lisp/ros/unitree_guide/msg/CustomMsg.lisp
 
 
-/home/ros/Guoyulun/Competition/SimEnv/devel/share/common-lisp/ros/unitree_guide/msg/CustomPoint.lisp: /opt/ros/noetic/lib/genlisp/gen_lisp.py
-/home/ros/Guoyulun/Competition/SimEnv/devel/share/common-lisp/ros/unitree_guide/msg/CustomPoint.lisp: /home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_guide/unitree_guide/msg/CustomPoint.msg
+devel/share/common-lisp/ros/unitree_guide/msg/CustomPoint.lisp: /opt/ros/noetic/lib/genlisp/gen_lisp.py
+devel/share/common-lisp/ros/unitree_guide/msg/CustomPoint.lisp: /home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_guide/unitree_guide/msg/CustomPoint.msg
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --blue --bold --progress-dir=/home/ros/Guoyulun/Competition/SimEnv/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Generating Lisp code from unitree_guide/CustomPoint.msg"
-	cd /home/ros/Guoyulun/Competition/SimEnv/build/unitree_guide/unitree_guide/unitree_guide && ../../../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/genlisp/cmake/../../../lib/genlisp/gen_lisp.py /home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_guide/unitree_guide/msg/CustomPoint.msg -Iunitree_guide:/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_guide/unitree_guide/msg -Istd_msgs:/opt/ros/noetic/share/std_msgs/cmake/../msg -p unitree_guide -o /home/ros/Guoyulun/Competition/SimEnv/devel/share/common-lisp/ros/unitree_guide/msg
+	cd /home/ros/Guoyulun/Competition/SimEnv/build/unitree_guide/unitree_guide/unitree_guide && ../../../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/genlisp/cmake/../../../lib/genlisp/gen_lisp.py /home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_guide/unitree_guide/msg/CustomPoint.msg -Iunitree_guide:/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_guide/unitree_guide/msg -Istd_msgs:/opt/ros/noetic/share/std_msgs/cmake/../msg -p unitree_guide -o /home/ros/Guoyulun/Competition/SimEnv/build/devel/share/common-lisp/ros/unitree_guide/msg
 
-/home/ros/Guoyulun/Competition/SimEnv/devel/share/common-lisp/ros/unitree_guide/msg/CustomMsg.lisp: /opt/ros/noetic/lib/genlisp/gen_lisp.py
-/home/ros/Guoyulun/Competition/SimEnv/devel/share/common-lisp/ros/unitree_guide/msg/CustomMsg.lisp: /home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_guide/unitree_guide/msg/CustomMsg.msg
-/home/ros/Guoyulun/Competition/SimEnv/devel/share/common-lisp/ros/unitree_guide/msg/CustomMsg.lisp: /home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_guide/unitree_guide/msg/CustomPoint.msg
-/home/ros/Guoyulun/Competition/SimEnv/devel/share/common-lisp/ros/unitree_guide/msg/CustomMsg.lisp: /opt/ros/noetic/share/std_msgs/msg/Header.msg
+devel/share/common-lisp/ros/unitree_guide/msg/CustomMsg.lisp: /opt/ros/noetic/lib/genlisp/gen_lisp.py
+devel/share/common-lisp/ros/unitree_guide/msg/CustomMsg.lisp: /home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_guide/unitree_guide/msg/CustomMsg.msg
+devel/share/common-lisp/ros/unitree_guide/msg/CustomMsg.lisp: /home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_guide/unitree_guide/msg/CustomPoint.msg
+devel/share/common-lisp/ros/unitree_guide/msg/CustomMsg.lisp: /opt/ros/noetic/share/std_msgs/msg/Header.msg
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --blue --bold --progress-dir=/home/ros/Guoyulun/Competition/SimEnv/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Generating Lisp code from unitree_guide/CustomMsg.msg"
-	cd /home/ros/Guoyulun/Competition/SimEnv/build/unitree_guide/unitree_guide/unitree_guide && ../../../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/genlisp/cmake/../../../lib/genlisp/gen_lisp.py /home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_guide/unitree_guide/msg/CustomMsg.msg -Iunitree_guide:/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_guide/unitree_guide/msg -Istd_msgs:/opt/ros/noetic/share/std_msgs/cmake/../msg -p unitree_guide -o /home/ros/Guoyulun/Competition/SimEnv/devel/share/common-lisp/ros/unitree_guide/msg
+	cd /home/ros/Guoyulun/Competition/SimEnv/build/unitree_guide/unitree_guide/unitree_guide && ../../../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/genlisp/cmake/../../../lib/genlisp/gen_lisp.py /home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_guide/unitree_guide/msg/CustomMsg.msg -Iunitree_guide:/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_guide/unitree_guide/msg -Istd_msgs:/opt/ros/noetic/share/std_msgs/cmake/../msg -p unitree_guide -o /home/ros/Guoyulun/Competition/SimEnv/build/devel/share/common-lisp/ros/unitree_guide/msg
 
 unitree_guide_generate_messages_lisp: unitree_guide/unitree_guide/unitree_guide/CMakeFiles/unitree_guide_generate_messages_lisp
-unitree_guide_generate_messages_lisp: /home/ros/Guoyulun/Competition/SimEnv/devel/share/common-lisp/ros/unitree_guide/msg/CustomPoint.lisp
-unitree_guide_generate_messages_lisp: /home/ros/Guoyulun/Competition/SimEnv/devel/share/common-lisp/ros/unitree_guide/msg/CustomMsg.lisp
+unitree_guide_generate_messages_lisp: devel/share/common-lisp/ros/unitree_guide/msg/CustomPoint.lisp
+unitree_guide_generate_messages_lisp: devel/share/common-lisp/ros/unitree_guide/msg/CustomMsg.lisp
 unitree_guide_generate_messages_lisp: unitree_guide/unitree_guide/unitree_guide/CMakeFiles/unitree_guide_generate_messages_lisp.dir/build.make
 
 .PHONY : unitree_guide_generate_messages_lisp

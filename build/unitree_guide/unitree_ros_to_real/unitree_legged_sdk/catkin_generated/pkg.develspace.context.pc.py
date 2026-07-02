@@ -4,5 +4,5 @@ PROJECT_PKG_CONFIG_INCLUDE_DIRS = "/home/ros/Guoyulun/Competition/SimEnv/src/uni
 PROJECT_CATKIN_DEPENDS = "".replace(';', ' ')
 PKG_CONFIG_LIBRARIES_WITH_PREFIX = "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_sdk/lib/cpp/amd64/libunitree_legged_sdk.a".split(';') if "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_sdk/lib/cpp/amd64/libunitree_legged_sdk.a" != "" else []
 PROJECT_NAME = "unitree_legged_sdk"
-PROJECT_SPACE_DIR = "/home/ros/Guoyulun/Competition/SimEnv/devel"
+PROJECT_SPACE_DIR = "/home/ros/Guoyulun/Competition/SimEnv/build/devel"
 PROJECT_VERSION = "0.0.0"
