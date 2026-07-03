@@ -20,7 +20,9 @@ BUILDING_LENGTH="${BUILDING_LENGTH:-36.0}"
 DANGER_COUNT="${DANGER_COUNT:-3:6}"
 DISTRACTOR_COUNT="${DISTRACTOR_COUNT:-4:8}"
 GUI="${GUI:-true}"
-PAUSED="${PAUSED:-false}"
+PAUSED="${PAUSED:-true}"
+AUTO_UNPAUSE="$(as_ros_bool "${AUTO_UNPAUSE:-1}")"
+AUTO_UNPAUSE_DELAY="${AUTO_UNPAUSE_DELAY:-6}"
 START_CONTROLLER="${START_CONTROLLER:-1}"
 START_VIRTUAL_JOY="${START_VIRTUAL_JOY:-0}"
 CONTROLLER_FOREGROUND="${CONTROLLER_FOREGROUND:-1}"
@@ -40,9 +42,26 @@ GAZEBO_PHYSICS_REAL_TIME_UPDATE_RATE="${GAZEBO_PHYSICS_REAL_TIME_UPDATE_RATE:-50
 GAZEBO_PHYSICS_ODE_ITERS="${GAZEBO_PHYSICS_ODE_ITERS:-40}"
 GAZEBO_PHYSICS_CONTACT_MAX_CORRECTING_VEL="${GAZEBO_PHYSICS_CONTACT_MAX_CORRECTING_VEL:-5.0}"
 ROBOT_X="${ROBOT_X:-0.0}"
-ROBOT_Y="${ROBOT_Y:--2.2}"
+ROBOT_Y="${ROBOT_Y:-2.3}"
 ROBOT_Z="${ROBOT_Z:-0.6}"
 ROBOT_YAW="${ROBOT_YAW:-1.5708}"
+
+schedule_unpause_physics() {
+  if [ "$AUTO_UNPAUSE" != "true" ]; then
+    return
+  fi
+
+  (
+    sleep "$AUTO_UNPAUSE_DELAY"
+    for _ in $(seq 1 40); do
+      if rosservice list 2>/dev/null | grep -q '^/gazebo/unpause_physics$'; then
+        rosservice call /gazebo/unpause_physics >/dev/null 2>&1 || true
+        exit 0
+      fi
+      sleep 0.25
+    done
+  ) &
+}
 
 echo "Terminating previous Gazebo, launch, controller, and optional joystick processes..."
 pkill -f "roslaunch unitree_guide multi_floor_gazeboSim.launch" 2>/dev/null || true
@@ -117,6 +136,8 @@ echo "  Sensor data: $ENABLE_SENSOR_DATA"
 echo "  PointCloud2 converter: $ENABLE_POINTCLOUD_CONVERTER"
 echo "  Ground truth topics: $ENABLE_GROUND_TRUTH"
 echo "  Referee odom: $ENABLE_REFEREE_ODOM"
+echo "  Gazebo starts paused: $PAUSED"
+echo "  Auto unpause: $AUTO_UNPAUSE after ${AUTO_UNPAUSE_DELAY}s"
 echo "  Gazebo physics: max_step=$GAZEBO_PHYSICS_MAX_STEP_SIZE update_rate=$GAZEBO_PHYSICS_REAL_TIME_UPDATE_RATE ode_iters=$GAZEBO_PHYSICS_ODE_ITERS"
 echo "  Gazebo plugin path: $GAZEBO_PLUGIN_PATH"
 echo "=========================================="
@@ -168,6 +189,7 @@ if [ "$START_CONTROLLER" = "1" ]; then
     echo "Starting junior_ctrl controller in the foreground."
     echo "UNITREE_CTRL_DT=$UNITREE_CTRL_DT seconds."
     echo "Use keyboard input in this terminal: 2 = stand, 6 = RL mode."
+    schedule_unpause_physics
     "$WORKSPACE_DIR/devel/lib/unitree_guide/junior_ctrl"
   else
     echo "Starting junior_ctrl controller in the background. Keyboard state switching may not be available."
@@ -175,7 +197,10 @@ if [ "$START_CONTROLLER" = "1" ]; then
     "$WORKSPACE_DIR/devel/lib/unitree_guide/junior_ctrl" \
       > "$WORKSPACE_DIR/logs/junior_ctrl.log" 2>&1 &
     echo $! > "$WORKSPACE_DIR/logs/junior_ctrl.pid"
+    schedule_unpause_physics
   fi
+else
+  schedule_unpause_physics
 fi
 
 echo "Simulation startup command completed."

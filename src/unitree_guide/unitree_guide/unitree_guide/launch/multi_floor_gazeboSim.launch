@@ -48,8 +48,7 @@
                     -J FR_hip_joint -0.35 -J FR_thigh_joint 1.36 -J FR_calf_joint -2.65
                     -J FL_hip_joint 0.35 -J FL_thigh_joint 1.36 -J FL_calf_joint -2.65
                     -J RR_hip_joint -0.50 -J RR_thigh_joint 1.36 -J RR_calf_joint -2.65
-                    -J RL_hip_joint 0.50 -J RL_thigh_joint 1.36 -J RL_calf_joint -2.65
-                    -unpause"/>
+                    -J RL_hip_joint 0.50 -J RL_thigh_joint 1.36 -J RL_calf_joint -2.65"/>
 
     <node if="$(arg enable_referee_odom)" pkg="unitree_guide" type="state_from_gazebo" name="state_from_gazebo" args="0 0 0 0 0 0" output="screen">
         <param name="robot_name" value="$(arg rname)" />
