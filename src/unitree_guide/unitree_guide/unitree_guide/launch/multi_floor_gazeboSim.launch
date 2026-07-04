@@ -11,6 +11,9 @@
     <arg name="debug" default="false"/>
     <arg name="user_debug" default="false"/>
     <arg name="enable_sensor_data" default="true"/>
+    <arg name="enable_livox" default="$(arg enable_sensor_data)"/>
+    <arg name="enable_livox_imu" default="$(arg enable_livox)"/>
+    <arg name="enable_realsense" default="$(arg enable_sensor_data)"/>
     <arg name="enable_front_camera" default="false"/>
     <arg name="enable_referee_odom" default="true"/>
     <arg name="enable_ground_truth" default="true"/>
@@ -41,6 +44,9 @@
            command="$(find xacro)/xacro --inorder '$(arg dollar)$(arg robot_path)/xacro/robot.xacro'
            DEBUG:=$(arg user_debug)
            ENABLE_SENSOR_DATA:=$(arg enable_sensor_data)
+           ENABLE_LIVOX:=$(arg enable_livox)
+           ENABLE_LIVOX_IMU:=$(arg enable_livox_imu)
+           ENABLE_REALSENSE:=$(arg enable_realsense)
            ENABLE_FRONT_CAMERA:=$(arg enable_front_camera)
            ENABLE_GROUND_TRUTH:=$(arg enable_ground_truth)
            ENABLE_FOOT_CONTACT_SENSOR:=$(arg enable_foot_contact_sensor)
@@ -81,7 +87,7 @@
         <arg name="rname" value="$(arg rname)"/>
     </include>
 
-    <group if="$(arg enable_sensor_data)">
+    <group if="$(arg enable_livox)">
         <node if="$(arg enable_pointcloud_converter)" pkg="unitree_guide" type="pointcloud2livox.py" name="pointcloud2livox" output="screen">
             <param name="laser_blind" value="0.5" />
             <param name="min_angle" value="-7"/>

@@ -26,14 +26,15 @@ inline double getTimeSecond(){
 inline bool shouldLogAbsoluteWaitWarning(long long now){
     static long long lastWarningTime = 0;
     const char *enabledValue = std::getenv("UNITREE_LOG_WAIT_WARNINGS");
-    if(enabledValue != NULL && enabledValue[0] != '\0'){
-        std::string enabled(enabledValue);
-        for(char &ch : enabled){
-            ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
-        }
-        if(enabled == "0" || enabled == "false" || enabled == "no" || enabled == "off"){
-            return false;
-        }
+    if(enabledValue == NULL || enabledValue[0] == '\0'){
+        return false;
+    }
+    std::string enabled(enabledValue);
+    for(char &ch : enabled){
+        ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    }
+    if(enabled == "0" || enabled == "false" || enabled == "no" || enabled == "off"){
+        return false;
     }
 
     const char *envValue = std::getenv("UNITREE_WAIT_WARNING_INTERVAL_US");

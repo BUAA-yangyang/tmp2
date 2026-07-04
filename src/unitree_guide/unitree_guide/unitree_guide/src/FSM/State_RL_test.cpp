@@ -266,8 +266,8 @@ void State_RL::updateCommandTensor(){
     if(_keyboardMode.load()){
         _userValue = _lowState->userValue;
         commands_tensor[0] = finiteAxis(_userValue.ly) * _keyboardVxScale;
-        commands_tensor[1] = finiteAxis(_userValue.lx) * _keyboardVyScale;
-        commands_tensor[2] = finiteAxis(_userValue.rx) * _keyboardWzScale;
+        commands_tensor[1] = -finiteAxis(_userValue.lx) * _keyboardVyScale;
+        commands_tensor[2] = -finiteAxis(_userValue.rx) * _keyboardWzScale;
         return;
     }
 

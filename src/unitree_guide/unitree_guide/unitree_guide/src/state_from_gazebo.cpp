@@ -17,6 +17,13 @@ double x=0, y=0, z=0, roll=0, pitch=0, yaw=0;
 
 
 void callback_BASE(const gazebo_msgs::LinkStates::ConstPtr &msg) {
+    ros::Time stamp = ros::Time::now();
+    static ros::Time last_tf_stamp;
+    static bool has_last_tf_stamp = false;
+    if (has_last_tf_stamp && stamp <= last_tf_stamp) {
+        return;
+    }
+
     int index = 0;
     for (auto &linkName : msg->name) {
         if (linkName == robot_name+"_gazebo::base")
@@ -27,6 +34,8 @@ void callback_BASE(const gazebo_msgs::LinkStates::ConstPtr &msg) {
         ROS_WARN_THROTTLE(5.0, "Could not find link '%s_gazebo::base' in /gazebo/link_states", robot_name.c_str());
         return;
     }
+    last_tf_stamp = stamp;
+    has_last_tf_stamp = true;
 
     //map到odom的tf变换
     static tf::TransformBroadcaster bf1;
@@ -41,7 +50,7 @@ void callback_BASE(const gazebo_msgs::LinkStates::ConstPtr &msg) {
                                     y,
                                     z));
     // 发布odom到map的tf关系
-    bf1.sendTransform(tf::StampedTransform(transform_odom2map, ros::Time::now(), "map", "odom"));
+    bf1.sendTransform(tf::StampedTransform(transform_odom2map, stamp, "map", "odom"));
     
     //求变化矩阵的逆解，用于推算map到odom的关系，以便能得到base到map的关系，及
     tf::Transform transform_map2odom = transform_odom2map.inverse();
@@ -74,9 +83,9 @@ void callback_BASE(const gazebo_msgs::LinkStates::ConstPtr &msg) {
     transform_odom2base.setRotation(q_odom);
     transform_odom2base.setOrigin(pt_odom);
 
-    bf2.sendTransform(tf::StampedTransform(transform_odom2base, ros::Time::now(), "odom", "base"));
+    bf2.sendTransform(tf::StampedTransform(transform_odom2base, stamp, "odom", "base"));
 
-    Odom.header.stamp = ros::Time::now();
+    Odom.header.stamp = stamp;
     Odom.header.frame_id = "odom";
     Odom.child_frame_id = "base";
 
@@ -135,5 +144,3 @@ int main(int argc, char **argv) {
     ros::spin();
     return 0;
 }
-
-

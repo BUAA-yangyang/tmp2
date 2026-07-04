@@ -7,16 +7,22 @@
 现象：
 
 ```text
-[WARNING] The waitTime=2000 of function absoluteWait is not enough!
-The program has already cost 2435us.
+[WARNING] The waitTime=4000 of function absoluteWait is not enough!
+The program has already cost 5110us.
 ```
 
-含义：`junior_ctrl` 单次控制循环耗时超过目标周期。`waitTime=2000` 表示目标周期为 2000 us，即 500 Hz。该提示不代表场景生成失败。
+含义：`junior_ctrl` 单次控制循环耗时超过目标周期。`waitTime=4000` 表示目标周期为 4000 us，即 250 Hz。该提示不代表场景生成失败。
 
 当前 `auto.sh` 默认设置：
 
 ```bash
 UNITREE_CTRL_DT=0.004
+```
+
+默认情况下，`auto.sh` 会设置 `UNITREE_LOG_WAIT_WARNINGS=0`，不再打印这条刷屏 warning。需要观察控制周期耗时时，可显式开启：
+
+```bash
+UNITREE_LOG_WAIT_WARNINGS=1 ./auto.sh
 ```
 
 仍感觉明显慢动作时，可无 GUI 启动：
@@ -67,6 +73,13 @@ GUI=false ./auto.sh
 
 ```bash
 ENABLE_POINTCLOUD_CONVERTER=0 ./auto.sh
+```
+
+如果只需要某一种传感器，可以关闭默认传感器数据后再单独打开：
+
+```bash
+ENABLE_SENSOR_DATA=0 ENABLE_REALSENSE=1 ./auto.sh
+ENABLE_SENSOR_DATA=0 ENABLE_LIVOX=1 ./auto.sh
 ```
 
 足端 ContactSensor 也会带来明显计算负载。若当前任务不需要足端接触力话题，可保持默认关闭；需要使用时再统一开启：

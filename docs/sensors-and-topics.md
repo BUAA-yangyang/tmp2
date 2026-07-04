@@ -2,6 +2,33 @@
 
 本文列出 Unitree A1 在仿真中的传感器安装位姿、常用 ROS 话题和坐标系。坐标系遵循 ROS 常用约定：X 向前，Y 向左，Z 向上。
 
+## 传感器数据开关
+
+默认启动会发布 Livox、Livox IMU 和 RealSense 深度相机数据。传感器 link、joint 和可视模型始终保留；关闭下列开关只会停止对应 Gazebo sensor/plugin 的数据发布。
+
+| 环境变量 | 默认值 | 影响的话题 |
+|----------|--------|------------|
+| `ENABLE_SENSOR_DATA` | `1` | 比赛传感器数据默认总开关 |
+| `ENABLE_LIVOX` | 跟随 `ENABLE_SENSOR_DATA` | `/scan` |
+| `ENABLE_LIVOX_IMU` | 跟随 `ENABLE_LIVOX` | `/livox/imu` |
+| `ENABLE_REALSENSE` | 跟随 `ENABLE_SENSOR_DATA` | `/real_sense/rgb/*`、`/real_sense/depth/*` |
+| `ENABLE_DEPTH_CAMERA` | 空 | `ENABLE_REALSENSE` 的别名 |
+| `ENABLE_FRONT_CAMERA` | `0` | `/camera/image_raw`、`/camera/camera_info` |
+| `ENABLE_POINTCLOUD_CONVERTER` | 跟随 `ENABLE_LIVOX` | `/livox/Pointcloud2`、`/livox/lidar2` |
+
+常用示例：
+
+```bash
+# 关闭所有比赛传感器数据，但保留机器人和传感器模型显示
+ENABLE_SENSOR_DATA=0 ./auto.sh
+
+# 只开启 RealSense 深度相机/RGB/深度点云
+ENABLE_SENSOR_DATA=0 ENABLE_REALSENSE=1 ./auto.sh
+
+# 只开启 Livox 雷达和点云转换
+ENABLE_SENSOR_DATA=0 ENABLE_LIVOX=1 ./auto.sh
+```
+
 ## 传感器位姿
 
 ### 机载 IMU `imu_link`

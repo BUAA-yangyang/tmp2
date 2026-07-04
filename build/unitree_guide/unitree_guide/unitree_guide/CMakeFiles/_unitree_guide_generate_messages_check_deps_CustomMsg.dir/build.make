@@ -54,7 +54,7 @@ CMAKE_BINARY_DIR = /home/ros/Guoyulun/Competition/SimEnv/build
 include unitree_guide/unitree_guide/unitree_guide/CMakeFiles/_unitree_guide_generate_messages_check_deps_CustomMsg.dir/progress.make
 
 unitree_guide/unitree_guide/unitree_guide/CMakeFiles/_unitree_guide_generate_messages_check_deps_CustomMsg:
-	cd /home/ros/Guoyulun/Competition/SimEnv/build/unitree_guide/unitree_guide/unitree_guide && ../../../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/genmsg/cmake/../../../lib/genmsg/genmsg_check_deps.py unitree_guide /home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_guide/unitree_guide/msg/CustomMsg.msg std_msgs/Header:unitree_guide/CustomPoint
+	cd /home/ros/Guoyulun/Competition/SimEnv/build/unitree_guide/unitree_guide/unitree_guide && ../../../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/genmsg/cmake/../../../lib/genmsg/genmsg_check_deps.py unitree_guide /home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_guide/unitree_guide/msg/CustomMsg.msg unitree_guide/CustomPoint:std_msgs/Header
 
 _unitree_guide_generate_messages_check_deps_CustomMsg: unitree_guide/unitree_guide/unitree_guide/CMakeFiles/_unitree_guide_generate_messages_check_deps_CustomMsg
 _unitree_guide_generate_messages_check_deps_CustomMsg: unitree_guide/unitree_guide/unitree_guide/CMakeFiles/_unitree_guide_generate_messages_check_deps_CustomMsg.dir/build.make

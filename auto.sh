@@ -29,15 +29,21 @@ CONTROLLER_FOREGROUND="${CONTROLLER_FOREGROUND:-1}"
 START_BUILDING_CONTROL="${START_BUILDING_CONTROL:-1}"
 ENABLE_SENSOR_DATA_DEFAULT="${ENABLE_SENSORS:-1}"
 ENABLE_SENSOR_DATA="$(as_ros_bool "${ENABLE_SENSOR_DATA:-$ENABLE_SENSOR_DATA_DEFAULT}")"
+ENABLE_LIVOX="$(as_ros_bool "${ENABLE_LIVOX:-$ENABLE_SENSOR_DATA}")"
+ENABLE_LIVOX_IMU="$(as_ros_bool "${ENABLE_LIVOX_IMU:-$ENABLE_LIVOX}")"
+ENABLE_REALSENSE_INPUT="${ENABLE_REALSENSE:-${ENABLE_DEPTH_CAMERA:-$ENABLE_SENSOR_DATA}}"
+ENABLE_REALSENSE="$(as_ros_bool "$ENABLE_REALSENSE_INPUT")"
+ENABLE_FRONT_CAMERA="$(as_ros_bool "${ENABLE_FRONT_CAMERA:-0}")"
 ENABLE_REFEREE_ODOM="$(as_ros_bool "${ENABLE_REFEREE_ODOM:-1}")"
 ENABLE_GROUND_TRUTH="$(as_ros_bool "${ENABLE_GROUND_TRUTH:-1}")"
 ENABLE_FOOT_CONTACT_SENSOR="$(as_ros_bool "${ENABLE_FOOT_CONTACT_SENSOR:-0}")"
 ENABLE_FOOT_FORCE_VISUAL="$(as_ros_bool "${ENABLE_FOOT_FORCE_VISUAL:-0}")"
 ENABLE_JOY_NODE="$(as_ros_bool "${ENABLE_JOY_NODE:-0}")"
-ENABLE_POINTCLOUD_CONVERTER="$(as_ros_bool "${ENABLE_POINTCLOUD_CONVERTER:-1}")"
+ENABLE_POINTCLOUD_CONVERTER="$(as_ros_bool "${ENABLE_POINTCLOUD_CONVERTER:-$ENABLE_LIVOX}")"
 POINTCLOUD_USE_GROUND_TRUTH_ODOM="$(as_ros_bool "${POINTCLOUD_USE_GROUND_TRUTH_ODOM:-1}")"
 WRITE_GENERATED_TRUTH_COPY="$(as_ros_bool "${WRITE_GENERATED_TRUTH_COPY:-1}")"
 UNITREE_CTRL_DT="${UNITREE_CTRL_DT:-0.004}"
+UNITREE_LOG_WAIT_WARNINGS="$(as_ros_bool "${UNITREE_LOG_WAIT_WARNINGS:-0}")"
 ROBOT_SPAWN_TIMEOUT="${ROBOT_SPAWN_TIMEOUT:-120}"
 CONTROLLER_SPAWNER_TIMEOUT="${CONTROLLER_SPAWNER_TIMEOUT:-120}"
 GAZEBO_PHYSICS_MAX_STEP_SIZE="${GAZEBO_PHYSICS_MAX_STEP_SIZE:-0.002}"
@@ -153,6 +159,7 @@ export COMPETITION_ROBOT_Y="$ROBOT_Y"
 export COMPETITION_ROBOT_Z="$ROBOT_Z"
 export COMPETITION_ROBOT_YAW="$ROBOT_YAW"
 export UNITREE_CTRL_DT
+export UNITREE_LOG_WAIT_WARNINGS
 export CONTROLLER_SPAWNER_TIMEOUT
 export GAZEBO_MODEL_PATH="${GAZEBO_MODEL_PATH:-}:$SCENE_OUTPUT_DIR:$UNITREE_GAZEBO_MODELS"
 export GAZEBO_PLUGIN_PATH="$WORKSPACE_DIR/devel/lib:${GAZEBO_PLUGIN_PATH:-}"
@@ -165,7 +172,11 @@ echo "  Truth:   $RESULTS_DIR/danger_truth.json"
 echo "  Manifest:$SCENE_OUTPUT_DIR/scene_manifest.json"
 echo "  Result:  $RESULTS_DIR/detected_danger.json"
 echo "  Robot pose: x=$ROBOT_X y=$ROBOT_Y z=$ROBOT_Z yaw=$ROBOT_YAW"
-echo "  Sensor data: $ENABLE_SENSOR_DATA"
+echo "  Sensor data default: $ENABLE_SENSOR_DATA"
+echo "  Livox lidar: $ENABLE_LIVOX"
+echo "  Livox IMU: $ENABLE_LIVOX_IMU"
+echo "  RealSense depth camera: $ENABLE_REALSENSE"
+echo "  Front RGB camera: $ENABLE_FRONT_CAMERA"
 echo "  PointCloud2 converter: $ENABLE_POINTCLOUD_CONVERTER"
 echo "  Ground truth topics: $ENABLE_GROUND_TRUTH"
 echo "  Referee odom: $ENABLE_REFEREE_ODOM"
@@ -173,6 +184,7 @@ echo "  Foot contact sensors: $ENABLE_FOOT_CONTACT_SENSOR"
 echo "  Foot force visual: $ENABLE_FOOT_FORCE_VISUAL"
 echo "  Gazebo starts paused: $PAUSED"
 echo "  Auto unpause: $AUTO_UNPAUSE after ${AUTO_UNPAUSE_DELAY}s"
+echo "  Unitree wait warnings: $UNITREE_LOG_WAIT_WARNINGS"
 echo "  Robot spawn timeout: ${ROBOT_SPAWN_TIMEOUT}s"
 echo "  Controller spawner timeout: ${CONTROLLER_SPAWNER_TIMEOUT}s"
 echo "  Gazebo physics: max_step=$GAZEBO_PHYSICS_MAX_STEP_SIZE update_rate=$GAZEBO_PHYSICS_REAL_TIME_UPDATE_RATE ode_iters=$GAZEBO_PHYSICS_ODE_ITERS"
@@ -197,6 +209,10 @@ roslaunch unitree_guide multi_floor_gazeboSim.launch \
   robot_yaw:="$ROBOT_YAW" \
   controller_spawner_timeout:="$CONTROLLER_SPAWNER_TIMEOUT" \
   enable_sensor_data:="$ENABLE_SENSOR_DATA" \
+  enable_livox:="$ENABLE_LIVOX" \
+  enable_livox_imu:="$ENABLE_LIVOX_IMU" \
+  enable_realsense:="$ENABLE_REALSENSE" \
+  enable_front_camera:="$ENABLE_FRONT_CAMERA" \
   enable_referee_odom:="$ENABLE_REFEREE_ODOM" \
   enable_ground_truth:="$ENABLE_GROUND_TRUTH" \
   enable_foot_contact_sensor:="$ENABLE_FOOT_CONTACT_SENSOR" \

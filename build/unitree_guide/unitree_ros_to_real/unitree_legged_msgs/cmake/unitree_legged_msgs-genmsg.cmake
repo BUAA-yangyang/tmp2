@@ -54,12 +54,12 @@ add_custom_target(_unitree_legged_msgs_generate_messages_check_deps_${_filename}
 
 get_filename_component(_filename "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/LowCmd.msg" NAME_WE)
 add_custom_target(_unitree_legged_msgs_generate_messages_check_deps_${_filename}
-  COMMAND ${CATKIN_ENV} ${PYTHON_EXECUTABLE} ${GENMSG_CHECK_DEPS_SCRIPT} "unitree_legged_msgs" "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/LowCmd.msg" "unitree_legged_msgs/MotorCmd:unitree_legged_msgs/BmsCmd"
+  COMMAND ${CATKIN_ENV} ${PYTHON_EXECUTABLE} ${GENMSG_CHECK_DEPS_SCRIPT} "unitree_legged_msgs" "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/LowCmd.msg" "unitree_legged_msgs/BmsCmd:unitree_legged_msgs/MotorCmd"
 )
 
 get_filename_component(_filename "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/LowState.msg" NAME_WE)
 add_custom_target(_unitree_legged_msgs_generate_messages_check_deps_${_filename}
-  COMMAND ${CATKIN_ENV} ${PYTHON_EXECUTABLE} ${GENMSG_CHECK_DEPS_SCRIPT} "unitree_legged_msgs" "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/LowState.msg" "unitree_legged_msgs/MotorState:unitree_legged_msgs/Cartesian:unitree_legged_msgs/IMU:unitree_legged_msgs/BmsState"
+  COMMAND ${CATKIN_ENV} ${PYTHON_EXECUTABLE} ${GENMSG_CHECK_DEPS_SCRIPT} "unitree_legged_msgs" "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/LowState.msg" "unitree_legged_msgs/MotorState:unitree_legged_msgs/Cartesian:unitree_legged_msgs/BmsState:unitree_legged_msgs/IMU"
 )
 
 get_filename_component(_filename "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/HighCmd.msg" NAME_WE)
@@ -69,7 +69,7 @@ add_custom_target(_unitree_legged_msgs_generate_messages_check_deps_${_filename}
 
 get_filename_component(_filename "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/HighState.msg" NAME_WE)
 add_custom_target(_unitree_legged_msgs_generate_messages_check_deps_${_filename}
-  COMMAND ${CATKIN_ENV} ${PYTHON_EXECUTABLE} ${GENMSG_CHECK_DEPS_SCRIPT} "unitree_legged_msgs" "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/HighState.msg" "unitree_legged_msgs/MotorState:unitree_legged_msgs/Cartesian:unitree_legged_msgs/IMU:unitree_legged_msgs/BmsState"
+  COMMAND ${CATKIN_ENV} ${PYTHON_EXECUTABLE} ${GENMSG_CHECK_DEPS_SCRIPT} "unitree_legged_msgs" "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/HighState.msg" "unitree_legged_msgs/MotorState:unitree_legged_msgs/Cartesian:unitree_legged_msgs/BmsState:unitree_legged_msgs/IMU"
 )
 
 #
@@ -123,13 +123,13 @@ _generate_msg_cpp(unitree_legged_msgs
 _generate_msg_cpp(unitree_legged_msgs
   "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/LowCmd.msg"
   "${MSG_I_FLAGS}"
-  "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/MotorCmd.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/BmsCmd.msg"
+  "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/BmsCmd.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/MotorCmd.msg"
   ${CATKIN_DEVEL_PREFIX}/${gencpp_INSTALL_DIR}/unitree_legged_msgs
 )
 _generate_msg_cpp(unitree_legged_msgs
   "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/LowState.msg"
   "${MSG_I_FLAGS}"
-  "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/MotorState.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/Cartesian.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/IMU.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/BmsState.msg"
+  "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/MotorState.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/Cartesian.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/BmsState.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/IMU.msg"
   ${CATKIN_DEVEL_PREFIX}/${gencpp_INSTALL_DIR}/unitree_legged_msgs
 )
 _generate_msg_cpp(unitree_legged_msgs
@@ -141,7 +141,7 @@ _generate_msg_cpp(unitree_legged_msgs
 _generate_msg_cpp(unitree_legged_msgs
   "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/HighState.msg"
   "${MSG_I_FLAGS}"
-  "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/MotorState.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/Cartesian.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/IMU.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/BmsState.msg"
+  "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/MotorState.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/Cartesian.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/BmsState.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/IMU.msg"
   ${CATKIN_DEVEL_PREFIX}/${gencpp_INSTALL_DIR}/unitree_legged_msgs
 )
 
@@ -236,13 +236,13 @@ _generate_msg_eus(unitree_legged_msgs
 _generate_msg_eus(unitree_legged_msgs
   "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/LowCmd.msg"
   "${MSG_I_FLAGS}"
-  "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/MotorCmd.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/BmsCmd.msg"
+  "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/BmsCmd.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/MotorCmd.msg"
   ${CATKIN_DEVEL_PREFIX}/${geneus_INSTALL_DIR}/unitree_legged_msgs
 )
 _generate_msg_eus(unitree_legged_msgs
   "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/LowState.msg"
   "${MSG_I_FLAGS}"
-  "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/MotorState.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/Cartesian.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/IMU.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/BmsState.msg"
+  "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/MotorState.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/Cartesian.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/BmsState.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/IMU.msg"
   ${CATKIN_DEVEL_PREFIX}/${geneus_INSTALL_DIR}/unitree_legged_msgs
 )
 _generate_msg_eus(unitree_legged_msgs
@@ -254,7 +254,7 @@ _generate_msg_eus(unitree_legged_msgs
 _generate_msg_eus(unitree_legged_msgs
   "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/HighState.msg"
   "${MSG_I_FLAGS}"
-  "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/MotorState.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/Cartesian.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/IMU.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/BmsState.msg"
+  "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/MotorState.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/Cartesian.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/BmsState.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/IMU.msg"
   ${CATKIN_DEVEL_PREFIX}/${geneus_INSTALL_DIR}/unitree_legged_msgs
 )
 
@@ -349,13 +349,13 @@ _generate_msg_lisp(unitree_legged_msgs
 _generate_msg_lisp(unitree_legged_msgs
   "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/LowCmd.msg"
   "${MSG_I_FLAGS}"
-  "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/MotorCmd.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/BmsCmd.msg"
+  "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/BmsCmd.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/MotorCmd.msg"
   ${CATKIN_DEVEL_PREFIX}/${genlisp_INSTALL_DIR}/unitree_legged_msgs
 )
 _generate_msg_lisp(unitree_legged_msgs
   "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/LowState.msg"
   "${MSG_I_FLAGS}"
-  "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/MotorState.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/Cartesian.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/IMU.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/BmsState.msg"
+  "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/MotorState.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/Cartesian.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/BmsState.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/IMU.msg"
   ${CATKIN_DEVEL_PREFIX}/${genlisp_INSTALL_DIR}/unitree_legged_msgs
 )
 _generate_msg_lisp(unitree_legged_msgs
@@ -367,7 +367,7 @@ _generate_msg_lisp(unitree_legged_msgs
 _generate_msg_lisp(unitree_legged_msgs
   "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/HighState.msg"
   "${MSG_I_FLAGS}"
-  "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/MotorState.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/Cartesian.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/IMU.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/BmsState.msg"
+  "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/MotorState.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/Cartesian.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/BmsState.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/IMU.msg"
   ${CATKIN_DEVEL_PREFIX}/${genlisp_INSTALL_DIR}/unitree_legged_msgs
 )
 
@@ -462,13 +462,13 @@ _generate_msg_nodejs(unitree_legged_msgs
 _generate_msg_nodejs(unitree_legged_msgs
   "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/LowCmd.msg"
   "${MSG_I_FLAGS}"
-  "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/MotorCmd.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/BmsCmd.msg"
+  "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/BmsCmd.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/MotorCmd.msg"
   ${CATKIN_DEVEL_PREFIX}/${gennodejs_INSTALL_DIR}/unitree_legged_msgs
 )
 _generate_msg_nodejs(unitree_legged_msgs
   "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/LowState.msg"
   "${MSG_I_FLAGS}"
-  "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/MotorState.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/Cartesian.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/IMU.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/BmsState.msg"
+  "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/MotorState.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/Cartesian.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/BmsState.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/IMU.msg"
   ${CATKIN_DEVEL_PREFIX}/${gennodejs_INSTALL_DIR}/unitree_legged_msgs
 )
 _generate_msg_nodejs(unitree_legged_msgs
@@ -480,7 +480,7 @@ _generate_msg_nodejs(unitree_legged_msgs
 _generate_msg_nodejs(unitree_legged_msgs
   "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/HighState.msg"
   "${MSG_I_FLAGS}"
-  "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/MotorState.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/Cartesian.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/IMU.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/BmsState.msg"
+  "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/MotorState.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/Cartesian.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/BmsState.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/IMU.msg"
   ${CATKIN_DEVEL_PREFIX}/${gennodejs_INSTALL_DIR}/unitree_legged_msgs
 )
 
@@ -575,13 +575,13 @@ _generate_msg_py(unitree_legged_msgs
 _generate_msg_py(unitree_legged_msgs
   "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/LowCmd.msg"
   "${MSG_I_FLAGS}"
-  "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/MotorCmd.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/BmsCmd.msg"
+  "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/BmsCmd.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/MotorCmd.msg"
   ${CATKIN_DEVEL_PREFIX}/${genpy_INSTALL_DIR}/unitree_legged_msgs
 )
 _generate_msg_py(unitree_legged_msgs
   "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/LowState.msg"
   "${MSG_I_FLAGS}"
-  "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/MotorState.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/Cartesian.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/IMU.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/BmsState.msg"
+  "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/MotorState.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/Cartesian.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/BmsState.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/IMU.msg"
   ${CATKIN_DEVEL_PREFIX}/${genpy_INSTALL_DIR}/unitree_legged_msgs
 )
 _generate_msg_py(unitree_legged_msgs
@@ -593,7 +593,7 @@ _generate_msg_py(unitree_legged_msgs
 _generate_msg_py(unitree_legged_msgs
   "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/HighState.msg"
   "${MSG_I_FLAGS}"
-  "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/MotorState.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/Cartesian.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/IMU.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/BmsState.msg"
+  "/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/MotorState.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/Cartesian.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/BmsState.msg;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/IMU.msg"
   ${CATKIN_DEVEL_PREFIX}/${genpy_INSTALL_DIR}/unitree_legged_msgs
 )
 

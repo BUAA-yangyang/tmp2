@@ -70,6 +70,18 @@ SEED=20260507 FLOOR_COUNT=4 ROOMS_PER_FLOOR=5 DANGER_COUNT=5 DISTRACTOR_COUNT=8 
 START_CONTROLLER=0 ./auto.sh
 ```
 
+只开启 RealSense 深度相机数据，关闭 Livox 和其他比赛传感器数据：
+
+```bash
+ENABLE_SENSOR_DATA=0 ENABLE_REALSENSE=1 ./auto.sh
+```
+
+只开启 Livox 雷达数据：
+
+```bash
+ENABLE_SENSOR_DATA=0 ENABLE_LIVOX=1 ./auto.sh
+```
+
 ## 启动参数
 
 | 环境变量 | 默认值 | 说明 |
@@ -89,9 +101,20 @@ START_CONTROLLER=0 ./auto.sh
 | `ROBOT_SPAWN_TIMEOUT` | `120` | 等待 Gazebo 完成机器人模型生成的最长时间，单位 s |
 | `CONTROLLER_SPAWNER_TIMEOUT` | `120` | 等待 Gazebo 暴露 controller_manager 接口的最长时间，单位 s |
 | `UNITREE_CTRL_DT` | `0.004` | `junior_ctrl` 控制周期，单位 s |
+| `UNITREE_LOG_WAIT_WARNINGS` | `0` | 是否输出 `absoluteWait is not enough` 控制周期超时提示 |
+| `ENABLE_SENSOR_DATA` | `1` | 比赛传感器数据默认总开关；具体传感器可用下列变量覆盖 |
+| `ENABLE_LIVOX` | 跟随 `ENABLE_SENSOR_DATA` | 是否发布 Livox 雷达 `/scan` |
+| `ENABLE_LIVOX_IMU` | 跟随 `ENABLE_LIVOX` | 是否发布 `/livox/imu` |
+| `ENABLE_REALSENSE` | 跟随 `ENABLE_SENSOR_DATA` | 是否发布 RealSense RGB、深度图和深度点云 |
+| `ENABLE_DEPTH_CAMERA` | 空 | `ENABLE_REALSENSE` 的别名，便于只控制深度相机 |
+| `ENABLE_FRONT_CAMERA` | `0` | 是否启用可选前视 RGB 相机 |
+| `ENABLE_POINTCLOUD_CONVERTER` | 跟随 `ENABLE_LIVOX` | 是否将 `/scan` 转换为 `/livox/Pointcloud2` 和 `/livox/lidar2` |
+| `ENABLE_GROUND_TRUTH` | `1` | 是否发布 Gazebo 真值调试话题 |
+| `ENABLE_REFEREE_ODOM` | `1` | 是否发布 `/Odometry_gazebo` 和 `odom -> base` TF |
+| `ENABLE_FOOT_CONTACT_SENSOR` | `0` | 是否启用四个足端 ContactSensor 及接触力话题 |
 | `START_VIRTUAL_JOY` | `0` | 是否启动虚拟手柄，通常需要 `uinput` 权限 |
 | `ROBOT_X` | `0.0` | 机器人出生点 x |
-| `ROBOT_Y` | `-2.2` | 机器人出生点 y |
+| `ROBOT_Y` | `-3.2` | 机器人出生点 y |
 | `ROBOT_Z` | `0.6` | 机器人出生点 z |
 | `ROBOT_YAW` | `1.5708` | 机器人出生点 yaw |
 

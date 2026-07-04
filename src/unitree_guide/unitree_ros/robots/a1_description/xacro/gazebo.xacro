@@ -290,11 +290,9 @@
         <kd  value="1.0"/>
     </gazebo>
 
-
-
-    <xacro:if value="${'$(arg ENABLE_SENSOR_DATA)' == 'true'}">
-        <!-- gazebo livox mid360 plugins -->
-        <xacro:property name="M_PI" value="3.14159"/>
+    <!-- gazebo livox mid360 plugins -->
+    <xacro:property name="M_PI" value="3.14159"/>
+    <xacro:if value="${'$(arg ENABLE_LIVOX)' == 'true'}">
         <gazebo reference="laser_livox">
             <sensor type="ray" name="laser_livox">
                 <always_on>true</always_on>
@@ -363,8 +361,10 @@
                 </plugin>
             </sensor>
         </gazebo>
+    </xacro:if>
 
-        <!-- gazebo livox imu-link plugins -->
+    <!-- gazebo livox imu-link plugins -->
+    <xacro:if value="${'$(arg ENABLE_LIVOX_IMU)' == 'true'}">
         <gazebo reference="livox_imu_link">
             <gravity>true</gravity>
             <sensor name="imu_sensor" type="imu">
@@ -384,8 +384,10 @@
                 <pose>0 0 0 0 0 0</pose>
             </sensor>
         </gazebo>
+    </xacro:if>
 
-        <!-- real_sense 深度相机(kinect)插件 -->
+    <!-- real_sense 深度相机(kinect)插件 -->
+    <xacro:if value="${'$(arg ENABLE_REALSENSE)' == 'true'}">
         <gazebo reference="real_sense">
             <sensor type="depth" name="real_sense">
                 <always_on>true</always_on>

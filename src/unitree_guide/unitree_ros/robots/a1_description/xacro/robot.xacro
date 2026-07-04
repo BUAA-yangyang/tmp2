@@ -4,6 +4,9 @@
 
     <xacro:arg name="DEBUG" default="false"/>
     <xacro:arg name="ENABLE_SENSOR_DATA" default="true"/>
+    <xacro:arg name="ENABLE_LIVOX" default="$(arg ENABLE_SENSOR_DATA)"/>
+    <xacro:arg name="ENABLE_LIVOX_IMU" default="$(arg ENABLE_LIVOX)"/>
+    <xacro:arg name="ENABLE_REALSENSE" default="$(arg ENABLE_SENSOR_DATA)"/>
     <xacro:arg name="ENABLE_FRONT_CAMERA" default="false"/>
     <xacro:arg name="ENABLE_GROUND_TRUTH" default="true"/>
     <xacro:arg name="ENABLE_FOOT_CONTACT_SENSOR" default="false"/>

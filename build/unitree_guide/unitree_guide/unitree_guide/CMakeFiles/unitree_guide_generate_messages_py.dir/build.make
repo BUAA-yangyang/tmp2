@@ -65,8 +65,8 @@ unitree_guide/unitree_guide/unitree_guide/CMakeFiles/unitree_guide_generate_mess
 
 /home/ros/Guoyulun/Competition/SimEnv/devel/lib/python3/dist-packages/unitree_guide/msg/_CustomMsg.py: /opt/ros/noetic/lib/genpy/genmsg_py.py
 /home/ros/Guoyulun/Competition/SimEnv/devel/lib/python3/dist-packages/unitree_guide/msg/_CustomMsg.py: /home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_guide/unitree_guide/msg/CustomMsg.msg
-/home/ros/Guoyulun/Competition/SimEnv/devel/lib/python3/dist-packages/unitree_guide/msg/_CustomMsg.py: /opt/ros/noetic/share/std_msgs/msg/Header.msg
 /home/ros/Guoyulun/Competition/SimEnv/devel/lib/python3/dist-packages/unitree_guide/msg/_CustomMsg.py: /home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_guide/unitree_guide/msg/CustomPoint.msg
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/python3/dist-packages/unitree_guide/msg/_CustomMsg.py: /opt/ros/noetic/share/std_msgs/msg/Header.msg
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --blue --bold --progress-dir=/home/ros/Guoyulun/Competition/SimEnv/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Generating Python from MSG unitree_guide/CustomMsg"
 	cd /home/ros/Guoyulun/Competition/SimEnv/build/unitree_guide/unitree_guide/unitree_guide && ../../../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/genpy/cmake/../../../lib/genpy/genmsg_py.py /home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_guide/unitree_guide/msg/CustomMsg.msg -Iunitree_guide:/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_guide/unitree_guide/msg -Istd_msgs:/opt/ros/noetic/share/std_msgs/cmake/../msg -p unitree_guide -o /home/ros/Guoyulun/Competition/SimEnv/devel/lib/python3/dist-packages/unitree_guide/msg
 
