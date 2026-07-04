@@ -80,7 +80,9 @@ if(CATKIN_MAKE)
         message_generation
         roscpp
         rospy
+        gazebo_msgs
         sensor_msgs
+        std_srvs
         std_msgs
         tf
         geometry_msgs
@@ -102,6 +104,8 @@ if(CATKIN_MAKE)
     catkin_package(
         CATKIN_DEPENDS 
         unitree_legged_msgs 
+        gazebo_msgs
+        std_srvs
     )
 endif()
 

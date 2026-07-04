@@ -187,7 +187,7 @@ foreach(t ${unitree_guide_EXPORTED_TARGETS})
   endif()
 endforeach()
 
-set(depends "unitree_legged_msgs")
+set(depends "unitree_legged_msgs;gazebo_msgs;std_srvs")
 foreach(depend ${depends})
   string(REPLACE " " ";" depend_list ${depend})
   # the package name of the dependency must be kept in a unique variable so that it is not overwritten in recursive calls

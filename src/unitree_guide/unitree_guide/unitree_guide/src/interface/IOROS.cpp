@@ -24,6 +24,7 @@ int buttonAt(const std::vector<int>& buttons, std::size_t index){
 }
 
 UserCommand joyCommandFromButtons(const std::vector<int>& buttons){
+    if(buttonAt(buttons, 10)) return UserCommand::RESET;    // reset robot pose
     if(buttonAt(buttons, 0)) return UserCommand::L2_B;      // passive/down
     if(buttonAt(buttons, 1)) return UserCommand::L2_A;      // fixed stand
     if(buttonAt(buttons, 2)) return UserCommand::START;     // trotting
@@ -175,8 +176,8 @@ void IOROS::joyCallback(const sensor_msgs::Joy::ConstPtr& msg) {
     if(axes.size() < 6){
         axes.resize(6, 0.0f);
     }
-    if(buttons.size() < 10){
-        buttons.resize(10, 0);
+    if(buttons.size() < 11){
+        buttons.resize(11, 0);
     }
 
     UserValue joyValue;

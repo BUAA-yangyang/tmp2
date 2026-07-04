@@ -54,7 +54,7 @@ CMAKE_BINARY_DIR = /home/ros/Guoyulun/Competition/SimEnv/build
 include unitree_guide/unitree_ros_to_real/unitree_legged_msgs/CMakeFiles/_unitree_legged_msgs_generate_messages_check_deps_HighCmd.dir/progress.make
 
 unitree_guide/unitree_ros_to_real/unitree_legged_msgs/CMakeFiles/_unitree_legged_msgs_generate_messages_check_deps_HighCmd:
-	cd /home/ros/Guoyulun/Competition/SimEnv/build/unitree_guide/unitree_ros_to_real/unitree_legged_msgs && ../../../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/genmsg/cmake/../../../lib/genmsg/genmsg_check_deps.py unitree_legged_msgs /home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/HighCmd.msg unitree_legged_msgs/LED:unitree_legged_msgs/BmsCmd
+	cd /home/ros/Guoyulun/Competition/SimEnv/build/unitree_guide/unitree_ros_to_real/unitree_legged_msgs && ../../../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/genmsg/cmake/../../../lib/genmsg/genmsg_check_deps.py unitree_legged_msgs /home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_msgs/msg/HighCmd.msg unitree_legged_msgs/BmsCmd:unitree_legged_msgs/LED
 
 _unitree_legged_msgs_generate_messages_check_deps_HighCmd: unitree_guide/unitree_ros_to_real/unitree_legged_msgs/CMakeFiles/_unitree_legged_msgs_generate_messages_check_deps_HighCmd
 _unitree_legged_msgs_generate_messages_check_deps_HighCmd: unitree_guide/unitree_ros_to_real/unitree_legged_msgs/CMakeFiles/_unitree_legged_msgs_generate_messages_check_deps_HighCmd.dir/build.make

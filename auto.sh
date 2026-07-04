@@ -216,7 +216,8 @@ if [ "$START_CONTROLLER" = "1" ]; then
   if [ "$CONTROLLER_FOREGROUND" = "1" ]; then
     echo "Starting junior_ctrl controller in the foreground."
     echo "UNITREE_CTRL_DT=$UNITREE_CTRL_DT seconds."
-    echo "Use keyboard input in this terminal: 2 = stand, 6 = RL mode."
+    echo "Use keyboard input in this terminal: 2 = stand, 4 = keyboard walk, 6 = RL mode, 8 = reset."
+    echo "In keyboard walk mode: W/S = forward/back, A/D = left/right, J/L = turn, Space = stop."
     schedule_unpause_physics
     "$WORKSPACE_DIR/devel/lib/unitree_guide/junior_ctrl" || true
     echo "junior_ctrl exited; keeping Gazebo running for inspection. Press Ctrl-C to stop this script."
@@ -235,5 +236,5 @@ else
 fi
 
 echo "Simulation startup command completed."
-echo "Controller mode remains governed by unitree_guide keyboard/joy input; publish geometry_msgs/Twist to /cmd_vel after RL mode is enabled."
+echo "Controller mode remains governed by unitree_guide keyboard/joy input. Mode 4 uses keyboard axes; mode 6 keeps the original RL /cmd_vel logic."
 wait "$LAUNCH_PID"

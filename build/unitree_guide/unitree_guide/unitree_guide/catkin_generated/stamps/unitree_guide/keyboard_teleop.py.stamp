@@ -17,6 +17,7 @@ BUTTON_FREE_STAND = 6
 BUTTON_BALANCE_TEST = 7
 BUTTON_SWING_TEST = 8
 BUTTON_STEP_TEST = 9
+BUTTON_RESET = 10
 
 
 def clamp(value, minimum=-1.0, maximum=1.0):
@@ -26,7 +27,7 @@ def clamp(value, minimum=-1.0, maximum=1.0):
 class KeyboardTeleop:
     def __init__(self):
         self.axes = [0.0] * 6
-        self.buttons = [0] * 10
+        self.buttons = [0] * 11
         self.linear_step = rospy.get_param("~linear_step", 0.05)
         self.angular_step = rospy.get_param("~angular_step", 0.05)
         self.repeat_rate = rospy.get_param("~repeat_rate", 20.0)
@@ -37,7 +38,7 @@ class KeyboardTeleop:
         tty.setcbreak(sys.stdin.fileno())
         timer = rospy.Timer(rospy.Duration(1.0 / self.repeat_rate), self.publish)
         try:
-            print("Keyboard teleop: 1 passive, 2 stand, 4 trot, 6 RL, WASD move, JL turn, Space stop, q quit")
+            print("Keyboard teleop: 1 passive, 2 stand, 4 keyboard walk, 6 RL, 8 reset, WASD move in mode 4, JL turn, Space stop, q quit")
             while not rospy.is_shutdown():
                 key = sys.stdin.read(1)
                 if key in ("q", "\x03"):
@@ -47,12 +48,12 @@ class KeyboardTeleop:
         finally:
             timer.shutdown()
             self.axes = [0.0] * 6
-            self.buttons = [0] * 10
+            self.buttons = [0] * 11
             self.publish(None)
             termios.tcsetattr(sys.stdin, termios.TCSADRAIN, settings)
 
     def handle_key(self, key):
-        self.buttons = [0] * 10
+        self.buttons = [0] * 11
         if key == "1":
             self.buttons[BUTTON_PASSIVE] = 1
         elif key == "2":
@@ -66,7 +67,7 @@ class KeyboardTeleop:
         elif key == "7":
             self.buttons[BUTTON_BALANCE_TEST] = 1
         elif key == "8":
-            self.buttons[BUTTON_STEP_TEST] = 1
+            self.buttons[BUTTON_RESET] = 1
         elif key == "9":
             self.buttons[BUTTON_SWING_TEST] = 1
         elif key in (" ", "\n"):
