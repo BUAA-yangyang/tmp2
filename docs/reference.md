@@ -1,6 +1,6 @@
 # 完整参考文档
 
-本文保留拆分前的完整说明，便于交叉核对历史内容。比赛选手建议优先阅读根目录 [README](../README.md) 和本目录下的专题文档。
+本文为比赛仿真环境的完整参考说明。比赛选手建议优先阅读根目录 [README](../README.md) 和本目录下的专题文档。
 
 ## 环境介绍
 
@@ -31,12 +31,11 @@
 - `numpy`，用于评估脚本
 - libtorch C++ 版本，用于 Unitree A1 控制器
 
-libtorch 和 CUDA 路径在 `src/unitree_guide/unitree_guide/unitree_guide/CMakeLists.txt` 中配置。当前工程默认指向 `/home/ros/Guoyulun/Download/libtorch` 和 `/usr/local/cuda/bin/nvcc`，如部署路径不同，需要按实际机器调整。
+libtorch 和 CUDA 路径在 `src/unitree_guide/unitree_guide/unitree_guide/CMakeLists.txt` 中配置。如部署路径不同，需要按实际机器调整。
 
 ## 编译
 
 ```bash
-cd /home/ros/Guoyulun/Competition/SimEnv
 source /opt/ros/noetic/setup.bash
 catkin_make -j
 source ./devel/setup.bash
@@ -45,7 +44,6 @@ source ./devel/setup.bash
 ## 一键启动
 
 ```bash
-cd /home/ros/Guoyulun/Competition/SimEnv
 ./auto.sh
 ```
 
@@ -70,7 +68,7 @@ cd /home/ros/Guoyulun/Competition/SimEnv
 | `generated_building/door_config.yaml` | 动态门控制配置，由 `building_generator_classic` 读取 | 否 |
 | `generated_building/elevator_config.yaml` | 简化电梯控制配置，由 `building_generator_classic` 读取 | 否 |
 | `generated_building/scene_manifest.json` | 本次场景 manifest，记录 seed、文件路径、源数量、机器人出生点 | 否 |
-| `generated_building/building_config.json` | 兼容脚本使用的建筑配置 | 否 |
+| `generated_building/building_config.json` | 环境内部使用的建筑配置 | 否 |
 | `generated_building/danger_truth.json` | 裁判真值副本，本地调试时可能存在 | 否 |
 | `results/danger_truth.json` | 裁判真值文件，包含危险源和干扰源列表 | 否 |
 | `logs/competition_gazebo.log` | Gazebo/launch 日志 | 否 |
@@ -157,14 +155,6 @@ rosrun building_obstacles generate_competition_scene.py \
   --output-dir ./generated_building \
   --results-dir ./results
 ```
-
-兼容旧命令：
-
-```bash
-rosrun building_obstacles generate_multi_floor_building.py ./generated_building 3 4
-```
-
-该旧入口现在会转调新的比赛场景生成器。
 
 默认楼栋尺寸按 Unitree A1 室内探索做了收敛：走廊约 2.2 m，单层默认 4 个房间，建筑占地约 20 m x 36 m。该尺寸保留进门、转向和传感器观测余量，同时避免场景过大导致探索时间主要消耗在长距离行走上。若需要提高比赛难度，可通过 `BUILDING_WIDTH`、`BUILDING_LENGTH` 和 `ROOMS_PER_FLOOR` 逐步增大场景。
 
@@ -256,7 +246,6 @@ START_BUILDING_CONTROL=1 ./auto.sh
 如需手动启动或重启门/电梯控制服务，可在 Gazebo 场景启动后运行：
 
 ```bash
-cd /home/ros/Guoyulun/Competition/SimEnv
 source ./devel/setup.bash
 rosrun building_generator_classic building_generator_classic_control \
   --door-config ./generated_building/door_config.yaml \
@@ -533,3 +522,4 @@ rosrun rviz rviz
 
 # 查看深度图像
 rosrun image_view image_view image:=/real_sense/depth/image_raw
+```

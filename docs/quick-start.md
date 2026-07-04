@@ -1,10 +1,6 @@
 # 快速启动
 
-本文面向第一次运行比赛仿真环境的选手。默认工作目录为：
-
-```bash
-cd /home/ros/Guoyulun/Competition/SimEnv
-```
+本文面向第一次运行比赛仿真环境的选手。除特别说明外，以下命令均在 SimEnv 仓库根目录执行。
 
 ## 运行要求
 
@@ -17,7 +13,7 @@ cd /home/ros/Guoyulun/Competition/SimEnv
 - CUDA >= 11.7
 - libtorch C++ 版本，用于 Unitree A1 控制器
 
-libtorch 和 CUDA 路径在 `src/unitree_guide/unitree_guide/unitree_guide/CMakeLists.txt` 中配置。当前工程默认指向 `/home/ros/Guoyulun/Download/libtorch` 和 `/usr/local/cuda/bin/nvcc`。如部署路径不同，需要按实际机器调整。
+libtorch 和 CUDA 路径在 `src/unitree_guide/unitree_guide/unitree_guide/CMakeLists.txt` 中配置。如部署路径不同，需要按实际机器调整。
 
 ## 编译
 
@@ -147,14 +143,6 @@ rosrun building_obstacles generate_competition_scene.py \
   --output-dir ./generated_building \
   --results-dir ./results
 ```
-
-兼容旧命令：
-
-```bash
-rosrun building_obstacles generate_multi_floor_building.py ./generated_building 3 4
-```
-
-旧入口会转调新的比赛场景生成器。
 
 ## 默认场景规模
 

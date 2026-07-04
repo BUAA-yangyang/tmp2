@@ -15,7 +15,6 @@
 | 输出结果并计算分数 | [结果格式与评估方法](docs/evaluation.md) |
 | 查看传感器安装、话题和坐标系 | [传感器与 ROS 话题](docs/sensors-and-topics.md) |
 | 处理启动 warning 或服务异常 | [常见问题](docs/troubleshooting.md) |
-| 查看旧版完整长文档 | [完整参考文档](docs/reference.md) |
 
 ## 任务描述
 
@@ -29,8 +28,9 @@
 
 ## 启动流程
 
+在 SimEnv 仓库根目录执行：
+
 ```bash
-cd /home/ros/Guoyulun/Competition/SimEnv
 source /opt/ros/noetic/setup.bash
 catkin_make -j
 source ./devel/setup.bash
@@ -38,6 +38,21 @@ source ./devel/setup.bash
 ```
 
 `auto.sh` 会自动完成随机场景生成、Gazebo 启动、A1 模型与传感器启动、门/电梯控制服务启动和 `junior_ctrl` 控制器启动。更多启动方式见 [快速启动](docs/quick-start.md)。
+
+参赛队伍请统一使用 `./auto.sh` 启动比赛环境。单独生成场景时，也应使用 [快速启动](docs/quick-start.md) 中的 `generate_competition_scene.py` 命令。
+
+常用传感器开关：
+
+```bash
+# 关闭所有比赛传感器数据，但保留传感器模型显示
+ENABLE_SENSOR_DATA=0 ./auto.sh
+
+# 只开启 RealSense 深度相机/RGB/深度点云
+ENABLE_SENSOR_DATA=0 ENABLE_REALSENSE=1 ./auto.sh
+
+# 只开启 Livox 雷达和点云转换
+ENABLE_SENSOR_DATA=0 ENABLE_LIVOX=1 ./auto.sh
+```
 
 ## 算法接口
 
@@ -95,7 +110,7 @@ python3 ./src/building_obstacles/scripts/evaluate_danger.py \
 | `generated_building/layout_metadata.json` | 楼栋布局、房间、门、电梯和目标点元数据 | 否 |
 | `generated_building/door_config.yaml` | 动态门控制配置，由环境服务读取 | 否 |
 | `generated_building/elevator_config.yaml` | 电梯控制配置，由环境服务读取 | 否 |
-| `generated_building/building_config.json` | 兼容脚本使用的建筑配置 | 否 |
+| `generated_building/building_config.json` | 环境内部使用的建筑配置 | 否 |
 | `generated_building/scene_manifest.json` | 本次随机场景 manifest | 否 |
 | `generated_building/danger_truth.json` | 裁判真值副本，本地调试时可能存在 | 否 |
 | `results/danger_truth.json` | 裁判真值文件 | 否 |
