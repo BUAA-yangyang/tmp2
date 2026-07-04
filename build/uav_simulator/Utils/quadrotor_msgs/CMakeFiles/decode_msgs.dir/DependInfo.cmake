@@ -18,7 +18,7 @@ set(CMAKE_TARGET_DEFINITIONS_CXX
 
 # The include file search paths:
 set(CMAKE_CXX_TARGET_INCLUDE_PATH
-  "devel/include"
+  "/home/ros/Guoyulun/Competition/SimEnv/devel/include"
   "/opt/ros/noetic/include"
   "/opt/ros/noetic/share/xmlrpcpp/cmake/../../../include/xmlrpcpp"
   "/home/ros/Guoyulun/Competition/SimEnv/src/uav_simulator/Utils/quadrotor_msgs/include"

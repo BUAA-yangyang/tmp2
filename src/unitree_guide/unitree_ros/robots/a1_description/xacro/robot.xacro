@@ -6,6 +6,7 @@
     <xacro:arg name="ENABLE_SENSOR_DATA" default="true"/>
     <xacro:arg name="ENABLE_FRONT_CAMERA" default="false"/>
     <xacro:arg name="ENABLE_GROUND_TRUTH" default="true"/>
+    <xacro:arg name="ENABLE_FOOT_CONTACT_SENSOR" default="false"/>
     <xacro:arg name="ENABLE_FOOT_FORCE_VISUAL" default="false"/>
 
     <xacro:include filename="$(find a1_description)/xacro/const.xacro"/>

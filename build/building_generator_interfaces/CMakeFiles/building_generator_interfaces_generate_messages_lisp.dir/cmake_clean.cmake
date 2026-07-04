@@ -1,6 +1,6 @@
 file(REMOVE_RECURSE
-  "../devel/share/common-lisp/ros/building_generator_interfaces/srv/CallElevator.lisp"
-  "../devel/share/common-lisp/ros/building_generator_interfaces/srv/SetDoorState.lisp"
+  "/home/ros/Guoyulun/Competition/SimEnv/devel/share/common-lisp/ros/building_generator_interfaces/srv/CallElevator.lisp"
+  "/home/ros/Guoyulun/Competition/SimEnv/devel/share/common-lisp/ros/building_generator_interfaces/srv/SetDoorState.lisp"
   "CMakeFiles/building_generator_interfaces_generate_messages_lisp"
 )
 

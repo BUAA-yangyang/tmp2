@@ -77,50 +77,50 @@ ros_example_position_OBJECTS = \
 # External object files for target ros_example_position
 ros_example_position_EXTERNAL_OBJECTS =
 
-devel/lib/unitree_legged_real/ros_example_position: unitree_guide/unitree_ros_to_real/unitree_legged_real/CMakeFiles/ros_example_position.dir/src/exe/example_position.cpp.o
-devel/lib/unitree_legged_real/ros_example_position: unitree_guide/unitree_ros_to_real/unitree_legged_real/CMakeFiles/ros_example_position.dir/build.make
-devel/lib/unitree_legged_real/ros_example_position: /home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_sdk/lib/cpp/amd64/libunitree_legged_sdk.a
-devel/lib/unitree_legged_real/ros_example_position: /opt/ros/noetic/lib/libroscpp.so
-devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/libpthread.so
-devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/libboost_chrono.so.1.71.0
-devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/libboost_filesystem.so.1.71.0
-devel/lib/unitree_legged_real/ros_example_position: /opt/ros/noetic/lib/librosconsole.so
-devel/lib/unitree_legged_real/ros_example_position: /opt/ros/noetic/lib/librosconsole_log4cxx.so
-devel/lib/unitree_legged_real/ros_example_position: /opt/ros/noetic/lib/librosconsole_backend_interface.so
-devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/liblog4cxx.so
-devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/libboost_regex.so.1.71.0
-devel/lib/unitree_legged_real/ros_example_position: /opt/ros/noetic/lib/libxmlrpcpp.so
-devel/lib/unitree_legged_real/ros_example_position: /opt/ros/noetic/lib/libroscpp_serialization.so
-devel/lib/unitree_legged_real/ros_example_position: /opt/ros/noetic/lib/librostime.so
-devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/libboost_date_time.so.1.71.0
-devel/lib/unitree_legged_real/ros_example_position: /opt/ros/noetic/lib/libcpp_common.so
-devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/libboost_system.so.1.71.0
-devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/libboost_thread.so.1.71.0
-devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/libconsole_bridge.so.0.4
-devel/lib/unitree_legged_real/ros_example_position: /home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_sdk/lib/cpp/amd64/libunitree_legged_sdk.a
-devel/lib/unitree_legged_real/ros_example_position: /opt/ros/noetic/lib/libroscpp.so
-devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/libpthread.so
-devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/libboost_chrono.so.1.71.0
-devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/libboost_filesystem.so.1.71.0
-devel/lib/unitree_legged_real/ros_example_position: /opt/ros/noetic/lib/librosconsole.so
-devel/lib/unitree_legged_real/ros_example_position: /opt/ros/noetic/lib/librosconsole_log4cxx.so
-devel/lib/unitree_legged_real/ros_example_position: /opt/ros/noetic/lib/librosconsole_backend_interface.so
-devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/liblog4cxx.so
-devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/libboost_regex.so.1.71.0
-devel/lib/unitree_legged_real/ros_example_position: /opt/ros/noetic/lib/libxmlrpcpp.so
-devel/lib/unitree_legged_real/ros_example_position: /opt/ros/noetic/lib/libroscpp_serialization.so
-devel/lib/unitree_legged_real/ros_example_position: /opt/ros/noetic/lib/librostime.so
-devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/libboost_date_time.so.1.71.0
-devel/lib/unitree_legged_real/ros_example_position: /opt/ros/noetic/lib/libcpp_common.so
-devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/libboost_system.so.1.71.0
-devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/libboost_thread.so.1.71.0
-devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/libconsole_bridge.so.0.4
-devel/lib/unitree_legged_real/ros_example_position: unitree_guide/unitree_ros_to_real/unitree_legged_real/CMakeFiles/ros_example_position.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/ros/Guoyulun/Competition/SimEnv/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Linking CXX executable ../../../devel/lib/unitree_legged_real/ros_example_position"
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: unitree_guide/unitree_ros_to_real/unitree_legged_real/CMakeFiles/ros_example_position.dir/src/exe/example_position.cpp.o
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: unitree_guide/unitree_ros_to_real/unitree_legged_real/CMakeFiles/ros_example_position.dir/build.make
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_sdk/lib/cpp/amd64/libunitree_legged_sdk.a
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /opt/ros/noetic/lib/libroscpp.so
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/libpthread.so
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/libboost_chrono.so.1.71.0
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/libboost_filesystem.so.1.71.0
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /opt/ros/noetic/lib/librosconsole.so
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /opt/ros/noetic/lib/librosconsole_log4cxx.so
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /opt/ros/noetic/lib/librosconsole_backend_interface.so
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/liblog4cxx.so
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/libboost_regex.so.1.71.0
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /opt/ros/noetic/lib/libxmlrpcpp.so
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /opt/ros/noetic/lib/libroscpp_serialization.so
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /opt/ros/noetic/lib/librostime.so
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/libboost_date_time.so.1.71.0
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /opt/ros/noetic/lib/libcpp_common.so
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/libboost_system.so.1.71.0
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/libboost_thread.so.1.71.0
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/libconsole_bridge.so.0.4
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_ros_to_real/unitree_legged_sdk/lib/cpp/amd64/libunitree_legged_sdk.a
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /opt/ros/noetic/lib/libroscpp.so
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/libpthread.so
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/libboost_chrono.so.1.71.0
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/libboost_filesystem.so.1.71.0
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /opt/ros/noetic/lib/librosconsole.so
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /opt/ros/noetic/lib/librosconsole_log4cxx.so
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /opt/ros/noetic/lib/librosconsole_backend_interface.so
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/liblog4cxx.so
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/libboost_regex.so.1.71.0
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /opt/ros/noetic/lib/libxmlrpcpp.so
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /opt/ros/noetic/lib/libroscpp_serialization.so
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /opt/ros/noetic/lib/librostime.so
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/libboost_date_time.so.1.71.0
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /opt/ros/noetic/lib/libcpp_common.so
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/libboost_system.so.1.71.0
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/libboost_thread.so.1.71.0
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: /usr/lib/x86_64-linux-gnu/libconsole_bridge.so.0.4
+/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position: unitree_guide/unitree_ros_to_real/unitree_legged_real/CMakeFiles/ros_example_position.dir/link.txt
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/home/ros/Guoyulun/Competition/SimEnv/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Linking CXX executable /home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position"
 	cd /home/ros/Guoyulun/Competition/SimEnv/build/unitree_guide/unitree_ros_to_real/unitree_legged_real && $(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/ros_example_position.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.
-unitree_guide/unitree_ros_to_real/unitree_legged_real/CMakeFiles/ros_example_position.dir/build: devel/lib/unitree_legged_real/ros_example_position
+unitree_guide/unitree_ros_to_real/unitree_legged_real/CMakeFiles/ros_example_position.dir/build: /home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/ros_example_position
 
 .PHONY : unitree_guide/unitree_ros_to_real/unitree_legged_real/CMakeFiles/ros_example_position.dir/build
 

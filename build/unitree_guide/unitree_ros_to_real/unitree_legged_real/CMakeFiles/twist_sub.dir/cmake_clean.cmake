@@ -1,6 +1,6 @@
 file(REMOVE_RECURSE
-  "../../../devel/lib/unitree_legged_real/twist_sub"
-  "../../../devel/lib/unitree_legged_real/twist_sub.pdb"
+  "/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/twist_sub"
+  "/home/ros/Guoyulun/Competition/SimEnv/devel/lib/unitree_legged_real/twist_sub.pdb"
   "CMakeFiles/twist_sub.dir/src/exe/twist_sub.cpp.o"
 )
 

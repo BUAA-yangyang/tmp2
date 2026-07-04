@@ -69,6 +69,14 @@ GUI=false ./auto.sh
 ENABLE_POINTCLOUD_CONVERTER=0 ./auto.sh
 ```
 
+足端 ContactSensor 也会带来明显计算负载。若当前任务不需要足端接触力话题，可保持默认关闭；需要使用时再统一开启：
+
+```bash
+ENABLE_FOOT_CONTACT_SENSOR=1 ./auto.sh
+```
+
+关闭该开关只会停止四个足端接触力话题和对应力箭头的数据来源，不会取消足端碰撞或改变机器人与地面的接触物理。
+
 ## `rospack` 提示 too many positional options
 
 现象：

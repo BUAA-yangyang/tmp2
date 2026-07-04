@@ -1,4 +1,4 @@
-prefix=/usr/local
+prefix=/home/ros/Guoyulun/Competition/SimEnv/install
 
 Name: odom_visualization
 Description: Description of odom_visualization

@@ -82,45 +82,47 @@
         <xacro:p3d_truth_plugin plugin_name="p3d_RR_foot_pos_vel" body_name="RR_foot" topic_name="ground_truth/RR_foot" frame_name="base"/>
     </xacro:if>
 
-    <!-- Foot contacts. -->
-    <gazebo reference="FR_calf">
-        <sensor name="FR_foot_contact" type="contact">
-        <update_rate>100</update_rate>
-        <plugin name="contactPlugin" filename="libunitreeFootContactPlugin.so"/>
-        <contact>
-            <collision>FR_calf_fixed_joint_lump__FR_foot_collision_1</collision>
-        </contact>
-        </sensor>
-    </gazebo>
-    <gazebo reference="FL_calf">
-        <sensor name="FL_foot_contact" type="contact">
-        <update_rate>100</update_rate>
-        <plugin name="contactPlugin" filename="libunitreeFootContactPlugin.so"/>
-        <contact>
-            <collision>FL_calf_fixed_joint_lump__FL_foot_collision_1</collision>
-        </contact>
-        </sensor>
-    </gazebo>
-    <gazebo reference="RR_calf">
-        <sensor name="RR_foot_contact" type="contact">
-        <update_rate>100</update_rate>
-        <plugin name="contactPlugin" filename="libunitreeFootContactPlugin.so"/>
-        <contact>
-            <collision>RR_calf_fixed_joint_lump__RR_foot_collision_1</collision>
-        </contact>
-        </sensor>
-    </gazebo>
-    <gazebo reference="RL_calf">
-        <sensor name="RL_foot_contact" type="contact">
-        <update_rate>100</update_rate>
-        <plugin name="contactPlugin" filename="libunitreeFootContactPlugin.so"/>
-        <contact>
-            <collision>RL_calf_fixed_joint_lump__RL_foot_collision_1</collision>
-        </contact>
-        </sensor>
-    </gazebo>
+    <xacro:if value="${'$(arg ENABLE_FOOT_CONTACT_SENSOR)' == 'true'}">
+        <!-- Optional foot contact force topics. Disabling them keeps foot collisions unchanged. -->
+        <gazebo reference="FR_calf">
+            <sensor name="FR_foot_contact" type="contact">
+                <update_rate>100</update_rate>
+                <plugin name="contactPlugin" filename="libunitreeFootContactPlugin.so"/>
+                <contact>
+                    <collision>FR_calf_fixed_joint_lump__FR_foot_collision_1</collision>
+                </contact>
+            </sensor>
+        </gazebo>
+        <gazebo reference="FL_calf">
+            <sensor name="FL_foot_contact" type="contact">
+                <update_rate>100</update_rate>
+                <plugin name="contactPlugin" filename="libunitreeFootContactPlugin.so"/>
+                <contact>
+                    <collision>FL_calf_fixed_joint_lump__FL_foot_collision_1</collision>
+                </contact>
+            </sensor>
+        </gazebo>
+        <gazebo reference="RR_calf">
+            <sensor name="RR_foot_contact" type="contact">
+                <update_rate>100</update_rate>
+                <plugin name="contactPlugin" filename="libunitreeFootContactPlugin.so"/>
+                <contact>
+                    <collision>RR_calf_fixed_joint_lump__RR_foot_collision_1</collision>
+                </contact>
+            </sensor>
+        </gazebo>
+        <gazebo reference="RL_calf">
+            <sensor name="RL_foot_contact" type="contact">
+                <update_rate>100</update_rate>
+                <plugin name="contactPlugin" filename="libunitreeFootContactPlugin.so"/>
+                <contact>
+                    <collision>RL_calf_fixed_joint_lump__RL_foot_collision_1</collision>
+                </contact>
+            </sensor>
+        </gazebo>
+    </xacro:if>
 
-    <xacro:if value="${'$(arg ENABLE_FOOT_FORCE_VISUAL)' == 'true'}">
+    <xacro:if value="${'$(arg ENABLE_FOOT_CONTACT_SENSOR)' == 'true' and '$(arg ENABLE_FOOT_FORCE_VISUAL)' == 'true'}">
         <!-- Visualization of foot contacts. Disabled by default for competition scenes. -->
         <gazebo reference="FR_foot">
             <visual>

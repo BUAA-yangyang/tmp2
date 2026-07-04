@@ -20,7 +20,7 @@ BUILDING_LENGTH="${BUILDING_LENGTH:-36.0}"
 DANGER_COUNT="${DANGER_COUNT:-3:6}"
 DISTRACTOR_COUNT="${DISTRACTOR_COUNT:-4:8}"
 GUI="${GUI:-true}"
-PAUSED="${PAUSED:-true}"
+PAUSED="${PAUSED:-false}"
 AUTO_UNPAUSE="$(as_ros_bool "${AUTO_UNPAUSE:-1}")"
 AUTO_UNPAUSE_DELAY="${AUTO_UNPAUSE_DELAY:-6}"
 START_CONTROLLER="${START_CONTROLLER:-1}"
@@ -31,6 +31,7 @@ ENABLE_SENSOR_DATA_DEFAULT="${ENABLE_SENSORS:-1}"
 ENABLE_SENSOR_DATA="$(as_ros_bool "${ENABLE_SENSOR_DATA:-$ENABLE_SENSOR_DATA_DEFAULT}")"
 ENABLE_REFEREE_ODOM="$(as_ros_bool "${ENABLE_REFEREE_ODOM:-1}")"
 ENABLE_GROUND_TRUTH="$(as_ros_bool "${ENABLE_GROUND_TRUTH:-1}")"
+ENABLE_FOOT_CONTACT_SENSOR="$(as_ros_bool "${ENABLE_FOOT_CONTACT_SENSOR:-0}")"
 ENABLE_FOOT_FORCE_VISUAL="$(as_ros_bool "${ENABLE_FOOT_FORCE_VISUAL:-0}")"
 ENABLE_JOY_NODE="$(as_ros_bool "${ENABLE_JOY_NODE:-0}")"
 ENABLE_POINTCLOUD_CONVERTER="$(as_ros_bool "${ENABLE_POINTCLOUD_CONVERTER:-1}")"
@@ -42,7 +43,7 @@ GAZEBO_PHYSICS_REAL_TIME_UPDATE_RATE="${GAZEBO_PHYSICS_REAL_TIME_UPDATE_RATE:-50
 GAZEBO_PHYSICS_ODE_ITERS="${GAZEBO_PHYSICS_ODE_ITERS:-40}"
 GAZEBO_PHYSICS_CONTACT_MAX_CORRECTING_VEL="${GAZEBO_PHYSICS_CONTACT_MAX_CORRECTING_VEL:-5.0}"
 ROBOT_X="${ROBOT_X:-0.0}"
-ROBOT_Y="${ROBOT_Y:-2.3}"
+ROBOT_Y="${ROBOT_Y:--3.2}"
 ROBOT_Z="${ROBOT_Z:-0.6}"
 ROBOT_YAW="${ROBOT_YAW:-1.5708}"
 
@@ -61,6 +62,34 @@ schedule_unpause_physics() {
       sleep 0.25
     done
   ) &
+}
+
+wait_for_robot_spawn() {
+  local timeout="${ROBOT_SPAWN_TIMEOUT:-45}"
+  local deadline=$((SECONDS + timeout))
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    if ! kill -0 "$LAUNCH_PID" 2>/dev/null; then
+      echo "roslaunch exited during startup. Last log lines:" >&2
+      tail -n 80 "$WORKSPACE_DIR/logs/competition_gazebo.log" >&2
+      exit 1
+    fi
+    if timeout 1s rosservice call /gazebo/get_model_state "{model_name: 'a1_gazebo', relative_entity_name: 'world'}" 2>/dev/null | grep -q "success: True"; then
+      return
+    fi
+    if grep -a -q "Successfully spawned entity" "$WORKSPACE_DIR/logs/competition_gazebo.log" 2>/dev/null; then
+      return
+    fi
+    if grep -a -E -q "Spawn service failed|Service call failed" "$WORKSPACE_DIR/logs/competition_gazebo.log" 2>/dev/null; then
+      echo "Robot spawn failed. Last log lines:" >&2
+      tail -n 80 "$WORKSPACE_DIR/logs/competition_gazebo.log" >&2
+      exit 1
+    fi
+    sleep 0.2
+  done
+
+  echo "Timed out waiting for robot spawn. Last log lines:" >&2
+  tail -n 80 "$WORKSPACE_DIR/logs/competition_gazebo.log" >&2
+  exit 1
 }
 
 echo "Terminating previous Gazebo, launch, controller, and optional joystick processes..."
@@ -132,10 +161,13 @@ echo "  World:   $BUILDING_WORLD_FILE"
 echo "  Truth:   $RESULTS_DIR/danger_truth.json"
 echo "  Manifest:$SCENE_OUTPUT_DIR/scene_manifest.json"
 echo "  Result:  $RESULTS_DIR/detected_danger.json"
+echo "  Robot pose: x=$ROBOT_X y=$ROBOT_Y z=$ROBOT_Z yaw=$ROBOT_YAW"
 echo "  Sensor data: $ENABLE_SENSOR_DATA"
 echo "  PointCloud2 converter: $ENABLE_POINTCLOUD_CONVERTER"
 echo "  Ground truth topics: $ENABLE_GROUND_TRUTH"
 echo "  Referee odom: $ENABLE_REFEREE_ODOM"
+echo "  Foot contact sensors: $ENABLE_FOOT_CONTACT_SENSOR"
+echo "  Foot force visual: $ENABLE_FOOT_FORCE_VISUAL"
 echo "  Gazebo starts paused: $PAUSED"
 echo "  Auto unpause: $AUTO_UNPAUSE after ${AUTO_UNPAUSE_DELAY}s"
 echo "  Gazebo physics: max_step=$GAZEBO_PHYSICS_MAX_STEP_SIZE update_rate=$GAZEBO_PHYSICS_REAL_TIME_UPDATE_RATE ode_iters=$GAZEBO_PHYSICS_ODE_ITERS"
@@ -161,6 +193,7 @@ roslaunch unitree_guide multi_floor_gazeboSim.launch \
   enable_sensor_data:="$ENABLE_SENSOR_DATA" \
   enable_referee_odom:="$ENABLE_REFEREE_ODOM" \
   enable_ground_truth:="$ENABLE_GROUND_TRUTH" \
+  enable_foot_contact_sensor:="$ENABLE_FOOT_CONTACT_SENSOR" \
   enable_foot_force_visual:="$ENABLE_FOOT_FORCE_VISUAL" \
   enable_joy_node:="$ENABLE_JOY_NODE" \
   enable_pointcloud_converter:="$ENABLE_POINTCLOUD_CONVERTER" \
@@ -168,12 +201,7 @@ roslaunch unitree_guide multi_floor_gazeboSim.launch \
   > "$WORKSPACE_DIR/logs/competition_gazebo.log" 2>&1 &
 LAUNCH_PID=$!
 echo "$LAUNCH_PID" > "$WORKSPACE_DIR/logs/competition_gazebo.pid"
-sleep 25
-if ! kill -0 "$LAUNCH_PID" 2>/dev/null; then
-  echo "roslaunch exited during startup. Last log lines:" >&2
-  tail -n 80 "$WORKSPACE_DIR/logs/competition_gazebo.log" >&2
-  exit 1
-fi
+wait_for_robot_spawn
 
 if [ "$START_BUILDING_CONTROL" = "1" ]; then
   echo "Starting building door/elevator control service..."
@@ -190,7 +218,10 @@ if [ "$START_CONTROLLER" = "1" ]; then
     echo "UNITREE_CTRL_DT=$UNITREE_CTRL_DT seconds."
     echo "Use keyboard input in this terminal: 2 = stand, 6 = RL mode."
     schedule_unpause_physics
-    "$WORKSPACE_DIR/devel/lib/unitree_guide/junior_ctrl"
+    "$WORKSPACE_DIR/devel/lib/unitree_guide/junior_ctrl" || true
+    echo "junior_ctrl exited; keeping Gazebo running for inspection. Press Ctrl-C to stop this script."
+    wait "$LAUNCH_PID"
+    exit 0
   else
     echo "Starting junior_ctrl controller in the background. Keyboard state switching may not be available."
     echo "UNITREE_CTRL_DT=$UNITREE_CTRL_DT seconds."
@@ -205,3 +236,4 @@ fi
 
 echo "Simulation startup command completed."
 echo "Controller mode remains governed by unitree_guide keyboard/joy input; publish geometry_msgs/Twist to /cmd_vel after RL mode is enabled."
+wait "$LAUNCH_PID"

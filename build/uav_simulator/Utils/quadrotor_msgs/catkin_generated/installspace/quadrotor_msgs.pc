@@ -1,4 +1,4 @@
-prefix=/usr/local
+prefix=/home/ros/Guoyulun/Competition/SimEnv/install
 
 Name: quadrotor_msgs
 Description: Description of quadrotor_msgs

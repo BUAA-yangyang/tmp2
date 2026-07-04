@@ -54,7 +54,7 @@ CMAKE_BINARY_DIR = /home/ros/Guoyulun/Competition/SimEnv/build
 include uav_simulator/Utils/quadrotor_msgs/CMakeFiles/_quadrotor_msgs_generate_messages_check_deps_OutputData.dir/progress.make
 
 uav_simulator/Utils/quadrotor_msgs/CMakeFiles/_quadrotor_msgs_generate_messages_check_deps_OutputData:
-	cd /home/ros/Guoyulun/Competition/SimEnv/build/uav_simulator/Utils/quadrotor_msgs && ../../../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/genmsg/cmake/../../../lib/genmsg/genmsg_check_deps.py quadrotor_msgs /home/ros/Guoyulun/Competition/SimEnv/src/uav_simulator/Utils/quadrotor_msgs/msg/OutputData.msg geometry_msgs/Vector3:geometry_msgs/Quaternion:std_msgs/Header
+	cd /home/ros/Guoyulun/Competition/SimEnv/build/uav_simulator/Utils/quadrotor_msgs && ../../../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/genmsg/cmake/../../../lib/genmsg/genmsg_check_deps.py quadrotor_msgs /home/ros/Guoyulun/Competition/SimEnv/src/uav_simulator/Utils/quadrotor_msgs/msg/OutputData.msg geometry_msgs/Quaternion:geometry_msgs/Vector3:std_msgs/Header
 
 _quadrotor_msgs_generate_messages_check_deps_OutputData: uav_simulator/Utils/quadrotor_msgs/CMakeFiles/_quadrotor_msgs_generate_messages_check_deps_OutputData
 _quadrotor_msgs_generate_messages_check_deps_OutputData: uav_simulator/Utils/quadrotor_msgs/CMakeFiles/_quadrotor_msgs_generate_messages_check_deps_OutputData.dir/build.make

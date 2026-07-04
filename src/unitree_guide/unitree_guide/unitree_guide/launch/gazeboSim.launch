@@ -14,6 +14,7 @@
     <arg name="enable_sensor_data" default="true"/>
     <arg name="enable_front_camera" default="false"/>
     <arg name="enable_ground_truth" default="true"/>
+    <arg name="enable_foot_contact_sensor" default="false"/>
     <arg name="enable_foot_force_visual" default="false"/>
     
     <include file="$(find gazebo_ros)/launch/empty_world.launch">
@@ -32,6 +33,7 @@
            ENABLE_SENSOR_DATA:=$(arg enable_sensor_data)
            ENABLE_FRONT_CAMERA:=$(arg enable_front_camera)
            ENABLE_GROUND_TRUTH:=$(arg enable_ground_truth)
+           ENABLE_FOOT_CONTACT_SENSOR:=$(arg enable_foot_contact_sensor)
            ENABLE_FOOT_FORCE_VISUAL:=$(arg enable_foot_force_visual)"/>
 
     <!-- Run a python script to the send a service call to gazebo_ros to spawn a URDF robot -->

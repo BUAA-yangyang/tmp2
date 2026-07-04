@@ -4,5 +4,5 @@ PROJECT_PKG_CONFIG_INCLUDE_DIRS = "/home/ros/Guoyulun/Competition/SimEnv/src/Mid
 PROJECT_CATKIN_DEPENDS = "tf".replace(';', ' ')
 PKG_CONFIG_LIBRARIES_WITH_PREFIX = "-llivox_laser_simulation".split(';') if "-llivox_laser_simulation" != "" else []
 PROJECT_NAME = "livox_laser_simulation"
-PROJECT_SPACE_DIR = "/home/ros/Guoyulun/Competition/SimEnv/build/devel"
+PROJECT_SPACE_DIR = "/home/ros/Guoyulun/Competition/SimEnv/devel"
 PROJECT_VERSION = "0.0.0"

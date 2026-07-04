@@ -1,6 +1,6 @@
 file(REMOVE_RECURSE
-  "../../../devel/lib/libpose_utils.pdb"
-  "../../../devel/lib/libpose_utils.so"
+  "/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libpose_utils.pdb"
+  "/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libpose_utils.so"
   "CMakeFiles/pose_utils.dir/src/pose_utils.cpp.o"
 )
 

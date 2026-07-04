@@ -53,23 +53,23 @@ CMAKE_BINARY_DIR = /home/ros/Guoyulun/Competition/SimEnv/build
 # Include the progress variables for this target.
 include building_generator_interfaces/CMakeFiles/building_generator_interfaces_generate_messages_nodejs.dir/progress.make
 
-building_generator_interfaces/CMakeFiles/building_generator_interfaces_generate_messages_nodejs: devel/share/gennodejs/ros/building_generator_interfaces/srv/CallElevator.js
-building_generator_interfaces/CMakeFiles/building_generator_interfaces_generate_messages_nodejs: devel/share/gennodejs/ros/building_generator_interfaces/srv/SetDoorState.js
+building_generator_interfaces/CMakeFiles/building_generator_interfaces_generate_messages_nodejs: /home/ros/Guoyulun/Competition/SimEnv/devel/share/gennodejs/ros/building_generator_interfaces/srv/CallElevator.js
+building_generator_interfaces/CMakeFiles/building_generator_interfaces_generate_messages_nodejs: /home/ros/Guoyulun/Competition/SimEnv/devel/share/gennodejs/ros/building_generator_interfaces/srv/SetDoorState.js
 
 
-devel/share/gennodejs/ros/building_generator_interfaces/srv/CallElevator.js: /opt/ros/noetic/lib/gennodejs/gen_nodejs.py
-devel/share/gennodejs/ros/building_generator_interfaces/srv/CallElevator.js: /home/ros/Guoyulun/Competition/SimEnv/src/building_generator_interfaces/srv/CallElevator.srv
+/home/ros/Guoyulun/Competition/SimEnv/devel/share/gennodejs/ros/building_generator_interfaces/srv/CallElevator.js: /opt/ros/noetic/lib/gennodejs/gen_nodejs.py
+/home/ros/Guoyulun/Competition/SimEnv/devel/share/gennodejs/ros/building_generator_interfaces/srv/CallElevator.js: /home/ros/Guoyulun/Competition/SimEnv/src/building_generator_interfaces/srv/CallElevator.srv
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --blue --bold --progress-dir=/home/ros/Guoyulun/Competition/SimEnv/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Generating Javascript code from building_generator_interfaces/CallElevator.srv"
-	cd /home/ros/Guoyulun/Competition/SimEnv/build/building_generator_interfaces && ../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/gennodejs/cmake/../../../lib/gennodejs/gen_nodejs.py /home/ros/Guoyulun/Competition/SimEnv/src/building_generator_interfaces/srv/CallElevator.srv -p building_generator_interfaces -o /home/ros/Guoyulun/Competition/SimEnv/build/devel/share/gennodejs/ros/building_generator_interfaces/srv
+	cd /home/ros/Guoyulun/Competition/SimEnv/build/building_generator_interfaces && ../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/gennodejs/cmake/../../../lib/gennodejs/gen_nodejs.py /home/ros/Guoyulun/Competition/SimEnv/src/building_generator_interfaces/srv/CallElevator.srv -p building_generator_interfaces -o /home/ros/Guoyulun/Competition/SimEnv/devel/share/gennodejs/ros/building_generator_interfaces/srv
 
-devel/share/gennodejs/ros/building_generator_interfaces/srv/SetDoorState.js: /opt/ros/noetic/lib/gennodejs/gen_nodejs.py
-devel/share/gennodejs/ros/building_generator_interfaces/srv/SetDoorState.js: /home/ros/Guoyulun/Competition/SimEnv/src/building_generator_interfaces/srv/SetDoorState.srv
+/home/ros/Guoyulun/Competition/SimEnv/devel/share/gennodejs/ros/building_generator_interfaces/srv/SetDoorState.js: /opt/ros/noetic/lib/gennodejs/gen_nodejs.py
+/home/ros/Guoyulun/Competition/SimEnv/devel/share/gennodejs/ros/building_generator_interfaces/srv/SetDoorState.js: /home/ros/Guoyulun/Competition/SimEnv/src/building_generator_interfaces/srv/SetDoorState.srv
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --blue --bold --progress-dir=/home/ros/Guoyulun/Competition/SimEnv/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Generating Javascript code from building_generator_interfaces/SetDoorState.srv"
-	cd /home/ros/Guoyulun/Competition/SimEnv/build/building_generator_interfaces && ../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/gennodejs/cmake/../../../lib/gennodejs/gen_nodejs.py /home/ros/Guoyulun/Competition/SimEnv/src/building_generator_interfaces/srv/SetDoorState.srv -p building_generator_interfaces -o /home/ros/Guoyulun/Competition/SimEnv/build/devel/share/gennodejs/ros/building_generator_interfaces/srv
+	cd /home/ros/Guoyulun/Competition/SimEnv/build/building_generator_interfaces && ../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/gennodejs/cmake/../../../lib/gennodejs/gen_nodejs.py /home/ros/Guoyulun/Competition/SimEnv/src/building_generator_interfaces/srv/SetDoorState.srv -p building_generator_interfaces -o /home/ros/Guoyulun/Competition/SimEnv/devel/share/gennodejs/ros/building_generator_interfaces/srv
 
 building_generator_interfaces_generate_messages_nodejs: building_generator_interfaces/CMakeFiles/building_generator_interfaces_generate_messages_nodejs
-building_generator_interfaces_generate_messages_nodejs: devel/share/gennodejs/ros/building_generator_interfaces/srv/CallElevator.js
-building_generator_interfaces_generate_messages_nodejs: devel/share/gennodejs/ros/building_generator_interfaces/srv/SetDoorState.js
+building_generator_interfaces_generate_messages_nodejs: /home/ros/Guoyulun/Competition/SimEnv/devel/share/gennodejs/ros/building_generator_interfaces/srv/CallElevator.js
+building_generator_interfaces_generate_messages_nodejs: /home/ros/Guoyulun/Competition/SimEnv/devel/share/gennodejs/ros/building_generator_interfaces/srv/SetDoorState.js
 building_generator_interfaces_generate_messages_nodejs: building_generator_interfaces/CMakeFiles/building_generator_interfaces_generate_messages_nodejs.dir/build.make
 
 .PHONY : building_generator_interfaces_generate_messages_nodejs

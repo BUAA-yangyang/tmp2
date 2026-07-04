@@ -54,7 +54,7 @@ CMAKE_BINARY_DIR = /home/ros/Guoyulun/Competition/SimEnv/build
 include uav_simulator/Utils/uav_utils/CMakeFiles/_run_tests_uav_utils_gtest_uav_utils-test.dir/progress.make
 
 uav_simulator/Utils/uav_utils/CMakeFiles/_run_tests_uav_utils_gtest_uav_utils-test:
-	cd /home/ros/Guoyulun/Competition/SimEnv/build/uav_simulator/Utils/uav_utils && ../../../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/catkin/cmake/test/run_tests.py /home/ros/Guoyulun/Competition/SimEnv/build/test_results/uav_utils/gtest-uav_utils-test.xml "/home/ros/Guoyulun/Competition/SimEnv/build/devel/lib/uav_utils/uav_utils-test --gtest_output=xml:/home/ros/Guoyulun/Competition/SimEnv/build/test_results/uav_utils/gtest-uav_utils-test.xml"
+	cd /home/ros/Guoyulun/Competition/SimEnv/build/uav_simulator/Utils/uav_utils && ../../../catkin_generated/env_cached.sh /usr/bin/python3 /opt/ros/noetic/share/catkin/cmake/test/run_tests.py /home/ros/Guoyulun/Competition/SimEnv/build/test_results/uav_utils/gtest-uav_utils-test.xml "/home/ros/Guoyulun/Competition/SimEnv/devel/lib/uav_utils/uav_utils-test --gtest_output=xml:/home/ros/Guoyulun/Competition/SimEnv/build/test_results/uav_utils/gtest-uav_utils-test.xml"
 
 _run_tests_uav_utils_gtest_uav_utils-test: uav_simulator/Utils/uav_utils/CMakeFiles/_run_tests_uav_utils_gtest_uav_utils-test
 _run_tests_uav_utils_gtest_uav_utils-test: uav_simulator/Utils/uav_utils/CMakeFiles/_run_tests_uav_utils_gtest_uav_utils-test.dir/build.make

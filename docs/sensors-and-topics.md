@@ -61,6 +61,14 @@ Livox 内置 IMU `livox_imu_link`：
 
 ## 足端接触力
 
+足端 ContactSensor 为可选传感器。官方环境可通过 `ENABLE_FOOT_CONTACT_SENSOR` 统一开启或关闭：
+
+```bash
+ENABLE_FOOT_CONTACT_SENSOR=1 ./auto.sh
+```
+
+默认关闭时，下表中的足端接触力话题不会发布；机器人足端碰撞体、惯性参数、关节参数以及脚与地面的物理接触仍保持不变。若正式比赛开启该开关，参赛算法可以订阅这些话题；若关闭，则算法不应依赖这些话题。
+
 | 话题名称 | 消息类型 | 发布频率 | 说明 |
 |---------|---------|---------|------|
 | `/FR_foot_contact` | `gazebo_msgs/ContactsState` | 100 Hz | 右前足接触力 |

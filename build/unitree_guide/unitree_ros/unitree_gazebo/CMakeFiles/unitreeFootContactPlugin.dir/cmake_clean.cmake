@@ -1,6 +1,6 @@
 file(REMOVE_RECURSE
-  "../../../devel/lib/libunitreeFootContactPlugin.pdb"
-  "../../../devel/lib/libunitreeFootContactPlugin.so"
+  "/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libunitreeFootContactPlugin.pdb"
+  "/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libunitreeFootContactPlugin.so"
   "CMakeFiles/unitreeFootContactPlugin.dir/plugin/foot_contact_plugin.cc.o"
 )
 

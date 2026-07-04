@@ -1,4 +1,4 @@
-prefix=/usr/local
+prefix=/home/ros/Guoyulun/Competition/SimEnv/install
 
 Name: local_sensing_node
 Description: Description of local_sensing_node

@@ -1,6 +1,6 @@
 file(REMOVE_RECURSE
-  "../../../devel/lib/libunitree_controller.pdb"
-  "../../../devel/lib/libunitree_controller.so"
+  "/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libunitree_controller.pdb"
+  "/home/ros/Guoyulun/Competition/SimEnv/devel/lib/libunitree_controller.so"
   "CMakeFiles/unitree_controller.dir/src/body.cpp.o"
 )
 

@@ -4,5 +4,5 @@ PROJECT_PKG_CONFIG_INCLUDE_DIRS = "/home/ros/Guoyulun/Competition/SimEnv/src/uni
 PROJECT_CATKIN_DEPENDS = "unitree_legged_msgs;controller_interface;hardware_interface;pluginlib;roscpp".replace(';', ' ')
 PKG_CONFIG_LIBRARIES_WITH_PREFIX = "-lunitree_legged_control".split(';') if "-lunitree_legged_control" != "" else []
 PROJECT_NAME = "unitree_legged_control"
-PROJECT_SPACE_DIR = "/home/ros/Guoyulun/Competition/SimEnv/build/devel"
+PROJECT_SPACE_DIR = "/home/ros/Guoyulun/Competition/SimEnv/devel"
 PROJECT_VERSION = "0.0.0"

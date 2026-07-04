@@ -20,7 +20,7 @@ set(CMAKE_TARGET_DEFINITIONS_CXX
 set(CMAKE_CXX_TARGET_INCLUDE_PATH
   "/usr/include/eigen3"
   "/home/ros/Guoyulun/Competition/SimEnv/src/uav_simulator/so3_control/include"
-  "devel/include"
+  "/home/ros/Guoyulun/Competition/SimEnv/devel/include"
   "/opt/ros/noetic/include"
   "/opt/ros/noetic/share/xmlrpcpp/cmake/../../../include/xmlrpcpp"
   )
