@@ -22,6 +22,7 @@ DOOR_CLEARANCE = 0.02
 DOOR_PANEL_THICKNESS = 0.06
 ELEVATOR_CAR_FLOOR_THICKNESS = 0.12
 ELEVATOR_CAR_DOOR_GAP = 0.06
+ELEVATOR_DOOR_MOTION_DURATION = 25.0
 STAIR_STEP_HEIGHT = 0.13
 STAIR_STEP_DEPTH = 0.26
 STAIR_LANDING_THICKNESS = 0.18
@@ -735,7 +736,7 @@ def _door_config_entry(door: DoorSpec) -> dict[str, object]:
     if door.kind == "elevator":
         slide_offset = door.width / 2.0 + WALL_THICKNESS / 2.0 + DOOR_PANEL_THICKNESS
         recess_offset = -(WALL_THICKNESS / 2.0 + DOOR_PANEL_THICKNESS / 2.0)
-        payload["motion_duration"] = 60.0
+        payload["motion_duration"] = ELEVATOR_DOOR_MOTION_DURATION
     payload["panel_poses"] = {
         "left_closed": [0.0, -panel_offset, 0.0, 0.0, 0.0, 0.0],
         "right_closed": [0.0, panel_offset, 0.0, 0.0, 0.0, 0.0],

@@ -19,6 +19,7 @@
     <arg name="enable_joy_node" default="false"/>
     <arg name="enable_pointcloud_converter" default="true"/>
     <arg name="pointcloud_use_ground_truth_odom" default="true"/>
+    <arg name="controller_spawner_timeout" default="$(optenv CONTROLLER_SPAWNER_TIMEOUT 120)"/>
 
     <arg name="world_file" default="$(optenv BUILDING_WORLD_FILE)"/>
     <arg name="robot_x" default="$(optenv COMPETITION_ROBOT_X 0.0)"/>
@@ -59,7 +60,7 @@
     <rosparam file="$(arg dollar)$(arg robot_path)/config/robot_control.yaml" command="load"/>
 
     <node pkg="controller_manager" type="spawner" name="controller_spawner" respawn="false"
-           ns="/$(arg rname)_gazebo" args="joint_state_controller
+           ns="/$(arg rname)_gazebo" args="--timeout $(arg controller_spawner_timeout) joint_state_controller
           FL_hip_controller FL_thigh_controller FL_calf_controller
           FR_hip_controller FR_thigh_controller FR_calf_controller
           RL_hip_controller RL_thigh_controller RL_calf_controller

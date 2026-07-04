@@ -99,8 +99,10 @@ SEED=77 FLOOR_COUNT=3 ROOMS_PER_FLOOR=4 ./auto.sh
 | `GUI` | `true` | 是否启动 Gazebo GUI |
 | `PAUSED` | `true` | Gazebo 启动后是否暂停 |
 | `START_CONTROLLER` | `1` | 是否启动 `junior_ctrl` |
-| `CONTROLLER_FOREGROUND` | `1` | 是否在前台运行控制器。前台运行时可以在当前终端输入 `1`、`2`、`6` 切换状态 |
+| `CONTROLLER_FOREGROUND` | `1` | 是否在前台运行控制器。前台运行时可以在当前终端输入 `1`、`2`、`4`、`6`、`8` 切换状态 |
 | `START_BUILDING_CONTROL` | `1` | 是否启动楼栋门/电梯控制服务 |
+| `ROBOT_SPAWN_TIMEOUT` | `120` | 等待 Gazebo 完成机器人模型生成的最长时间，单位 s |
+| `CONTROLLER_SPAWNER_TIMEOUT` | `120` | 等待 Gazebo 暴露 controller_manager 接口的最长时间，单位 s |
 | `UNITREE_CTRL_DT` | `0.002` | `junior_ctrl` 控制周期，单位 s。默认 500 Hz |
 | `UNITREE_STAND_DURATION` | `3.0` | 按 `2` 后从当前姿态平滑站立的时长，单位 s |
 | `START_VIRTUAL_JOY` | `0` | 是否启动虚拟手柄。该功能通常需要 `uinput` 权限 |
@@ -165,11 +167,12 @@ rosrun building_obstacles generate_multi_floor_building.py ./generated_building 
 
 ## 控制器与算法接入
 
-`auto.sh` 默认以前台方式启动 `junior_ctrl`。该控制器仍遵循 Unitree 原有交互流程，进入 RL 模式后接收 `/cmd_vel`：
+`auto.sh` 默认以前台方式启动 `junior_ctrl`。该控制器仍遵循 Unitree 原有交互流程：
 
 - 键盘输入 `2`：站立。
-- 键盘输入 `6`：切换到 RL 模式。
-- RL 模式下订阅 `/cmd_vel`，消息类型为 `geometry_msgs/Twist`。
+- 键盘输入 `4`：切换到 RL 键盘行走模式，使用 `W/S`、`A/D`、`J/L` 控制速度。
+- 键盘输入 `6`：切换到 RL `/cmd_vel` 模式。
+- RL `/cmd_vel` 模式下订阅 `/cmd_vel`，消息类型为 `geometry_msgs/Twist`。
 
 `junior_ctrl` 原始控制周期为 `0.002 s`，即 500 Hz。在 Gazebo GUI、随机楼栋、传感器和 RL 推理同时运行时，部分机器会出现：
 
@@ -295,7 +298,7 @@ rosservice call /call_elevator "{elevator_id: 'elevator_main', target_floor: 0, 
 - `main_entrance` 为首层主入口门。
 - `elevator_floor_0`、`elevator_floor_1` 等为各楼层电梯厅门。
 - `elevator_main` 为当前楼栋默认电梯 ID。
-- 电梯厅门默认采用 60 s 缓慢开门或关门过程，控制服务会持续插值更新左右门板位置，`rosservice call /set_door_state` 通常在动作完成后返回。
+- 电梯厅门默认采用约 25 s 开门或关门过程，控制服务会持续插值更新左右门板位置，`rosservice call /set_door_state` 通常在动作完成后返回。
 - 当前电梯为简化仿真模型，`/call_elevator` 负责移动轿厢到目标楼层；机器人进出轿厢仍由参赛算法通过 `/cmd_vel` 控制。
 - `open_doors` 字段记录电梯状态，但楼层电梯厅门建议仍通过 `/set_door_state` 明确开关，便于比赛流程可复现。
 

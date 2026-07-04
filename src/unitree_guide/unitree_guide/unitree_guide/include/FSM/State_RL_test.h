@@ -5,6 +5,7 @@
 #define STATE_RL_TEST_H
 
 #include "FSM/FSMState.h"
+#include <atomic>
 #include <fstream>  // 包含文件流的头文件
 #include <thread>
 #include <string>
@@ -33,6 +34,8 @@ public:
     torch::Tensor quat_rotate_inverse(const torch::Tensor& q, const torch::Tensor& v);
     std::ofstream outfile;
 private:
+    void updateCommandTensor();
+
     int debug = false;
     at::string model_path;
     torch::DeviceType device;
@@ -92,6 +95,10 @@ private:
     float motion_time = 0.0;
     std::thread* infer_thread = nullptr;
     std::thread* amp_obs_thread = nullptr;
+    std::atomic_bool _keyboardMode{false};
+    float _keyboardVxScale = 0.6f;
+    float _keyboardVyScale = 0.35f;
+    float _keyboardWzScale = 0.9f;
     uint8_t infer_thread_runnning = State_RL::STOP;
     uint8_t ampthreadRunning = State_RL::STOP;
     float infer_duration = 0.02;

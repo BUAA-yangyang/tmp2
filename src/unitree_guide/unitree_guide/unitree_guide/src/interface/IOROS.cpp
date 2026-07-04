@@ -27,8 +27,8 @@ UserCommand joyCommandFromButtons(const std::vector<int>& buttons){
     if(buttonAt(buttons, 10)) return UserCommand::RESET;    // reset robot pose
     if(buttonAt(buttons, 0)) return UserCommand::L2_B;      // passive/down
     if(buttonAt(buttons, 1)) return UserCommand::L2_A;      // fixed stand
-    if(buttonAt(buttons, 2)) return UserCommand::START;     // trotting
-    if(buttonAt(buttons, 3)) return UserCommand::RL;        // RL
+    if(buttonAt(buttons, 2)) return UserCommand::RL_KEYBOARD; // RL with keyboard axes
+    if(buttonAt(buttons, 3)) return UserCommand::RL;          // RL with /cmd_vel
     if(buttonAt(buttons, 6)) return UserCommand::L2_X;      // free stand
     if(buttonAt(buttons, 7)) return UserCommand::L1_X;      // balance test
     if(buttonAt(buttons, 8)) return UserCommand::L1_A;      // swing test

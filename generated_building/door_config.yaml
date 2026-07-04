@@ -65,7 +65,7 @@ doors:
   initial_open: true
   dynamic: true
   model_name: dynamic_elevator_floor_0
-  motion_duration: 60.0
+  motion_duration: 25.0
   panel_poses:
     left_closed:
     - 0.0
@@ -117,7 +117,7 @@ doors:
   initial_open: false
   dynamic: true
   model_name: dynamic_elevator_floor_1
-  motion_duration: 60.0
+  motion_duration: 25.0
   panel_poses:
     left_closed:
     - 0.0
@@ -169,7 +169,7 @@ doors:
   initial_open: false
   dynamic: true
   model_name: dynamic_elevator_floor_2
-  motion_duration: 60.0
+  motion_duration: 25.0
   panel_poses:
     left_closed:
     - 0.0
@@ -206,4 +206,4 @@ doors:
   - 0.0
   - 0.0
   - 3.141592653589793
-signature: f9be42825445bfde
+signature: a2b8bf0324c248a3

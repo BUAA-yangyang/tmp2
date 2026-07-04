@@ -23,8 +23,8 @@
     "team_scene_info_file": "/home/ros/Guoyulun/Competition/SimEnv/generated_building/team_scene_info.json",
     "velocity_command_topic": "/cmd_vel"
   },
-  "danger_count": 4,
-  "distractor_count": 8,
+  "danger_count": 5,
+  "distractor_count": 7,
   "door_config": "/home/ros/Guoyulun/Competition/SimEnv/generated_building/door_config.yaml",
   "elevator_config": "/home/ros/Guoyulun/Competition/SimEnv/generated_building/elevator_config.yaml",
   "gazebo_physics": {
@@ -57,7 +57,7 @@
     "z": 0.6
   },
   "schema": "competition_scene_manifest_v1",
-  "seed": 1005103320,
+  "seed": 882637485,
   "source_count": 12,
   "team_scene_info": "/home/ros/Guoyulun/Competition/SimEnv/generated_building/team_scene_info.json",
   "truth_file": "/home/ros/Guoyulun/Competition/SimEnv/results/danger_truth.json",

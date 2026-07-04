@@ -86,6 +86,8 @@ START_CONTROLLER=0 ./auto.sh
 | `START_CONTROLLER` | `1` | 是否启动 `junior_ctrl` |
 | `CONTROLLER_FOREGROUND` | `1` | 是否在前台运行控制器 |
 | `START_BUILDING_CONTROL` | `1` | 是否启动楼栋门/电梯控制服务 |
+| `ROBOT_SPAWN_TIMEOUT` | `120` | 等待 Gazebo 完成机器人模型生成的最长时间，单位 s |
+| `CONTROLLER_SPAWNER_TIMEOUT` | `120` | 等待 Gazebo 暴露 controller_manager 接口的最长时间，单位 s |
 | `UNITREE_CTRL_DT` | `0.004` | `junior_ctrl` 控制周期，单位 s |
 | `START_VIRTUAL_JOY` | `0` | 是否启动虚拟手柄，通常需要 `uinput` 权限 |
 | `ROBOT_X` | `0.0` | 机器人出生点 x |

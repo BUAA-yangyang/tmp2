@@ -169,7 +169,8 @@ FSMStateName State_FixedStand::checkChange(){
         return FSMStateName::MOVE_BASE;
     }
 #endif  // COMPILE_WITH_MOVE_BASE
-    else if(_lowState->userCmd == UserCommand::RL){
+    else if(_lowState->userCmd == UserCommand::RL ||
+            _lowState->userCmd == UserCommand::RL_KEYBOARD){
         return FSMStateName::RL;
     }
     else{

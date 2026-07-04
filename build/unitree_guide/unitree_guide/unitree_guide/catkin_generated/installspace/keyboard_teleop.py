@@ -11,7 +11,7 @@ from sensor_msgs.msg import Joy
 
 BUTTON_PASSIVE = 0
 BUTTON_STAND = 1
-BUTTON_TROT = 2
+BUTTON_RL_KEYBOARD = 2
 BUTTON_RL = 3
 BUTTON_FREE_STAND = 6
 BUTTON_BALANCE_TEST = 7
@@ -38,7 +38,7 @@ class KeyboardTeleop:
         tty.setcbreak(sys.stdin.fileno())
         timer = rospy.Timer(rospy.Duration(1.0 / self.repeat_rate), self.publish)
         try:
-            print("Keyboard teleop: 1 passive, 2 stand, 4 keyboard walk, 6 RL, 8 reset, WASD move in mode 4, JL turn, Space stop, q quit")
+            print("Keyboard teleop: 1 passive, 2 stand, 4 RL keyboard walk, 6 RL /cmd_vel, 8 reset, WASD move in mode 4, JL turn, Space stop, q quit")
             while not rospy.is_shutdown():
                 key = sys.stdin.read(1)
                 if key in ("q", "\x03"):
@@ -61,7 +61,7 @@ class KeyboardTeleop:
         elif key == "3":
             self.buttons[BUTTON_FREE_STAND] = 1
         elif key == "4":
-            self.buttons[BUTTON_TROT] = 1
+            self.buttons[BUTTON_RL_KEYBOARD] = 1
         elif key == "6":
             self.buttons[BUTTON_RL] = 1
         elif key == "7":

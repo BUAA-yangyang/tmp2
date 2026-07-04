@@ -31,6 +31,7 @@ enum class UserCommand{
     L1_A,       // swingTest
     L1_Y,        // stepTest
     RL,
+    RL_KEYBOARD, // RL with keyboard axes
     RESET,      // reset robot pose in Gazebo
 };
 

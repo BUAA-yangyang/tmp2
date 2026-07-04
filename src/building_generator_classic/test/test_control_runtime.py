@@ -15,7 +15,7 @@ class BuildingControlRuntimeTest(unittest.TestCase):
                     "id": "elevator_floor_0",
                     "kind": "elevator",
                     "initial_open": True,
-                    "motion_duration": 60.0,
+                    "motion_duration": 25.0,
                     "panel_poses": {
                         "left_closed": [0.0, -0.35, 0.0, 0.0, 0.0, 0.0],
                         "left_open": [0.0, -1.2, 0.0, 0.0, 0.0, 0.0],
@@ -43,7 +43,7 @@ class BuildingControlRuntimeTest(unittest.TestCase):
         elevator_result = runtime.call_elevator("elevator_main", 2, True)
 
         self.assertEqual(door_result["state"], "closed")
-        self.assertEqual(door_result["motion_duration"], 60.0)
+        self.assertEqual(door_result["motion_duration"], 25.0)
         self.assertEqual(door_result["start_panel_poses"]["left_panel"], [0.0, -1.2, 0.0, 0.0, 0.0, 0.0])
         self.assertEqual(door_result["panel_poses"]["left_panel"], [0.0, -0.35, 0.0, 0.0, 0.0, 0.0])
         self.assertEqual(elevator_result["current_floor"], 2)

@@ -38,6 +38,8 @@ ENABLE_POINTCLOUD_CONVERTER="$(as_ros_bool "${ENABLE_POINTCLOUD_CONVERTER:-1}")"
 POINTCLOUD_USE_GROUND_TRUTH_ODOM="$(as_ros_bool "${POINTCLOUD_USE_GROUND_TRUTH_ODOM:-1}")"
 WRITE_GENERATED_TRUTH_COPY="$(as_ros_bool "${WRITE_GENERATED_TRUTH_COPY:-1}")"
 UNITREE_CTRL_DT="${UNITREE_CTRL_DT:-0.004}"
+ROBOT_SPAWN_TIMEOUT="${ROBOT_SPAWN_TIMEOUT:-120}"
+CONTROLLER_SPAWNER_TIMEOUT="${CONTROLLER_SPAWNER_TIMEOUT:-120}"
 GAZEBO_PHYSICS_MAX_STEP_SIZE="${GAZEBO_PHYSICS_MAX_STEP_SIZE:-0.002}"
 GAZEBO_PHYSICS_REAL_TIME_UPDATE_RATE="${GAZEBO_PHYSICS_REAL_TIME_UPDATE_RATE:-500}"
 GAZEBO_PHYSICS_ODE_ITERS="${GAZEBO_PHYSICS_ODE_ITERS:-40}"
@@ -65,7 +67,7 @@ schedule_unpause_physics() {
 }
 
 wait_for_robot_spawn() {
-  local timeout="${ROBOT_SPAWN_TIMEOUT:-45}"
+  local timeout="$ROBOT_SPAWN_TIMEOUT"
   local deadline=$((SECONDS + timeout))
   while [ "$SECONDS" -lt "$deadline" ]; do
     if ! kill -0 "$LAUNCH_PID" 2>/dev/null; then
@@ -151,6 +153,7 @@ export COMPETITION_ROBOT_Y="$ROBOT_Y"
 export COMPETITION_ROBOT_Z="$ROBOT_Z"
 export COMPETITION_ROBOT_YAW="$ROBOT_YAW"
 export UNITREE_CTRL_DT
+export CONTROLLER_SPAWNER_TIMEOUT
 export GAZEBO_MODEL_PATH="${GAZEBO_MODEL_PATH:-}:$SCENE_OUTPUT_DIR:$UNITREE_GAZEBO_MODELS"
 export GAZEBO_PLUGIN_PATH="$WORKSPACE_DIR/devel/lib:${GAZEBO_PLUGIN_PATH:-}"
 
@@ -170,6 +173,8 @@ echo "  Foot contact sensors: $ENABLE_FOOT_CONTACT_SENSOR"
 echo "  Foot force visual: $ENABLE_FOOT_FORCE_VISUAL"
 echo "  Gazebo starts paused: $PAUSED"
 echo "  Auto unpause: $AUTO_UNPAUSE after ${AUTO_UNPAUSE_DELAY}s"
+echo "  Robot spawn timeout: ${ROBOT_SPAWN_TIMEOUT}s"
+echo "  Controller spawner timeout: ${CONTROLLER_SPAWNER_TIMEOUT}s"
 echo "  Gazebo physics: max_step=$GAZEBO_PHYSICS_MAX_STEP_SIZE update_rate=$GAZEBO_PHYSICS_REAL_TIME_UPDATE_RATE ode_iters=$GAZEBO_PHYSICS_ODE_ITERS"
 echo "  Gazebo plugin path: $GAZEBO_PLUGIN_PATH"
 echo "=========================================="
@@ -190,6 +195,7 @@ roslaunch unitree_guide multi_floor_gazeboSim.launch \
   robot_y:="$ROBOT_Y" \
   robot_z:="$ROBOT_Z" \
   robot_yaw:="$ROBOT_YAW" \
+  controller_spawner_timeout:="$CONTROLLER_SPAWNER_TIMEOUT" \
   enable_sensor_data:="$ENABLE_SENSOR_DATA" \
   enable_referee_odom:="$ENABLE_REFEREE_ODOM" \
   enable_ground_truth:="$ENABLE_GROUND_TRUTH" \
@@ -216,8 +222,8 @@ if [ "$START_CONTROLLER" = "1" ]; then
   if [ "$CONTROLLER_FOREGROUND" = "1" ]; then
     echo "Starting junior_ctrl controller in the foreground."
     echo "UNITREE_CTRL_DT=$UNITREE_CTRL_DT seconds."
-    echo "Use keyboard input in this terminal: 2 = stand, 4 = keyboard walk, 6 = RL mode, 8 = reset."
-    echo "In keyboard walk mode: W/S = forward/back, A/D = left/right, J/L = turn, Space = stop."
+    echo "Use keyboard input in this terminal: 2 = stand, 4 = RL keyboard walk, 6 = RL /cmd_vel mode, 8 = reset."
+    echo "In RL keyboard walk mode: W/S = forward/back, A/D = left/right, J/L = turn, Space = stop."
     schedule_unpause_physics
     "$WORKSPACE_DIR/devel/lib/unitree_guide/junior_ctrl" || true
     echo "junior_ctrl exited; keeping Gazebo running for inspection. Press Ctrl-C to stop this script."
@@ -236,5 +242,5 @@ else
 fi
 
 echo "Simulation startup command completed."
-echo "Controller mode remains governed by unitree_guide keyboard/joy input. Mode 4 uses keyboard axes; mode 6 keeps the original RL /cmd_vel logic."
+echo "Controller mode remains governed by unitree_guide keyboard/joy input. Mode 4 uses RL with keyboard axes; mode 6 keeps the original RL /cmd_vel logic."
 wait "$LAUNCH_PID"

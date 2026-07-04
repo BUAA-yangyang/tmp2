@@ -2,7 +2,24 @@
  Copyright (c) 2020-2023, Unitree Robotics.Co.Ltd. All rights reserved.
 ***********************************************************************/
 #include <iostream>
+#include <cmath>
 #include "FSM/State_RL_test.h"
+
+namespace {
+float finiteAxis(float value)
+{
+    if(!std::isfinite(value)){
+        return 0.0f;
+    }
+    if(value > 1.0f){
+        return 1.0f;
+    }
+    if(value < -1.0f){
+        return -1.0f;
+    }
+    return value;
+}
+}
 
 State_RL::State_RL(CtrlComponents *ctrlComp)
                 :FSMState(ctrlComp, FSMStateName::RL, "RL")
@@ -18,6 +35,16 @@ State_RL::State_RL(CtrlComponents *ctrlComp)
 
 
 void State_RL::enter(){
+    const bool keyboardMode = (_lowState->userCmd == UserCommand::RL_KEYBOARD);
+    _keyboardMode.store(keyboardMode);
+    if(keyboardMode){
+        _ctrlComp->ioInter->zeroCmdPanel();
+        _lowState->userValue.setZero();
+        std::cout << "[INFO] Entered RL keyboard mode. Use W/S, A/D, J/L, Space." << std::endl;
+    }else{
+        std::cout << "[INFO] Entered RL /cmd_vel mode." << std::endl;
+    }
+
      // if (real == false){
         for(int i=0; i<12; i++){
             _lowCmd->motorCmd[i].q = _lowState->motorState[i].q;
@@ -51,11 +78,11 @@ void State_RL::enter(){
     {
         refresh_rl_obs();
     }
-    infer_thread = new std::thread(&State_RL::infer_thread_callback,this);
     infer_thread_runnning = State_RL::RUNNING;
+    infer_thread = new std::thread(&State_RL::infer_thread_callback,this);
     if (debug == true){
-        amp_obs_thread = new std::thread(&State_RL::save_amp_obs_thread,this);
         ampthreadRunning = State_RL::RUNNING;
+        amp_obs_thread = new std::thread(&State_RL::save_amp_obs_thread,this);
     }
 }
 
@@ -95,8 +122,25 @@ FSMStateName State_RL::checkChange(){
     else if(_lowState->userCmd == UserCommand::L2_A){
         return FSMStateName::FIXEDSTAND;
     }
+    else if(_lowState->userCmd == UserCommand::RL_KEYBOARD){
+        if(!_keyboardMode.exchange(true)){
+            _ctrlComp->ioInter->zeroCmdPanel();
+            _lowState->userValue.setZero();
+            std::cout << "[INFO] Switched RL command source to keyboard axes." << std::endl;
+        }
+        _last_cmd = static_cast<int>(_lowState->userCmd);
+        return FSMStateName::RL;
+    }
+    else if(_lowState->userCmd == UserCommand::RL){
+        if(_keyboardMode.exchange(false)){
+            std::cout << "[INFO] Switched RL command source to /cmd_vel." << std::endl;
+        }
+        _last_cmd = static_cast<int>(_lowState->userCmd);
+        return FSMStateName::RL;
+    }
     else if(_lowState->userCmd == UserCommand::L1_X){
-        if (_last_cmd==static_cast<int>(UserCommand::RL))
+        if (_last_cmd==static_cast<int>(UserCommand::RL) ||
+            _last_cmd==static_cast<int>(UserCommand::RL_KEYBOARD))
         {
             _cnt = (_cnt+1)%(sizeof(_targetPos_map) / sizeof(_targetPos_map[0]));
             if (real == false){
@@ -218,6 +262,20 @@ void State_RL::save_amp_obs_thread()
     ampthreadRunning = State_RL::OVER;
 }
 
+void State_RL::updateCommandTensor(){
+    if(_keyboardMode.load()){
+        _userValue = _lowState->userValue;
+        commands_tensor[0] = finiteAxis(_userValue.ly) * _keyboardVxScale;
+        commands_tensor[1] = finiteAxis(_userValue.lx) * _keyboardVyScale;
+        commands_tensor[2] = finiteAxis(_userValue.rx) * _keyboardWzScale;
+        return;
+    }
+
+    commands_tensor[0] = this->current_cmd_vel_.linear_x;
+    commands_tensor[1] = this->current_cmd_vel_.linear_y;
+    commands_tensor[2] = this->current_cmd_vel_.angular_z;
+}
+
 
 
 void State_RL::refresh_rl_obs(){
@@ -239,13 +297,7 @@ void State_RL::refresh_rl_obs(){
         //订阅cmd_vel
         // this->Sub_=nh.subscribe<geometry_msgs::Twist>("/cmd_vel",1000,boost::bind(&FSMState::cmdVelCallback,this,_1));
 
-        // commands_tensor[0] = _ctrlComp->ioInter->axes[1];
-        // commands_tensor[1] = _ctrlComp->ioInter->axes[0];
-        // commands_tensor[2] = _ctrlComp->ioInter->axes[3]*3.14;
-
-        commands_tensor[0] = this->current_cmd_vel_.linear_x;
-        commands_tensor[1] = this->current_cmd_vel_.linear_y;
-        commands_tensor[2] = this->current_cmd_vel_.angular_z;
+        updateCommandTensor();
 
 
         // std::cout << _ctrlComp->ioInter->axes << std::endl;
