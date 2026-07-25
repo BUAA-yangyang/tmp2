@@ -1,0 +1,63 @@
+# Input topics from the simulated RealSense D415.
+rgb_topic: /real_sense/rgb/image_raw
+depth_topic: /real_sense/depth/image_raw
+depth_camera_info_topic: /real_sense/depth/camera_info
+
+# Output topics owned by this package.
+detections_topic: /danger_perception/detections
+debug_image_topic: /danger_perception/debug/detections_image
+debug_red_mask_topic: /danger_perception/debug/mask_red
+debug_green_mask_topic: /danger_perception/debug/mask_green
+
+# Synchronization.
+sync_queue_size: 8
+sync_slop: 0.08
+
+# HSV thresholds. OpenCV hue range is 0-179.
+red_hsv_lower1: [0, 80, 50]
+red_hsv_upper1: [10, 255, 255]
+red_hsv_lower2: [170, 80, 50]
+red_hsv_upper2: [179, 255, 255]
+green_hsv_lower: [40, 60, 40]
+green_hsv_upper: [85, 255, 255]
+
+# Contour filtering.
+min_area: 60.0
+max_area: 200000.0
+min_aspect_ratio: 0.55
+max_aspect_ratio: 1.85
+min_circularity: 0.65
+max_sphere_extent: 0.88
+morph_kernel_size: 5
+morph_iterations: 1
+
+# Depth validation and 3D point estimation.
+min_depth_m: 0.40
+max_depth_m: 8.0
+depth_scale: 0.001
+depth_percentile: 50.0
+min_depth_valid_ratio: 0.35
+max_depth_std_m: 0.45
+estimate_sphere_center: true
+sphere_radius_m: 0.15
+depth_mask_erode: 1
+
+# TF and output frame. In the current simulator map is usually aligned with
+# Gazebo world. If a localization module publishes world directly, set this to
+# world.
+enable_tf: true
+target_frame: map
+tf_timeout: 0.10
+
+# Tracking and filtering.
+use_tracker: true
+merge_distance_m: 0.60
+track_position_alpha: 0.35
+track_stale_after_s: 20.0
+min_track_observations: 1
+publish_min_confidence: 0.45
+
+# Debug output.
+publish_debug_images: true
+draw_rejected_candidates: true
+log_throttle_s: 2.0

@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>a1_danger_perception</name>
+  <version>0.0.1</version>
+  <description>OpenCV-based danger source detection and localization for the A1 competition environment.</description>
+
+  <maintainer email="todo@example.com">A1 Team</maintainer>
+  <license>UNLICENSED</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <build_depend>a1_navigation_interfaces</build_depend>
+  <build_depend>cv_bridge</build_depend>
+  <build_depend>geometry_msgs</build_depend>
+  <build_depend>message_filters</build_depend>
+  <build_depend>rospy</build_depend>
+  <build_depend>sensor_msgs</build_depend>
+  <build_depend>std_msgs</build_depend>
+  <build_depend>tf2_geometry_msgs</build_depend>
+  <build_depend>tf2_ros</build_depend>
+
+  <exec_depend>a1_navigation_interfaces</exec_depend>
+  <exec_depend>cv_bridge</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>message_filters</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-opencv</exec_depend>
+  <exec_depend>rospy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>tf2_geometry_msgs</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+
+  <export/>
+</package>
