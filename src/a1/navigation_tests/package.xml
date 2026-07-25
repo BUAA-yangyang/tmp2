@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>a1_navigation_tests</name>
+  <version>0.1.0</version>
+  <description>
+    A1 上层模块的集成测试、测试场景与调试工具。
+    避免临时测试脚本散落到业务模块里。
+  </description>
+
+  <maintainer email="xujc@buaa.edu.cn">xujc</maintainer>
+  <license>TODO</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <exec_depend>rospy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>topic_tools</exec_depend>
+  <exec_depend>a1_navigation</exec_depend>
+</package>
