@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>a1_navigation</name>
+  <version>0.1.0</version>
+  <description>
+    A1 单楼层二维导航模块。封装 move_base，接收当前楼层地图、机器人位姿与导航目标，
+    完成全局路径规划、局部避障与恢复行为，速度输出到 /cmd_vel_nav。
+    本包不直接发布最终 /cmd_vel（那是 a1_cmd_mux 的唯一职责）。
+  </description>
+
+  <maintainer email="xujc@buaa.edu.cn">xujc</maintainer>
+  <license>TODO</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <!-- 本包只有 launch/config，无编译产物，故只需 exec 依赖 -->
+  <exec_depend>move_base</exec_depend>
+  <exec_depend>costmap_2d</exec_depend>
+  <exec_depend>global_planner</exec_depend>
+  <exec_depend>navfn</exec_depend>
+  <exec_depend>base_local_planner</exec_depend>
+  <exec_depend>dwa_local_planner</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>topic_tools</exec_depend>
+  <exec_depend>rviz</exec_depend>
+</package>

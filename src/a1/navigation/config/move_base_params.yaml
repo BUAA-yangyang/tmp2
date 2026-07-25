@@ -1,0 +1,52 @@
+# move_base 本体参数（不属于某个 costmap 或 planner）
+
+# 全局规划器：GlobalPlanner 比老的 navfn 更可控（支持 A*/Dijkstra、栅格外插）
+base_global_planner: "global_planner/GlobalPlanner"
+# 局部规划器：DWA。四足能横移，DWA 支持 y 方向采样
+base_local_planner: "dwa_local_planner/DWAPlannerROS"
+
+controller_frequency: 10.0     # 局部规划(出速度)频率，也就是 /cmd_vel_nav 的发布频率
+planner_frequency: 1.0         # 全局重规划频率；>0 表示周期性重规划，环境变化时能绕开新障碍
+controller_patience: 5.0       # 局部规划连续失败多久后触发恢复行为
+planner_patience: 5.0
+
+# 卡住判定：oscillation_timeout 秒内移动不到 oscillation_distance 米就认为在振荡
+oscillation_timeout: 10.0
+oscillation_distance: 0.20
+
+# ---- 恢复行为 ----
+# 原理：规划失败时 move_base 依次执行恢复动作（清空 costmap、原地旋转）再重试。
+# 先允许开着，但要知道"原地旋转"对四足是有风险的动作（窄处可能刮到墙）。
+recovery_behavior_enabled: true
+clearing_rotation_allowed: true
+
+# 停止时把 costmap 清干净，避免残留的假障碍卡住下一次规划
+clearing_radius: 0.5
+conservative_reset_dist: 3.0
+
+# 恢复旋转的速度必须自己限住，否则实测会发出 wz=1.0，超过 A1 的 RL 训练上限 0.9。
+# 坑：RotateRecovery 的速度参数不是从 ~/rotate_recovery 读的，而是从
+# ~/TrajectoryPlannerROS 读的（源码里硬编码了这个命名空间，用于向后兼容）。
+# 所以即使我们用 DWA 做局部规划，也必须写一份 TrajectoryPlannerROS 的速度参数，
+# 否则 max_vel_theta 会取默认值 1.0。写在 ~/rotate_recovery 下面是无效的。
+rotate_recovery:
+  frequency: 10.0
+  sim_granularity: 0.017
+
+TrajectoryPlannerROS:
+  max_vel_theta: 0.70
+  min_in_place_vel_theta: 0.30
+  acc_lim_theta: 3.0
+  yaw_goal_tolerance: 0.30
+
+shutdown_costmaps: false
+
+GlobalPlanner:
+  allow_unknown: true    # 关键：滚动窗口外全是"未知"，不允许穿越未知则一步都规划不出去
+  use_dijkstra: true
+  use_grid_path: false
+  default_tolerance: 0.20
+  cost_factor: 0.55
+  neutral_cost: 66
+  lethal_cost: 253
+  publish_potential: false
