@@ -1,0 +1,30 @@
+global_costmap:
+  # ---- 坐标系 ----
+  # global_frame: odom 而不是 map。原理：里程碑1 没有静态地图也没有 AMCL，
+  # 全局代价地图退化成"跟着机器人滚动的窗口"，只由实时传感器填充。
+  # 这样 move_base 的三个输入里"地图"和"全局定位"两项都不需要额外模块，
+  # 只要有 odom→base 的 TF 就能跑。后期接 floor_mapping 时改成 map + static_map: true。
+  global_frame: odom
+  robot_base_frame: base    # 注意是 base，不是 base_link（A1 的 URDF 根 link 就叫 base）
+
+  # static_map: false + rolling_window: true 就是"无地图滚动窗口"模式
+  static_map: false
+  rolling_window: true
+  width: 20.0
+  height: 20.0
+  resolution: 0.05
+
+  update_frequency: 3.0     # 重算代价的频率
+  publish_frequency: 1.0    # 往 RViz 发布的频率（纯可视化，调低省 CPU）
+  transform_tolerance: 0.5  # 允许 TF 落后多久；仿真 TF 是 500Hz，0.5s 很宽裕
+
+  # 分层顺序：先障碍，再膨胀。没有 static_layer。
+  plugins:
+    - {name: obstacle_layer,  type: "costmap_2d::ObstacleLayer"}
+    - {name: inflation_layer, type: "costmap_2d::InflationLayer"}
+
+  inflation_layer:
+    # 膨胀半径 > 机器人半宽(0.15)，让路径与墙保持余量；
+    # cost_scaling_factor 越大，代价衰减越快 → 路径越"敢"贴近障碍
+    inflation_radius: 0.25
+    cost_scaling_factor: 5.0
