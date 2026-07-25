@@ -1,0 +1,438 @@
+[rosmaster.main][INFO] 2026-07-02 11:57:26,510: initialization complete, waiting for shutdown
+[rosmaster.main][INFO] 2026-07-02 11:57:26,510: Starting ROS Master Node
+[xmlrpc][INFO] 2026-07-02 11:57:26,511: XML-RPC server binding to 0.0.0.0:11311
+[xmlrpc][INFO] 2026-07-02 11:57:26,511: Started XML-RPC server [http://LAPTOP-4NHCRNJ5:11311/]
+[rosmaster.master][INFO] 2026-07-02 11:57:26,511: Master initialized: port[11311], uri[http://LAPTOP-4NHCRNJ5:11311/]
+[xmlrpc][INFO] 2026-07-02 11:57:26,511: xml rpc node: starting XML-RPC server
+[rosmaster.master][INFO] 2026-07-02 11:57:26,600: +PARAM [/run_id] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,600: +PARAM [/roslaunch/uris/host_laptop_4nhcrnj5__34587] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,657: +PARAM [/rosversion] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,658: +PARAM [/rosdistro] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,658: +PUB [/rosout] /wait_for_walk_gazebo_38066_1782964645688 http://LAPTOP-4NHCRNJ5:43679/
+[rosmaster.master][INFO] 2026-07-02 11:57:26,658: +PARAM [/world_file] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,659: +PARAM [/use_sim_time] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,659: +PARAM [/gazebo/enable_ros_network] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,659: +PARAM [/robot_description] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,659: +PARAM [/a1_gazebo/joint_state_controller/type] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,659: +PARAM [/a1_gazebo/joint_state_controller/publish_rate] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,659: +PARAM [/a1_gazebo/FL_hip_controller/type] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,659: +PARAM [/a1_gazebo/FL_hip_controller/joint] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,659: +PARAM [/a1_gazebo/FL_hip_controller/pid/p] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,659: +PARAM [/a1_gazebo/FL_hip_controller/pid/i] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,659: +PARAM [/a1_gazebo/FL_hip_controller/pid/d] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,659: +PARAM [/a1_gazebo/FL_thigh_controller/type] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,660: +PARAM [/a1_gazebo/FL_thigh_controller/joint] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,660: +PARAM [/a1_gazebo/FL_thigh_controller/pid/p] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,660: +PARAM [/a1_gazebo/FL_thigh_controller/pid/i] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,660: +PARAM [/a1_gazebo/FL_thigh_controller/pid/d] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,660: +PARAM [/a1_gazebo/FL_calf_controller/type] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,660: +PARAM [/a1_gazebo/FL_calf_controller/joint] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,660: +PARAM [/a1_gazebo/FL_calf_controller/pid/p] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,661: +PARAM [/a1_gazebo/FL_calf_controller/pid/i] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,661: +PARAM [/a1_gazebo/FL_calf_controller/pid/d] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,661: +PARAM [/a1_gazebo/FR_hip_controller/type] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,661: +PARAM [/a1_gazebo/FR_hip_controller/joint] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,661: +PARAM [/a1_gazebo/FR_hip_controller/pid/p] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,661: +PARAM [/a1_gazebo/FR_hip_controller/pid/i] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,661: +PARAM [/a1_gazebo/FR_hip_controller/pid/d] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,661: +PARAM [/a1_gazebo/FR_thigh_controller/type] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,661: +PARAM [/a1_gazebo/FR_thigh_controller/joint] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,661: +PARAM [/a1_gazebo/FR_thigh_controller/pid/p] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,662: +PARAM [/a1_gazebo/FR_thigh_controller/pid/i] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,662: +PARAM [/a1_gazebo/FR_thigh_controller/pid/d] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,662: +PARAM [/a1_gazebo/FR_calf_controller/type] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,662: +SUB [/clock] /wait_for_walk_gazebo_38066_1782964645688 http://LAPTOP-4NHCRNJ5:43679/
+[rosmaster.master][INFO] 2026-07-02 11:57:26,662: +PARAM [/a1_gazebo/FR_calf_controller/joint] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,662: +PARAM [/a1_gazebo/FR_calf_controller/pid/p] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,662: +PARAM [/a1_gazebo/FR_calf_controller/pid/i] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,663: +PARAM [/a1_gazebo/FR_calf_controller/pid/d] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,663: +PARAM [/a1_gazebo/RL_hip_controller/type] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,663: +PARAM [/a1_gazebo/RL_hip_controller/joint] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,663: +PARAM [/a1_gazebo/RL_hip_controller/pid/p] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,663: +PARAM [/a1_gazebo/RL_hip_controller/pid/i] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,663: +PARAM [/a1_gazebo/RL_hip_controller/pid/d] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,663: +PARAM [/a1_gazebo/RL_thigh_controller/type] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,663: +PARAM [/a1_gazebo/RL_thigh_controller/joint] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,663: +PARAM [/a1_gazebo/RL_thigh_controller/pid/p] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,663: +PARAM [/a1_gazebo/RL_thigh_controller/pid/i] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,663: +PARAM [/a1_gazebo/RL_thigh_controller/pid/d] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,663: +PARAM [/a1_gazebo/RL_calf_controller/type] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,663: +PARAM [/a1_gazebo/RL_calf_controller/joint] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,663: +PARAM [/a1_gazebo/RL_calf_controller/pid/p] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,663: +PARAM [/a1_gazebo/RL_calf_controller/pid/i] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,663: +SERVICE [/wait_for_walk_gazebo_38066_1782964645688/get_loggers] /wait_for_walk_gazebo_38066_1782964645688 http://LAPTOP-4NHCRNJ5:43679/
+[rosmaster.master][INFO] 2026-07-02 11:57:26,664: +PARAM [/a1_gazebo/RL_calf_controller/pid/d] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,664: +PARAM [/a1_gazebo/RR_hip_controller/type] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,664: +PARAM [/a1_gazebo/RR_hip_controller/joint] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,664: +PARAM [/a1_gazebo/RR_hip_controller/pid/p] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,664: +PARAM [/a1_gazebo/RR_hip_controller/pid/i] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,665: +SERVICE [/wait_for_walk_gazebo_38066_1782964645688/set_logger_level] /wait_for_walk_gazebo_38066_1782964645688 http://LAPTOP-4NHCRNJ5:43679/
+[rosmaster.master][INFO] 2026-07-02 11:57:26,665: +PARAM [/a1_gazebo/RR_hip_controller/pid/d] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,665: +PARAM [/a1_gazebo/RR_thigh_controller/type] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,665: +PARAM [/a1_gazebo/RR_thigh_controller/joint] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,666: +PARAM [/a1_gazebo/RR_thigh_controller/pid/p] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,666: +PARAM [/a1_gazebo/RR_thigh_controller/pid/i] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,666: +PARAM [/a1_gazebo/RR_thigh_controller/pid/d] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,666: +PARAM [/a1_gazebo/RR_calf_controller/type] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,666: +PARAM [/a1_gazebo/RR_calf_controller/joint] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,666: +PARAM [/a1_gazebo/RR_calf_controller/pid/p] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,666: +PARAM [/a1_gazebo/RR_calf_controller/pid/i] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,666: +PARAM [/a1_gazebo/RR_calf_controller/pid/d] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,666: +PARAM [/joy_node/dev] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,667: +PARAM [/joy_node/deadzone] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,667: +PARAM [/joy_node/autorepeat_rate] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,667: +PARAM [/robot_name] by /roslaunch
+[rosmaster.master][INFO] 2026-07-02 11:57:26,697: +SERVICE [/rosout/get_loggers] /rosout http://LAPTOP-4NHCRNJ5:46685/
+[rosmaster.master][INFO] 2026-07-02 11:57:26,697: +SERVICE [/rosout/set_logger_level] /rosout http://LAPTOP-4NHCRNJ5:46685/
+[rosmaster.master][INFO] 2026-07-02 11:57:26,699: +SUB [/clock] /rosout http://LAPTOP-4NHCRNJ5:46685/
+[rosmaster.master][INFO] 2026-07-02 11:57:26,700: +PUB [/rosout_agg] /rosout http://LAPTOP-4NHCRNJ5:46685/
+[rosmaster.master][INFO] 2026-07-02 11:57:26,702: +SUB [/rosout] /rosout http://LAPTOP-4NHCRNJ5:46685/
+[rosmaster.master][INFO] 2026-07-02 11:57:26,737: +PUB [/rosout] /joy_node http://LAPTOP-4NHCRNJ5:35993/
+[rosmaster.master][INFO] 2026-07-02 11:57:26,737: +SERVICE [/joy_node/get_loggers] /joy_node http://LAPTOP-4NHCRNJ5:35993/
+[rosmaster.master][INFO] 2026-07-02 11:57:26,738: +SERVICE [/joy_node/set_logger_level] /joy_node http://LAPTOP-4NHCRNJ5:35993/
+[rosmaster.master][INFO] 2026-07-02 11:57:26,740: +SUB [/clock] /joy_node http://LAPTOP-4NHCRNJ5:35993/
+[rosmaster.master][INFO] 2026-07-02 11:57:26,740: +PUB [/diagnostics] /joy_node http://LAPTOP-4NHCRNJ5:35993/
+[rosmaster.master][INFO] 2026-07-02 11:57:26,741: +CACHEDPARAM [/joy_node/diagnostic_period] by /joy_node
+[rosmaster.master][INFO] 2026-07-02 11:57:26,741: +PUB [/joy] /joy_node http://LAPTOP-4NHCRNJ5:35993/
+[rosmaster.master][INFO] 2026-07-02 11:57:26,743: +SUB [/joy/set_feedback] /joy_node http://LAPTOP-4NHCRNJ5:35993/
+[rosmaster.master][INFO] 2026-07-02 11:57:26,747: +CACHEDPARAM [/rosout_disable_topics_generation] by /joy_node
+[rosmaster.master][INFO] 2026-07-02 11:57:26,770: +PUB [/rosout] /robot_state_publisher http://LAPTOP-4NHCRNJ5:34935/
+[rosmaster.master][INFO] 2026-07-02 11:57:26,771: +SERVICE [/robot_state_publisher/get_loggers] /robot_state_publisher http://LAPTOP-4NHCRNJ5:34935/
+[rosmaster.master][INFO] 2026-07-02 11:57:26,771: +SERVICE [/robot_state_publisher/set_logger_level] /robot_state_publisher http://LAPTOP-4NHCRNJ5:34935/
+[rosmaster.master][INFO] 2026-07-02 11:57:26,773: +SUB [/clock] /robot_state_publisher http://LAPTOP-4NHCRNJ5:34935/
+[rosmaster.master][INFO] 2026-07-02 11:57:26,777: +PUB [/tf] /robot_state_publisher http://LAPTOP-4NHCRNJ5:34935/
+[rosmaster.master][INFO] 2026-07-02 11:57:26,778: +PUB [/tf_static] /robot_state_publisher http://LAPTOP-4NHCRNJ5:34935/
+[rosmaster.master][INFO] 2026-07-02 11:57:26,781: +SUB [/a1_gazebo/joint_states] /robot_state_publisher http://LAPTOP-4NHCRNJ5:34935/
+[rosmaster.master][INFO] 2026-07-02 11:57:26,811: publisherUpdate[/rosout] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:43679/', 'http://LAPTOP-4NHCRNJ5:35993/']
+[rosmaster.master][INFO] 2026-07-02 11:57:26,815: publisherUpdate[/rosout] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:43679/', 'http://LAPTOP-4NHCRNJ5:35993/']: sec=0.00, result=[1, '', 0]
+[rosmaster.master][INFO] 2026-07-02 11:57:26,815: publisherUpdate[/rosout] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:43679/', 'http://LAPTOP-4NHCRNJ5:35993/', 'http://LAPTOP-4NHCRNJ5:34935/']
+[rosmaster.master][INFO] 2026-07-02 11:57:26,815: publisherUpdate[/rosout] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:43679/', 'http://LAPTOP-4NHCRNJ5:35993/', 'http://LAPTOP-4NHCRNJ5:34935/']: sec=0.00, result=[1, '', 0]
+[rosmaster.master][INFO] 2026-07-02 11:57:27,089: +PUB [/rosout] /a1_gazebo/controller_spawner http://LAPTOP-4NHCRNJ5:32961/
+[rosmaster.master][INFO] 2026-07-02 11:57:27,093: +SUB [/clock] /a1_gazebo/controller_spawner http://LAPTOP-4NHCRNJ5:32961/
+[rosmaster.master][INFO] 2026-07-02 11:57:27,094: +SERVICE [/a1_gazebo/controller_spawner/get_loggers] /a1_gazebo/controller_spawner http://LAPTOP-4NHCRNJ5:32961/
+[rosmaster.master][INFO] 2026-07-02 11:57:27,095: +SERVICE [/a1_gazebo/controller_spawner/set_logger_level] /a1_gazebo/controller_spawner http://LAPTOP-4NHCRNJ5:32961/
+[rosmaster.master][INFO] 2026-07-02 11:57:27,096: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:27,113: publisherUpdate[/rosout] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:43679/', 'http://LAPTOP-4NHCRNJ5:35993/', 'http://LAPTOP-4NHCRNJ5:34935/', 'http://LAPTOP-4NHCRNJ5:32961/']
+[rosmaster.master][INFO] 2026-07-02 11:57:27,114: publisherUpdate[/rosout] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:43679/', 'http://LAPTOP-4NHCRNJ5:35993/', 'http://LAPTOP-4NHCRNJ5:34935/', 'http://LAPTOP-4NHCRNJ5:32961/']: sec=0.00, result=[1, '', 0]
+[rosmaster.master][INFO] 2026-07-02 11:57:27,202: +PUB [/rosout] /urdf_spawner http://LAPTOP-4NHCRNJ5:35723/
+[rosmaster.master][INFO] 2026-07-02 11:57:27,204: +SUB [/clock] /urdf_spawner http://LAPTOP-4NHCRNJ5:35723/
+[rosmaster.master][INFO] 2026-07-02 11:57:27,205: +SERVICE [/urdf_spawner/get_loggers] /urdf_spawner http://LAPTOP-4NHCRNJ5:35723/
+[rosmaster.master][INFO] 2026-07-02 11:57:27,206: +SERVICE [/urdf_spawner/set_logger_level] /urdf_spawner http://LAPTOP-4NHCRNJ5:35723/
+[rosmaster.master][INFO] 2026-07-02 11:57:27,207: +CACHEDPARAM [/rosout_disable_topics_generation] by /urdf_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:27,213: publisherUpdate[/rosout] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:43679/', 'http://LAPTOP-4NHCRNJ5:35993/', 'http://LAPTOP-4NHCRNJ5:34935/', 'http://LAPTOP-4NHCRNJ5:32961/', 'http://LAPTOP-4NHCRNJ5:35723/']
+[rosmaster.master][INFO] 2026-07-02 11:57:27,214: +CACHEDPARAM [/rosout_disable_topics_generation] by /urdf_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:27,214: publisherUpdate[/rosout] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:43679/', 'http://LAPTOP-4NHCRNJ5:35993/', 'http://LAPTOP-4NHCRNJ5:34935/', 'http://LAPTOP-4NHCRNJ5:32961/', 'http://LAPTOP-4NHCRNJ5:35723/']: sec=0.00, result=[1, '', 0]
+[rosmaster.master][INFO] 2026-07-02 11:57:27,317: +CACHEDPARAM [/rosout/omit_topics] by /rosout
+[rosmaster.master][INFO] 2026-07-02 11:57:27,670: +PUB [/rosout] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:27,671: +SERVICE [/gazebo/get_loggers] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:27,671: +SERVICE [/gazebo/set_logger_level] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:27,673: +SUB [/clock] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:27,676: +CACHEDPARAM [/rosout_disable_topics_generation] by /gazebo
+[rosmaster.master][INFO] 2026-07-02 11:57:27,715: publisherUpdate[/rosout] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:43679/', 'http://LAPTOP-4NHCRNJ5:35993/', 'http://LAPTOP-4NHCRNJ5:34935/', 'http://LAPTOP-4NHCRNJ5:32961/', 'http://LAPTOP-4NHCRNJ5:35723/', 'http://LAPTOP-4NHCRNJ5:35083/']
+[rosmaster.master][INFO] 2026-07-02 11:57:27,716: publisherUpdate[/rosout] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:43679/', 'http://LAPTOP-4NHCRNJ5:35993/', 'http://LAPTOP-4NHCRNJ5:34935/', 'http://LAPTOP-4NHCRNJ5:32961/', 'http://LAPTOP-4NHCRNJ5:35723/', 'http://LAPTOP-4NHCRNJ5:35083/']: sec=0.00, result=[1, '', 0]
+[rosmaster.master][INFO] 2026-07-02 11:57:30,432: +PUB [/clock] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,433: +SERVICE [/gazebo/spawn_sdf_model] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,433: +SERVICE [/gazebo/spawn_urdf_model] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,434: +SERVICE [/gazebo/delete_model] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,434: +SERVICE [/gazebo/delete_light] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,434: +SERVICE [/gazebo/get_model_properties] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,434: +SERVICE [/gazebo/get_model_state] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,435: +SERVICE [/gazebo/get_world_properties] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,435: +SERVICE [/gazebo/get_joint_properties] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,435: +SERVICE [/gazebo/get_link_properties] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,436: +SERVICE [/gazebo/get_link_state] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,436: +SERVICE [/gazebo/get_light_properties] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,436: +SERVICE [/gazebo/set_light_properties] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,436: +SERVICE [/gazebo/get_physics_properties] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,437: +PUB [/gazebo/link_states] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,437: +PUB [/gazebo/model_states] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,438: +PUB [/gazebo/performance_metrics] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,438: +SERVICE [/gazebo/set_link_properties] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,438: +SERVICE [/gazebo/set_physics_properties] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,439: +SERVICE [/gazebo/set_model_state] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,439: +SERVICE [/gazebo/set_model_configuration] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,439: +SERVICE [/gazebo/set_joint_properties] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,440: +SERVICE [/gazebo/set_link_state] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,441: +SUB [/gazebo/set_link_state] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,442: +SUB [/gazebo/set_model_state] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,442: +SERVICE [/gazebo/pause_physics] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,443: +SERVICE [/gazebo/unpause_physics] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,444: +SERVICE [/gazebo/apply_body_wrench] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,444: +SERVICE [/gazebo/apply_joint_effort] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,444: +SERVICE [/gazebo/clear_joint_forces] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,444: +SERVICE [/gazebo/clear_body_wrenches] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,445: +SERVICE [/gazebo/reset_simulation] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,445: +SERVICE [/gazebo/reset_world] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,449: +SERVICE [/gazebo/set_parameters] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,449: +PUB [/gazebo/parameter_descriptions] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,450: +PUB [/gazebo/parameter_updates] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,453: +PARAM [/gazebo/time_step] by /gazebo
+[rosmaster.master][INFO] 2026-07-02 11:57:30,454: +PARAM [/gazebo/max_update_rate] by /gazebo
+[rosmaster.master][INFO] 2026-07-02 11:57:30,454: +PARAM [/gazebo/gravity_x] by /gazebo
+[rosmaster.master][INFO] 2026-07-02 11:57:30,454: +PARAM [/gazebo/gravity_y] by /gazebo
+[rosmaster.master][INFO] 2026-07-02 11:57:30,455: +PARAM [/gazebo/gravity_z] by /gazebo
+[rosmaster.master][INFO] 2026-07-02 11:57:30,455: +PARAM [/gazebo/auto_disable_bodies] by /gazebo
+[rosmaster.master][INFO] 2026-07-02 11:57:30,455: +PARAM [/gazebo/sor_pgs_precon_iters] by /gazebo
+[rosmaster.master][INFO] 2026-07-02 11:57:30,455: +PARAM [/gazebo/sor_pgs_iters] by /gazebo
+[rosmaster.master][INFO] 2026-07-02 11:57:30,456: +PARAM [/gazebo/sor_pgs_w] by /gazebo
+[rosmaster.master][INFO] 2026-07-02 11:57:30,456: +PARAM [/gazebo/sor_pgs_rms_error_tol] by /gazebo
+[rosmaster.master][INFO] 2026-07-02 11:57:30,456: +PARAM [/gazebo/cfm] by /gazebo
+[rosmaster.master][INFO] 2026-07-02 11:57:30,456: +PARAM [/gazebo/erp] by /gazebo
+[rosmaster.master][INFO] 2026-07-02 11:57:30,457: +PARAM [/gazebo/contact_surface_layer] by /gazebo
+[rosmaster.master][INFO] 2026-07-02 11:57:30,457: +PARAM [/gazebo/contact_max_correcting_vel] by /gazebo
+[rosmaster.master][INFO] 2026-07-02 11:57:30,457: +PARAM [/gazebo/max_contacts] by /gazebo
+[rosmaster.master][INFO] 2026-07-02 11:57:30,459: +PARAM [/gazebo/time_step] by /gazebo
+[rosmaster.master][INFO] 2026-07-02 11:57:30,459: +PARAM [/gazebo/max_update_rate] by /gazebo
+[rosmaster.master][INFO] 2026-07-02 11:57:30,460: +PARAM [/gazebo/gravity_x] by /gazebo
+[rosmaster.master][INFO] 2026-07-02 11:57:30,460: +PARAM [/gazebo/gravity_y] by /gazebo
+[rosmaster.master][INFO] 2026-07-02 11:57:30,461: +PARAM [/gazebo/gravity_z] by /gazebo
+[rosmaster.master][INFO] 2026-07-02 11:57:30,461: +PARAM [/gazebo/auto_disable_bodies] by /gazebo
+[rosmaster.master][INFO] 2026-07-02 11:57:30,461: +PARAM [/gazebo/sor_pgs_precon_iters] by /gazebo
+[rosmaster.master][INFO] 2026-07-02 11:57:30,461: +PARAM [/gazebo/sor_pgs_iters] by /gazebo
+[rosmaster.master][INFO] 2026-07-02 11:57:30,462: +PARAM [/gazebo/sor_pgs_w] by /gazebo
+[rosmaster.master][INFO] 2026-07-02 11:57:30,462: +PARAM [/gazebo/sor_pgs_rms_error_tol] by /gazebo
+[rosmaster.master][INFO] 2026-07-02 11:57:30,462: +PARAM [/gazebo/cfm] by /gazebo
+[rosmaster.master][INFO] 2026-07-02 11:57:30,462: +PARAM [/gazebo/erp] by /gazebo
+[rosmaster.master][INFO] 2026-07-02 11:57:30,463: +PARAM [/gazebo/contact_surface_layer] by /gazebo
+[rosmaster.master][INFO] 2026-07-02 11:57:30,463: +PARAM [/gazebo/contact_max_correcting_vel] by /gazebo
+[rosmaster.master][INFO] 2026-07-02 11:57:30,463: +PARAM [/gazebo/max_contacts] by /gazebo
+[rosmaster.master][INFO] 2026-07-02 11:57:30,519: publisherUpdate[/clock] -> http://LAPTOP-4NHCRNJ5:43679/ ['http://LAPTOP-4NHCRNJ5:35083/']
+[rosmaster.master][INFO] 2026-07-02 11:57:30,520: publisherUpdate[/clock] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:35083/']
+[rosmaster.master][INFO] 2026-07-02 11:57:30,520: publisherUpdate[/clock] -> http://LAPTOP-4NHCRNJ5:35993/ ['http://LAPTOP-4NHCRNJ5:35083/']
+[rosmaster.master][INFO] 2026-07-02 11:57:30,521: publisherUpdate[/clock] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:35083/']: sec=0.00, result=[1, '', 0]
+[rosmaster.master][INFO] 2026-07-02 11:57:30,522: publisherUpdate[/clock] -> http://LAPTOP-4NHCRNJ5:34935/ ['http://LAPTOP-4NHCRNJ5:35083/']
+[rosmaster.master][INFO] 2026-07-02 11:57:30,522: publisherUpdate[/clock] -> http://LAPTOP-4NHCRNJ5:43679/ ['http://LAPTOP-4NHCRNJ5:35083/']: sec=0.00, result=[1, '', 0]
+[rosmaster.master][INFO] 2026-07-02 11:57:30,522: publisherUpdate[/clock] -> http://LAPTOP-4NHCRNJ5:32961/ ['http://LAPTOP-4NHCRNJ5:35083/']
+[rosmaster.master][INFO] 2026-07-02 11:57:30,523: publisherUpdate[/clock] -> http://LAPTOP-4NHCRNJ5:35993/ ['http://LAPTOP-4NHCRNJ5:35083/']: sec=0.00, result=[1, '', 0]
+[rosmaster.master][INFO] 2026-07-02 11:57:30,523: publisherUpdate[/clock] -> http://LAPTOP-4NHCRNJ5:35723/ ['http://LAPTOP-4NHCRNJ5:35083/']
+[rosmaster.master][INFO] 2026-07-02 11:57:30,523: publisherUpdate[/clock] -> http://LAPTOP-4NHCRNJ5:34935/ ['http://LAPTOP-4NHCRNJ5:35083/']: sec=0.00, result=[1, '', 0]
+[rosmaster.master][INFO] 2026-07-02 11:57:30,524: publisherUpdate[/clock] -> http://LAPTOP-4NHCRNJ5:35083/ ['http://LAPTOP-4NHCRNJ5:35083/']
+[rosmaster.master][INFO] 2026-07-02 11:57:30,525: publisherUpdate[/clock] -> http://LAPTOP-4NHCRNJ5:32961/ ['http://LAPTOP-4NHCRNJ5:35083/']: sec=0.00, result=[1, '', 0]
+[rosmaster.master][INFO] 2026-07-02 11:57:30,525: publisherUpdate[/clock] -> http://LAPTOP-4NHCRNJ5:35083/ ['http://LAPTOP-4NHCRNJ5:35083/']: sec=0.00, result=[1, '', 0]
+[rosmaster.master][INFO] 2026-07-02 11:57:30,553: publisherUpdate[/clock] -> http://LAPTOP-4NHCRNJ5:35723/ ['http://LAPTOP-4NHCRNJ5:35083/']: sec=0.03, result=[1, '', 0]
+[rosmaster.master][INFO] 2026-07-02 11:57:30,556: +CACHEDPARAM [/rosout_disable_topics_generation] by /urdf_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:30,587: -SUB [/clock] /wait_for_walk_gazebo_38066_1782964645688 http://LAPTOP-4NHCRNJ5:43679/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,587: -PUB [/rosout] /wait_for_walk_gazebo_38066_1782964645688 http://LAPTOP-4NHCRNJ5:43679/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,587: -SERVICE [/wait_for_walk_gazebo_38066_1782964645688/get_loggers] /wait_for_walk_gazebo_38066_1782964645688 rosrpc://LAPTOP-4NHCRNJ5:35465
+[rosmaster.master][INFO] 2026-07-02 11:57:30,587: -SERVICE [/wait_for_walk_gazebo_38066_1782964645688/set_logger_level] /wait_for_walk_gazebo_38066_1782964645688 rosrpc://LAPTOP-4NHCRNJ5:35465
+[rosmaster.master][INFO] 2026-07-02 11:57:30,625: publisherUpdate[/rosout] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:35993/', 'http://LAPTOP-4NHCRNJ5:34935/', 'http://LAPTOP-4NHCRNJ5:32961/', 'http://LAPTOP-4NHCRNJ5:35723/', 'http://LAPTOP-4NHCRNJ5:35083/']
+[rosmaster.master][INFO] 2026-07-02 11:57:30,626: publisherUpdate[/rosout] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:35993/', 'http://LAPTOP-4NHCRNJ5:34935/', 'http://LAPTOP-4NHCRNJ5:32961/', 'http://LAPTOP-4NHCRNJ5:35723/', 'http://LAPTOP-4NHCRNJ5:35083/']: sec=0.00, result=[1, '', 0]
+[rosmaster.master][INFO] 2026-07-02 11:57:30,892: +PUB [/trunk_imu] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:30,921: +CACHEDPARAM [/rosout_disable_topics_generation] by /urdf_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:30,922: +CACHEDPARAM [/rosout_disable_topics_generation] by /urdf_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:30,927: +CACHEDPARAM [/rosout_disable_topics_generation] by /urdf_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:31,600: +PUB [/rosout] /elevator_walk_integration_test_38262_1782964651469 http://LAPTOP-4NHCRNJ5:36553/
+[rosmaster.master][INFO] 2026-07-02 11:57:31,603: +SUB [/clock] /elevator_walk_integration_test_38262_1782964651469 http://LAPTOP-4NHCRNJ5:36553/
+[rosmaster.master][INFO] 2026-07-02 11:57:31,605: +SERVICE [/elevator_walk_integration_test_38262_1782964651469/get_loggers] /elevator_walk_integration_test_38262_1782964651469 http://LAPTOP-4NHCRNJ5:36553/
+[rosmaster.master][INFO] 2026-07-02 11:57:31,607: +SERVICE [/elevator_walk_integration_test_38262_1782964651469/set_logger_level] /elevator_walk_integration_test_38262_1782964651469 http://LAPTOP-4NHCRNJ5:36553/
+[rosmaster.master][INFO] 2026-07-02 11:57:31,627: publisherUpdate[/rosout] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:35993/', 'http://LAPTOP-4NHCRNJ5:34935/', 'http://LAPTOP-4NHCRNJ5:32961/', 'http://LAPTOP-4NHCRNJ5:35723/', 'http://LAPTOP-4NHCRNJ5:35083/', 'http://LAPTOP-4NHCRNJ5:36553/']
+[rosmaster.master][INFO] 2026-07-02 11:57:31,628: publisherUpdate[/rosout] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:35993/', 'http://LAPTOP-4NHCRNJ5:34935/', 'http://LAPTOP-4NHCRNJ5:32961/', 'http://LAPTOP-4NHCRNJ5:35723/', 'http://LAPTOP-4NHCRNJ5:35083/', 'http://LAPTOP-4NHCRNJ5:36553/']: sec=0.00, result=[1, '', 0]
+[rosmaster.master][INFO] 2026-07-02 11:57:31,633: +PUB [/rosout] /building_generator_classic_control http://LAPTOP-4NHCRNJ5:38253/
+[rosmaster.master][INFO] 2026-07-02 11:57:31,635: +SUB [/clock] /building_generator_classic_control http://LAPTOP-4NHCRNJ5:38253/
+[rosmaster.master][INFO] 2026-07-02 11:57:31,638: +SERVICE [/building_generator_classic_control/get_loggers] /building_generator_classic_control http://LAPTOP-4NHCRNJ5:38253/
+[rosmaster.master][INFO] 2026-07-02 11:57:31,640: +SERVICE [/building_generator_classic_control/set_logger_level] /building_generator_classic_control http://LAPTOP-4NHCRNJ5:38253/
+[rosmaster.master][INFO] 2026-07-02 11:57:31,644: +SERVICE [/call_elevator] /building_generator_classic_control http://LAPTOP-4NHCRNJ5:38253/
+[rosmaster.master][INFO] 2026-07-02 11:57:31,645: +SERVICE [/set_door_state] /building_generator_classic_control http://LAPTOP-4NHCRNJ5:38253/
+[rosmaster.master][INFO] 2026-07-02 11:57:31,646: +CACHEDPARAM [/rosout_disable_topics_generation] by /building_generator_classic_control
+[rosmaster.master][INFO] 2026-07-02 11:57:31,655: publisherUpdate[/rosout] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:35993/', 'http://LAPTOP-4NHCRNJ5:34935/', 'http://LAPTOP-4NHCRNJ5:32961/', 'http://LAPTOP-4NHCRNJ5:35723/', 'http://LAPTOP-4NHCRNJ5:35083/', 'http://LAPTOP-4NHCRNJ5:36553/', 'http://LAPTOP-4NHCRNJ5:38253/']
+[rosmaster.master][INFO] 2026-07-02 11:57:31,656: publisherUpdate[/rosout] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:35993/', 'http://LAPTOP-4NHCRNJ5:34935/', 'http://LAPTOP-4NHCRNJ5:32961/', 'http://LAPTOP-4NHCRNJ5:35723/', 'http://LAPTOP-4NHCRNJ5:35083/', 'http://LAPTOP-4NHCRNJ5:36553/', 'http://LAPTOP-4NHCRNJ5:38253/']: sec=0.00, result=[1, '', 0]
+[rosmaster.master][INFO] 2026-07-02 11:57:31,912: +PUB [/cmd_vel] /elevator_walk_integration_test_38262_1782964651469 http://LAPTOP-4NHCRNJ5:36553/
+[rosmaster.master][INFO] 2026-07-02 11:57:31,930: +CACHEDPARAM [/rosout_disable_topics_generation] by /urdf_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:31,934: +CACHEDPARAM [/rosout_disable_topics_generation] by /urdf_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:31,935: +CACHEDPARAM [/rosout_disable_topics_generation] by /urdf_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:31,940: -SUB [/clock] /urdf_spawner http://LAPTOP-4NHCRNJ5:35723/
+[rosmaster.master][INFO] 2026-07-02 11:57:31,940: -PUB [/rosout] /urdf_spawner http://LAPTOP-4NHCRNJ5:35723/
+[rosmaster.master][INFO] 2026-07-02 11:57:31,940: -SERVICE [/urdf_spawner/get_loggers] /urdf_spawner rosrpc://LAPTOP-4NHCRNJ5:38665
+[rosmaster.master][INFO] 2026-07-02 11:57:31,940: -SERVICE [/urdf_spawner/set_logger_level] /urdf_spawner rosrpc://LAPTOP-4NHCRNJ5:38665
+[rosmaster.master][INFO] 2026-07-02 11:57:31,957: publisherUpdate[/rosout] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:35993/', 'http://LAPTOP-4NHCRNJ5:34935/', 'http://LAPTOP-4NHCRNJ5:32961/', 'http://LAPTOP-4NHCRNJ5:35083/', 'http://LAPTOP-4NHCRNJ5:36553/', 'http://LAPTOP-4NHCRNJ5:38253/']
+[rosmaster.master][INFO] 2026-07-02 11:57:31,958: publisherUpdate[/rosout] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:35993/', 'http://LAPTOP-4NHCRNJ5:34935/', 'http://LAPTOP-4NHCRNJ5:32961/', 'http://LAPTOP-4NHCRNJ5:35083/', 'http://LAPTOP-4NHCRNJ5:36553/', 'http://LAPTOP-4NHCRNJ5:38253/']: sec=0.00, result=[1, '', 0]
+[rosmaster.master][INFO] 2026-07-02 11:57:32,132: +PUB [/rosout] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,133: +SERVICE [/unitree_gazebo_servo/get_loggers] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,133: +SERVICE [/unitree_gazebo_servo/set_logger_level] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,135: +SUB [/clock] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,137: +SUB [/trunk_imu] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,138: +SUB [/a1_gazebo/FR_hip_controller/state] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,140: +SUB [/a1_gazebo/FR_thigh_controller/state] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,141: +SUB [/a1_gazebo/FR_calf_controller/state] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,142: +SUB [/a1_gazebo/FL_hip_controller/state] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,143: +SUB [/a1_gazebo/FL_thigh_controller/state] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,144: +SUB [/a1_gazebo/FL_calf_controller/state] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,145: +SUB [/a1_gazebo/RR_hip_controller/state] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,146: +SUB [/a1_gazebo/RR_thigh_controller/state] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,147: +SUB [/a1_gazebo/RR_calf_controller/state] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,148: +SUB [/a1_gazebo/RL_hip_controller/state] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,149: +SUB [/a1_gazebo/RL_thigh_controller/state] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,151: +SUB [/a1_gazebo/RL_calf_controller/state] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,152: +SUB [/ground_truth/FL_foot] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,153: +SUB [/ground_truth/FR_foot] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,154: +SUB [/ground_truth/RL_foot] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,155: +SUB [/ground_truth/RR_foot] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,156: +SUB [/ground_truth/base_w] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,157: +SUB [/ground_truth/base_trunk] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,158: publisherUpdate[/rosout] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:35993/', 'http://LAPTOP-4NHCRNJ5:34935/', 'http://LAPTOP-4NHCRNJ5:32961/', 'http://LAPTOP-4NHCRNJ5:35083/', 'http://LAPTOP-4NHCRNJ5:36553/', 'http://LAPTOP-4NHCRNJ5:38253/', 'http://LAPTOP-4NHCRNJ5:39629/']
+[rosmaster.master][INFO] 2026-07-02 11:57:32,159: publisherUpdate[/rosout] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:35993/', 'http://LAPTOP-4NHCRNJ5:34935/', 'http://LAPTOP-4NHCRNJ5:32961/', 'http://LAPTOP-4NHCRNJ5:35083/', 'http://LAPTOP-4NHCRNJ5:36553/', 'http://LAPTOP-4NHCRNJ5:38253/', 'http://LAPTOP-4NHCRNJ5:39629/']: sec=0.00, result=[1, '', 0]
+[rosmaster.master][INFO] 2026-07-02 11:57:32,160: +SUB [/joy] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,175: +SERVICE [/a1_gazebo/controller_manager/list_controllers] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,175: +SERVICE [/a1_gazebo/controller_manager/list_controller_types] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,175: +SERVICE [/a1_gazebo/controller_manager/load_controller] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,176: +SERVICE [/a1_gazebo/controller_manager/unload_controller] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,176: +SERVICE [/a1_gazebo/controller_manager/switch_controller] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,176: +SERVICE [/a1_gazebo/controller_manager/reload_controller_libraries] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,183: +SUB [/apply_force/trunk] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,197: +PUB [/ground_truth/base_trunk] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,198: +PUB [/ground_truth/base_w] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,199: +PUB [/ground_truth/FL_foot] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,200: +PUB [/ground_truth/FR_foot] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,201: +PUB [/ground_truth/RL_foot] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,202: +PUB [/ground_truth/RR_foot] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,218: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:32,220: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:32,222: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:32,228: publisherUpdate[/ground_truth/base_trunk] -> http://LAPTOP-4NHCRNJ5:39629/ ['http://LAPTOP-4NHCRNJ5:35083/']
+[rosmaster.master][INFO] 2026-07-02 11:57:32,229: publisherUpdate[/ground_truth/base_trunk] -> http://LAPTOP-4NHCRNJ5:39629/ ['http://LAPTOP-4NHCRNJ5:35083/']: sec=0.00, result=[1, '', 0]
+[rosmaster.master][INFO] 2026-07-02 11:57:32,229: publisherUpdate[/ground_truth/base_w] -> http://LAPTOP-4NHCRNJ5:39629/ ['http://LAPTOP-4NHCRNJ5:35083/']
+[rosmaster.master][INFO] 2026-07-02 11:57:32,230: publisherUpdate[/ground_truth/base_w] -> http://LAPTOP-4NHCRNJ5:39629/ ['http://LAPTOP-4NHCRNJ5:35083/']: sec=0.00, result=[1, '', 0]
+[rosmaster.master][INFO] 2026-07-02 11:57:32,230: publisherUpdate[/ground_truth/FL_foot] -> http://LAPTOP-4NHCRNJ5:39629/ ['http://LAPTOP-4NHCRNJ5:35083/']
+[rosmaster.master][INFO] 2026-07-02 11:57:32,231: +PUB [/a1_gazebo/joint_states] /gazebo http://LAPTOP-4NHCRNJ5:35083/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,231: publisherUpdate[/ground_truth/FL_foot] -> http://LAPTOP-4NHCRNJ5:39629/ ['http://LAPTOP-4NHCRNJ5:35083/']: sec=0.00, result=[1, '', 0]
+[rosmaster.master][INFO] 2026-07-02 11:57:32,231: publisherUpdate[/ground_truth/FR_foot] -> http://LAPTOP-4NHCRNJ5:39629/ ['http://LAPTOP-4NHCRNJ5:35083/']
+[rosmaster.master][INFO] 2026-07-02 11:57:32,232: publisherUpdate[/ground_truth/FR_foot] -> http://LAPTOP-4NHCRNJ5:39629/ ['http://LAPTOP-4NHCRNJ5:35083/']: sec=0.00, result=[1, '', 0]
+[rosmaster.master][INFO] 2026-07-02 11:57:32,232: publisherUpdate[/ground_truth/RL_foot] -> http://LAPTOP-4NHCRNJ5:39629/ ['http://LAPTOP-4NHCRNJ5:35083/']
+[rosmaster.master][INFO] 2026-07-02 11:57:32,234: publisherUpdate[/ground_truth/RL_foot] -> http://LAPTOP-4NHCRNJ5:39629/ ['http://LAPTOP-4NHCRNJ5:35083/']: sec=0.00, result=[1, '', 0]
+[rosmaster.master][INFO] 2026-07-02 11:57:32,234: publisherUpdate[/ground_truth/RR_foot] -> http://LAPTOP-4NHCRNJ5:39629/ ['http://LAPTOP-4NHCRNJ5:35083/']
+[rosmaster.master][INFO] 2026-07-02 11:57:32,234: publisherUpdate[/ground_truth/RR_foot] -> http://LAPTOP-4NHCRNJ5:39629/ ['http://LAPTOP-4NHCRNJ5:35083/']: sec=0.00, result=[1, '', 0]
+[rosmaster.master][INFO] 2026-07-02 11:57:32,234: publisherUpdate[/a1_gazebo/joint_states] -> http://LAPTOP-4NHCRNJ5:34935/ ['http://LAPTOP-4NHCRNJ5:35083/']
+[rosmaster.master][INFO] 2026-07-02 11:57:32,235: publisherUpdate[/a1_gazebo/joint_states] -> http://LAPTOP-4NHCRNJ5:34935/ ['http://LAPTOP-4NHCRNJ5:35083/']: sec=0.00, result=[1, '', 0]
+[rosmaster.master][INFO] 2026-07-02 11:57:32,246: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:32,461: +PUB [/a1_gazebo/FR_hip_controller/command] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,461: +PUB [/a1_gazebo/FR_thigh_controller/command] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,462: +PUB [/a1_gazebo/FR_calf_controller/command] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,462: +PUB [/a1_gazebo/FL_hip_controller/command] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,463: +PUB [/a1_gazebo/FL_thigh_controller/command] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,463: +PUB [/a1_gazebo/FL_calf_controller/command] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,464: +PUB [/a1_gazebo/RR_hip_controller/command] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,464: +PUB [/a1_gazebo/RR_thigh_controller/command] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,464: +PUB [/a1_gazebo/RR_calf_controller/command] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,465: +PUB [/a1_gazebo/RL_hip_controller/command] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,465: +PUB [/a1_gazebo/RL_thigh_controller/command] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:32,466: +PUB [/a1_gazebo/RL_calf_controller/command] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:33,252: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:33,254: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:34,259: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:34,260: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:35,266: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:35,268: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:36,077: +SUB [/cmd_vel] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 11:57:36,278: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:36,280: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:37,284: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:37,286: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:38,290: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:38,292: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:39,297: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:39,299: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:43,486: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:43,488: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:44,493: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:44,495: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:45,500: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:45,501: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:46,505: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:46,507: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:47,511: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:47,512: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 11:57:47,520: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 12:01:11,960: -SUB [/clock] /building_generator_classic_control http://LAPTOP-4NHCRNJ5:38253/
+[rosmaster.master][INFO] 2026-07-02 12:01:11,961: -SUB [/clock] /elevator_walk_integration_test_38262_1782964651469 http://LAPTOP-4NHCRNJ5:36553/
+[rosmaster.master][INFO] 2026-07-02 12:01:11,961: -PUB [/rosout] /building_generator_classic_control http://LAPTOP-4NHCRNJ5:38253/
+[rosmaster.master][INFO] 2026-07-02 12:01:11,961: -PUB [/rosout] /elevator_walk_integration_test_38262_1782964651469 http://LAPTOP-4NHCRNJ5:36553/
+[rosmaster.master][INFO] 2026-07-02 12:01:11,962: -SERVICE [/building_generator_classic_control/get_loggers] /building_generator_classic_control rosrpc://LAPTOP-4NHCRNJ5:44699
+[rosmaster.master][INFO] 2026-07-02 12:01:11,962: -PUB [/cmd_vel] /elevator_walk_integration_test_38262_1782964651469 http://LAPTOP-4NHCRNJ5:36553/
+[rosmaster.master][INFO] 2026-07-02 12:01:11,962: -SERVICE [/building_generator_classic_control/set_logger_level] /building_generator_classic_control rosrpc://LAPTOP-4NHCRNJ5:44699
+[rosmaster.master][INFO] 2026-07-02 12:01:11,962: -SERVICE [/call_elevator] /building_generator_classic_control rosrpc://LAPTOP-4NHCRNJ5:44699
+[rosmaster.master][INFO] 2026-07-02 12:01:11,962: -SERVICE [/set_door_state] /building_generator_classic_control rosrpc://LAPTOP-4NHCRNJ5:44699
+[rosmaster.master][INFO] 2026-07-02 12:01:11,962: -SUB [/cmd_vel] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:11,963: -SERVICE [/elevator_walk_integration_test_38262_1782964651469/get_loggers] /elevator_walk_integration_test_38262_1782964651469 rosrpc://LAPTOP-4NHCRNJ5:33531
+[rosmaster.master][INFO] 2026-07-02 12:01:11,963: -SERVICE [/elevator_walk_integration_test_38262_1782964651469/set_logger_level] /elevator_walk_integration_test_38262_1782964651469 rosrpc://LAPTOP-4NHCRNJ5:33531
+[rosmaster.master][INFO] 2026-07-02 12:01:11,969: publisherUpdate[/rosout] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:35993/', 'http://LAPTOP-4NHCRNJ5:34935/', 'http://LAPTOP-4NHCRNJ5:32961/', 'http://LAPTOP-4NHCRNJ5:35083/', 'http://LAPTOP-4NHCRNJ5:36553/', 'http://LAPTOP-4NHCRNJ5:39629/']
+[rosmaster.master][INFO] 2026-07-02 12:01:11,970: publisherUpdate[/rosout] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:35993/', 'http://LAPTOP-4NHCRNJ5:34935/', 'http://LAPTOP-4NHCRNJ5:32961/', 'http://LAPTOP-4NHCRNJ5:35083/', 'http://LAPTOP-4NHCRNJ5:36553/', 'http://LAPTOP-4NHCRNJ5:39629/']: sec=0.00, result=[1, '', 0]
+[rosmaster.master][INFO] 2026-07-02 12:01:11,970: publisherUpdate[/rosout] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:35993/', 'http://LAPTOP-4NHCRNJ5:34935/', 'http://LAPTOP-4NHCRNJ5:32961/', 'http://LAPTOP-4NHCRNJ5:35083/', 'http://LAPTOP-4NHCRNJ5:39629/']
+[rosmaster.master][INFO] 2026-07-02 12:01:11,970: publisherUpdate[/rosout] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:35993/', 'http://LAPTOP-4NHCRNJ5:34935/', 'http://LAPTOP-4NHCRNJ5:32961/', 'http://LAPTOP-4NHCRNJ5:35083/', 'http://LAPTOP-4NHCRNJ5:39629/']: sec=0.00, result=[1, '', 0]
+[rosmaster.master][INFO] 2026-07-02 12:01:11,971: publisherUpdate[/cmd_vel] -> http://LAPTOP-4NHCRNJ5:39629/ []
+[rosmaster.master][INFO] 2026-07-02 12:01:11,971: publisherUpdate[/cmd_vel] -> http://LAPTOP-4NHCRNJ5:39629/ []: sec=0.00, result=[0, 'Unknown Error', 0]
+[rosmaster.master][INFO] 2026-07-02 12:01:12,055: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 12:01:12,056: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 12:01:12,072: -PUB [/rosout] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,072: publisherUpdate[/rosout] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:35993/', 'http://LAPTOP-4NHCRNJ5:34935/', 'http://LAPTOP-4NHCRNJ5:32961/', 'http://LAPTOP-4NHCRNJ5:35083/']
+[rosmaster.master][INFO] 2026-07-02 12:01:12,072: -PUB [/a1_gazebo/FR_hip_controller/command] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,073: publisherUpdate[/rosout] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:35993/', 'http://LAPTOP-4NHCRNJ5:34935/', 'http://LAPTOP-4NHCRNJ5:32961/', 'http://LAPTOP-4NHCRNJ5:35083/']: sec=0.00, result=[1, '', 0]
+[rosmaster.master][INFO] 2026-07-02 12:01:12,073: -PUB [/a1_gazebo/FR_thigh_controller/command] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,073: -PUB [/a1_gazebo/FR_calf_controller/command] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,073: -PUB [/a1_gazebo/FL_hip_controller/command] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,074: -PUB [/a1_gazebo/FL_thigh_controller/command] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,074: -PUB [/a1_gazebo/FL_calf_controller/command] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,074: -PUB [/a1_gazebo/RR_hip_controller/command] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,075: -PUB [/a1_gazebo/RR_thigh_controller/command] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,075: -PUB [/a1_gazebo/RR_calf_controller/command] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,075: -PUB [/a1_gazebo/RL_hip_controller/command] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,076: -PUB [/a1_gazebo/RL_thigh_controller/command] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,076: -PUB [/a1_gazebo/RL_calf_controller/command] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,076: -SUB [/clock] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,076: -SUB [/trunk_imu] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,077: -SUB [/a1_gazebo/FR_hip_controller/state] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,077: -SUB [/a1_gazebo/FR_thigh_controller/state] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,077: -SUB [/a1_gazebo/FR_calf_controller/state] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,077: -SUB [/a1_gazebo/FL_hip_controller/state] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,078: -SUB [/a1_gazebo/FL_thigh_controller/state] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,078: -SUB [/a1_gazebo/FL_calf_controller/state] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,078: -SUB [/a1_gazebo/RR_hip_controller/state] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,078: -SUB [/a1_gazebo/RR_thigh_controller/state] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,079: -SUB [/a1_gazebo/RR_calf_controller/state] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,079: -SUB [/a1_gazebo/RL_hip_controller/state] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,079: -SUB [/a1_gazebo/RL_thigh_controller/state] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,079: -SUB [/a1_gazebo/RL_calf_controller/state] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,080: -SUB [/ground_truth/FL_foot] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,080: -SUB [/ground_truth/FR_foot] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,081: -SUB [/ground_truth/RL_foot] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,081: -SUB [/ground_truth/RR_foot] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,081: -SUB [/ground_truth/base_w] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,082: -SUB [/ground_truth/base_trunk] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,082: -SUB [/joy] /unitree_gazebo_servo http://LAPTOP-4NHCRNJ5:39629/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,082: -SERVICE [/unitree_gazebo_servo/get_loggers] /unitree_gazebo_servo rosrpc://LAPTOP-4NHCRNJ5:59759
+[rosmaster.master][INFO] 2026-07-02 12:01:12,082: -SERVICE [/unitree_gazebo_servo/set_logger_level] /unitree_gazebo_servo rosrpc://LAPTOP-4NHCRNJ5:59759
+[rosmaster.master][INFO] 2026-07-02 12:01:12,232: -PUB [/rosout] /joy_node http://LAPTOP-4NHCRNJ5:35993/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,233: -PUB [/diagnostics] /joy_node http://LAPTOP-4NHCRNJ5:35993/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,234: -PUB [/joy] /joy_node http://LAPTOP-4NHCRNJ5:35993/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,234: -SUB [/clock] /joy_node http://LAPTOP-4NHCRNJ5:35993/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,235: -SUB [/joy/set_feedback] /joy_node http://LAPTOP-4NHCRNJ5:35993/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,235: -SERVICE [/joy_node/get_loggers] /joy_node rosrpc://LAPTOP-4NHCRNJ5:56757
+[rosmaster.master][INFO] 2026-07-02 12:01:12,235: -SERVICE [/joy_node/set_logger_level] /joy_node rosrpc://LAPTOP-4NHCRNJ5:56757
+[rosmaster.master][INFO] 2026-07-02 12:01:12,236: -CACHEDPARAM [/joy_node/diagnostic_period] by /joy_node
+[rosmaster.master][INFO] 2026-07-02 12:01:12,236: -CACHEDPARAM [/rosout_disable_topics_generation] by /joy_node
+[rosmaster.master][INFO] 2026-07-02 12:01:12,247: publisherUpdate[/rosout] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:34935/', 'http://LAPTOP-4NHCRNJ5:32961/', 'http://LAPTOP-4NHCRNJ5:35083/']
+[rosmaster.master][INFO] 2026-07-02 12:01:12,248: publisherUpdate[/rosout] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:34935/', 'http://LAPTOP-4NHCRNJ5:32961/', 'http://LAPTOP-4NHCRNJ5:35083/']: sec=0.00, result=[1, '', 0]
+[rosmaster.master][INFO] 2026-07-02 12:01:12,311: -PUB [/rosout] /robot_state_publisher http://LAPTOP-4NHCRNJ5:34935/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,311: -PUB [/tf] /robot_state_publisher http://LAPTOP-4NHCRNJ5:34935/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,312: -PUB [/tf_static] /robot_state_publisher http://LAPTOP-4NHCRNJ5:34935/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,312: -SUB [/clock] /robot_state_publisher http://LAPTOP-4NHCRNJ5:34935/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,313: -SUB [/a1_gazebo/joint_states] /robot_state_publisher http://LAPTOP-4NHCRNJ5:34935/
+[rosmaster.master][INFO] 2026-07-02 12:01:12,313: -SERVICE [/robot_state_publisher/get_loggers] /robot_state_publisher rosrpc://LAPTOP-4NHCRNJ5:54031
+[rosmaster.master][INFO] 2026-07-02 12:01:12,313: -SERVICE [/robot_state_publisher/set_logger_level] /robot_state_publisher rosrpc://LAPTOP-4NHCRNJ5:54031
+[rosmaster.master][INFO] 2026-07-02 12:01:12,347: publisherUpdate[/rosout] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:32961/', 'http://LAPTOP-4NHCRNJ5:35083/']
+[rosmaster.master][INFO] 2026-07-02 12:01:12,348: publisherUpdate[/rosout] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:32961/', 'http://LAPTOP-4NHCRNJ5:35083/']: sec=0.00, result=[1, '', 0]
+[rosmaster.master][INFO] 2026-07-02 12:01:27,081: +CACHEDPARAM [/rosout_disable_topics_generation] by /a1_gazebo/controller_spawner
+[rosmaster.master][INFO] 2026-07-02 12:01:27,082: -SUB [/clock] /a1_gazebo/controller_spawner http://LAPTOP-4NHCRNJ5:32961/
+[rosmaster.master][INFO] 2026-07-02 12:01:27,082: -PUB [/rosout] /a1_gazebo/controller_spawner http://LAPTOP-4NHCRNJ5:32961/
+[rosmaster.master][INFO] 2026-07-02 12:01:27,083: -SERVICE [/a1_gazebo/controller_spawner/get_loggers] /a1_gazebo/controller_spawner rosrpc://LAPTOP-4NHCRNJ5:36949
+[rosmaster.master][INFO] 2026-07-02 12:01:27,083: -SERVICE [/a1_gazebo/controller_spawner/set_logger_level] /a1_gazebo/controller_spawner rosrpc://LAPTOP-4NHCRNJ5:36949
+[rosmaster.master][INFO] 2026-07-02 12:01:27,146: publisherUpdate[/rosout] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:35083/']
+[rosmaster.master][INFO] 2026-07-02 12:01:27,147: publisherUpdate[/rosout] -> http://LAPTOP-4NHCRNJ5:46685/ ['http://LAPTOP-4NHCRNJ5:35083/']: sec=0.00, result=[1, '', 0]
+[rosmaster.master][INFO] 2026-07-02 12:01:28,048: -PUB [/rosout_agg] /rosout http://LAPTOP-4NHCRNJ5:46685/
+[rosmaster.master][INFO] 2026-07-02 12:01:28,049: -SUB [/clock] /rosout http://LAPTOP-4NHCRNJ5:46685/
+[rosmaster.master][INFO] 2026-07-02 12:01:28,049: -SUB [/rosout] /rosout http://LAPTOP-4NHCRNJ5:46685/
+[rosmaster.master][INFO] 2026-07-02 12:01:28,050: -SERVICE [/rosout/get_loggers] /rosout rosrpc://LAPTOP-4NHCRNJ5:41623
+[rosmaster.master][INFO] 2026-07-02 12:01:28,050: -SERVICE [/rosout/set_logger_level] /rosout rosrpc://LAPTOP-4NHCRNJ5:41623
+[rosmaster.master][INFO] 2026-07-02 12:01:28,050: -CACHEDPARAM [/rosout/omit_topics] by /rosout
+[rosmaster.main][INFO] 2026-07-02 12:01:28,159: keyboard interrupt, will exit
+[rosmaster.main][INFO] 2026-07-02 12:01:28,159: stopping master...
+[rospy.core][INFO] 2026-07-02 12:01:28,159: signal_shutdown [atexit]

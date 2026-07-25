@@ -1,0 +1,27 @@
+[rospy.client][INFO] 2026-07-02 08:21:02,068: init_node, name[/urdf_spawner], pid[35468]
+[xmlrpc][INFO] 2026-07-02 08:21:02,069: XML-RPC server binding to 0.0.0.0:0
+[xmlrpc][INFO] 2026-07-02 08:21:02,069: Started XML-RPC server [http://LAPTOP-4NHCRNJ5:42527/]
+[rospy.init][INFO] 2026-07-02 08:21:02,069: ROS Slave URI: [http://LAPTOP-4NHCRNJ5:42527/]
+[rospy.impl.masterslave][INFO] 2026-07-02 08:21:02,069: _ready: http://LAPTOP-4NHCRNJ5:42527/
+[rospy.registration][INFO] 2026-07-02 08:21:02,071: Registering with master node http://localhost:11311
+[xmlrpc][INFO] 2026-07-02 08:21:02,071: xml rpc node: starting XML-RPC server
+[rospy.init][INFO] 2026-07-02 08:21:02,170: registered with master
+[rospy.rosout][INFO] 2026-07-02 08:21:02,170: initializing /rosout core topic
+[rospy.rosout][INFO] 2026-07-02 08:21:02,174: connected to core topic /rosout
+[rospy.simtime][INFO] 2026-07-02 08:21:02,174: initializing /clock core topic
+[rospy.simtime][INFO] 2026-07-02 08:21:02,176: connected to core topic /clock
+[rosout][INFO] 2026-07-02 08:21:02,178: Loading model XML from ros parameter robot_description
+[rosout][INFO] 2026-07-02 08:21:02,188: Waiting for service /gazebo/spawn_urdf_model
+[rospy.internal][INFO] 2026-07-02 08:21:02,386: topic[/rosout] adding connection to [/rosout], count 0
+[rospy.internal][INFO] 2026-07-02 08:21:05,796: topic[/clock] adding connection to [http://LAPTOP-4NHCRNJ5:46223/], count 0
+[rosout][INFO] 2026-07-02 08:21:05,807: Calling service /gazebo/spawn_urdf_model
+[rosout][INFO] 2026-07-02 08:21:06,211: Spawn status: SpawnModel: Successfully spawned entity
+[rosout][INFO] 2026-07-02 08:21:06,213: Waiting for service /gazebo/set_model_configuration
+[rosout][INFO] 2026-07-02 08:21:06,217: temporary hack to **fix** the -J joint position option (issue #93), sleeping for 1 second to avoid race condition.
+[rosout][INFO] 2026-07-02 08:21:07,219: Calling service /gazebo/set_model_configuration
+[rosout][INFO] 2026-07-02 08:21:07,224: Set model configuration status: SetModelConfiguration: success
+[rosout][INFO] 2026-07-02 08:21:07,224: Unpausing physics
+[rospy.core][INFO] 2026-07-02 08:21:07,229: signal_shutdown [atexit]
+[rospy.internal][INFO] 2026-07-02 08:21:07,231: topic[/rosout] removing connection to /rosout
+[rospy.internal][INFO] 2026-07-02 08:21:07,231: topic[/clock] removing connection to http://LAPTOP-4NHCRNJ5:46223/
+[rospy.impl.masterslave][INFO] 2026-07-02 08:21:07,232: atexit

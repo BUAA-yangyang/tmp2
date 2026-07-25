@@ -1,0 +1,20 @@
+[INFO] [1782965852.280327, 0.000000]: Controller Spawner: Waiting for service controller_manager/load_controller
+[INFO] [1782965856.501321, 0.022000]: Controller Spawner: Waiting for service controller_manager/switch_controller
+[INFO] [1782965856.505094, 0.022000]: Controller Spawner: Waiting for service controller_manager/unload_controller
+[INFO] [1782965856.508823, 0.022000]: Loading controller: joint_state_controller
+[INFO] [1782965856.540433, 0.026000]: Loading controller: FL_hip_controller
+[INFO] [1782965856.567012, 0.028000]: Loading controller: FL_thigh_controller
+[INFO] [1782965856.599394, 0.030000]: Loading controller: FL_calf_controller
+[INFO] [1782965856.623022, 0.032000]: Loading controller: FR_hip_controller
+[INFO] [1782965856.650991, 0.034000]: Loading controller: FR_thigh_controller
+[INFO] [1782965856.676758, 0.036000]: Loading controller: FR_calf_controller
+[INFO] [1782965856.706348, 0.036000]: Loading controller: RL_hip_controller
+[INFO] [1782965856.731751, 0.040000]: Loading controller: RL_thigh_controller
+[INFO] [1782965856.758569, 0.042000]: Loading controller: RL_calf_controller
+[INFO] [1782965856.786905, 0.044000]: Loading controller: RR_hip_controller
+[INFO] [1782965856.820493, 0.046000]: Loading controller: RR_thigh_controller
+[INFO] [1782965856.874221, 0.050000]: Loading controller: RR_calf_controller
+[INFO] [1782965856.903325, 0.052000]: Controller Spawner: Loaded controllers: joint_state_controller, FL_hip_controller, FL_thigh_controller, FL_calf_controller, FR_hip_controller, FR_thigh_controller, FR_calf_controller, RL_hip_controller, RL_thigh_controller, RL_calf_controller, RR_hip_controller, RR_thigh_controller, RR_calf_controller
+[INFO] [1782965856.951953, 0.054000]: Started controllers: joint_state_controller, FL_hip_controller, FL_thigh_controller, FL_calf_controller, FR_hip_controller, FR_thigh_controller, FR_calf_controller, RL_hip_controller, RL_thigh_controller, RL_calf_controller, RR_hip_controller, RR_thigh_controller, RR_calf_controller
+[INFO] [1782965903.989208, 4.362000]: Shutting down spawner. Stopping and unloading controllers...
+[INFO] [1782965903.991470, 4.362000]: Stopping all controllers...
