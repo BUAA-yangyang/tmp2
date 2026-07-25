@@ -7,6 +7,8 @@
 #include <ros/node_handle.h>
 #include <tf/transform_broadcaster.h>
 #include <gazebo/plugins/RayPlugin.hh>
+#include <gazebo/common/Events.hh>
+#include <atomic>
 #include "livox_ode_multiray_shape.h"
 
 namespace gazebo {
@@ -101,6 +103,8 @@ class LivoxPointsPlugin : public RayPlugin {
 
     double maxDist = 400.0;
     double minDist = 0.1;
+    std::atomic<bool> initialized{false};
+    event::ConnectionPtr activationConnection;
 };
 
 }  // namespace gazebo

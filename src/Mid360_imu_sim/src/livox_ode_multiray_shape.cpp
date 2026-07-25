@@ -33,12 +33,11 @@ LivoxOdeMultiRayShape::LivoxOdeMultiRayShape(CollisionPtr _parent)
     dGeomSetCategoryBits((dGeomID) this->raySpaceId, GZ_SENSOR_COLLIDE);
     dGeomSetCollideBits((dGeomID) this->raySpaceId, ~GZ_SENSOR_COLLIDE);
 
-    // These three lines may be unessecary
-    ODELinkPtr pLink =
-        boost::static_pointer_cast<ODELink>(this->collisionParent->GetLink());
-    pLink->SetSpaceId(this->raySpaceId);
-    boost::static_pointer_cast<ODECollision>(this->collisionParent)->SetSpaceId(
-        this->raySpaceId);
+    // Do not move the parent link or the sensor's native collision into the
+    // private ray space. The Gazebo RaySensor owns a separate ODEMultiRayShape
+    // on the same link; rewriting its parent space can create a cyclic/invalid
+    // space hierarchy and recurse inside dSpaceCollide2. AddRay() assigns only
+    // the custom ray collisions to raySpaceId below.
 }
 
 //////////////////////////////////////////////////
@@ -83,13 +82,8 @@ void LivoxOdeMultiRayShape::UpdateCallback(void *_data, dGeomID _o1, dGeomID _o2
     // Check space
     if (dGeomIsSpace(_o1) || dGeomIsSpace(_o2))
     {
-        if (dGeomGetSpace(_o1) == self->superSpaceId ||
-            dGeomGetSpace(_o2) == self->superSpaceId)
-            dSpaceCollide2(_o1, _o2, self, &UpdateCallback);
-
-        if (dGeomGetSpace(_o1) == self->raySpaceId ||
-            dGeomGetSpace(_o2) == self->raySpaceId)
-            dSpaceCollide2(_o1, _o2, self, &UpdateCallback);
+        dSpaceCollide2(_o1, _o2, self, &UpdateCallback);
+        return;
     }
     else
     {

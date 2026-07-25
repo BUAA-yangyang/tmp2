@@ -1,0 +1,13 @@
+# managed_launch is set by localization.launch because rosparam scalar values
+# do not perform roslaunch $(find ...) substitution.
+status_topic: /a1/localization/status
+pointcloud_topic: /a1_localization/livox_pointcloud
+imu_topic: /trunk_imu
+clock_topic: /clock
+reinitialize_service: /a1/localization/reinitialize
+supervisor_status_topic: /a1/localization/supervisor_status
+automatic_reinitialize: true
+monitor_clock: true
+input_timeout: 3.0
+settle_time: 2.0
+shutdown_timeout: 8.0
