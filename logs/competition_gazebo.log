@@ -1,0 +1,10 @@
+xacro: in-order processing became default in ROS Melodic. You can drop the option.
+[31m[ERROR] [1784876320.300981621, 0.214000000]: GetModelState: model [a1_gazebo] does not exist[0m
+[INFO] [1784876319.113196, 0.000000]: Loading model XML from ros parameter robot_description
+[INFO] [1784876319.119134, 0.000000]: Waiting for service /gazebo/spawn_urdf_model
+[INFO] [1784876320.323703, 0.236000]: Calling service /gazebo/spawn_urdf_model
+[INFO] [1784876320.450614, 0.284000]: Spawn status: SpawnModel: Successfully spawned entity
+[INFO] [1784876320.451275, 0.284000]: Waiting for service /gazebo/set_model_configuration
+[INFO] [1784876320.452570, 0.284000]: temporary hack to **fix** the -J joint position option (issue #93), sleeping for 1 second to avoid race condition.
+[INFO] [1784876321.454145, 0.492000]: Calling service /gazebo/set_model_configuration
+[INFO] [1784876321.457104, 0.496000]: Set model configuration status: SetModelConfiguration: success

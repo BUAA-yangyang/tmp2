@@ -1,0 +1,142 @@
+xacro: in-order processing became default in ROS Melodic. You can drop the option.
+[ERROR] [1782965851.981925332]: Couldn't open joystick /dev/input/js0. Will retry every second.
+[INFO] [1782965852.382198442]: Finished loading Gazebo ROS API Plugin.
+[INFO] [1782965852.383383022]: waitForService: Service [/gazebo/set_physics_properties] has not been advertised, waiting...
+[INFO] [1782965854.656534622]: waitForService: Service [/gazebo/set_physics_properties] is now available.
+[INFO] [1782965854.700140072]: Physics dynamic reconfigure ready.
+[1;33mWarning [Model.cc:216][0m Non-unique name[FL_foot] detected 2 times in XML children of model with name[a1_gazebo].
+[1;33mWarning [Model.cc:216][0m Non-unique name[FL_foot_joint_get_position] detected 2 times in XML children of model with name[a1_gazebo].
+[1;33mWarning [Model.cc:216][0m Non-unique name[FR_foot] detected 2 times in XML children of model with name[a1_gazebo].
+[1;33mWarning [Model.cc:216][0m Non-unique name[FR_foot_joint_get_position] detected 2 times in XML children of model with name[a1_gazebo].
+[1;33mWarning [Model.cc:216][0m Non-unique name[RL_foot] detected 2 times in XML children of model with name[a1_gazebo].
+[1;33mWarning [Model.cc:216][0m Non-unique name[RL_foot_joint_get_position] detected 2 times in XML children of model with name[a1_gazebo].
+[1;33mWarning [Model.cc:216][0m Non-unique name[RR_foot] detected 2 times in XML children of model with name[a1_gazebo].
+[1;33mWarning [Model.cc:216][0m Non-unique name[RR_foot_joint_get_position] detected 2 times in XML children of model with name[a1_gazebo].
+[INFO] [1782965852.288951, 0.000000]: Loading model XML from ros parameter robot_description
+[INFO] [1782965852.295664, 0.000000]: Waiting for service /gazebo/spawn_urdf_model
+[INFO] [1782965854.708046, 0.000000]: Calling service /gazebo/spawn_urdf_model
+[INFO] [1782965855.003090, 0.002000]: Spawn status: SpawnModel: Successfully spawned entity
+[INFO] [1782965855.004417, 0.002000]: Waiting for service /gazebo/set_model_configuration
+[INFO] [1782965855.007048, 0.002000]: temporary hack to **fix** the -J joint position option (issue #93), sleeping for 1 second to avoid race condition.
+[INFO] [1782965856.009389, 0.002000]: Calling service /gazebo/set_model_configuration
+[INFO] [1782965856.014570, 0.002000]: Set model configuration status: SetModelConfiguration: success
+[INFO] [1782965856.016836, 0.002000]: Unpausing physics
+[WARN] [1782965919.022256, 4.362000]: Controller Spawner error while taking down controllers: transport error completing service call: unable to receive data from sender, check sender's logs for details
+[31m[a1_gazebo/controller_spawner-4] escalating to SIGTERM[0m
+[31m[gazebo-2] escalating to SIGTERM[0m
+... logging to /home/ros/Guoyulun/Competition/SimEnv/logs/ros_elevator_trot_test/f1868ef0-75cc-11f1-93c5-5b1798934e13/roslaunch-LAPTOP-4NHCRNJ5-42745.log
+Checking log directory for disk usage. This may take a while.
+Press Ctrl-C to interrupt
+Done checking log file disk usage. Usage is <1GB.
+]2;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_guide/unitree_guide/launch/multi_floor_gazeboSim.launch
+[1mstarted roslaunch server http://LAPTOP-4NHCRNJ5:35699/[0m
+
+SUMMARY
+========
+
+PARAMETERS
+ * /a1_gazebo/FL_calf_controller/joint: FL_calf_joint
+ * /a1_gazebo/FL_calf_controller/pid/d: 8.0
+ * /a1_gazebo/FL_calf_controller/pid/i: 0.0
+ * /a1_gazebo/FL_calf_controller/pid/p: 300.0
+ * /a1_gazebo/FL_calf_controller/type: unitree_legged_co...
+ * /a1_gazebo/FL_hip_controller/joint: FL_hip_joint
+ * /a1_gazebo/FL_hip_controller/pid/d: 5.0
+ * /a1_gazebo/FL_hip_controller/pid/i: 0.0
+ * /a1_gazebo/FL_hip_controller/pid/p: 100.0
+ * /a1_gazebo/FL_hip_controller/type: unitree_legged_co...
+ * /a1_gazebo/FL_thigh_controller/joint: FL_thigh_joint
+ * /a1_gazebo/FL_thigh_controller/pid/d: 8.0
+ * /a1_gazebo/FL_thigh_controller/pid/i: 0.0
+ * /a1_gazebo/FL_thigh_controller/pid/p: 300.0
+ * /a1_gazebo/FL_thigh_controller/type: unitree_legged_co...
+ * /a1_gazebo/FR_calf_controller/joint: FR_calf_joint
+ * /a1_gazebo/FR_calf_controller/pid/d: 8.0
+ * /a1_gazebo/FR_calf_controller/pid/i: 0.0
+ * /a1_gazebo/FR_calf_controller/pid/p: 300.0
+ * /a1_gazebo/FR_calf_controller/type: unitree_legged_co...
+ * /a1_gazebo/FR_hip_controller/joint: FR_hip_joint
+ * /a1_gazebo/FR_hip_controller/pid/d: 5.0
+ * /a1_gazebo/FR_hip_controller/pid/i: 0.0
+ * /a1_gazebo/FR_hip_controller/pid/p: 100.0
+ * /a1_gazebo/FR_hip_controller/type: unitree_legged_co...
+ * /a1_gazebo/FR_thigh_controller/joint: FR_thigh_joint
+ * /a1_gazebo/FR_thigh_controller/pid/d: 8.0
+ * /a1_gazebo/FR_thigh_controller/pid/i: 0.0
+ * /a1_gazebo/FR_thigh_controller/pid/p: 300.0
+ * /a1_gazebo/FR_thigh_controller/type: unitree_legged_co...
+ * /a1_gazebo/RL_calf_controller/joint: RL_calf_joint
+ * /a1_gazebo/RL_calf_controller/pid/d: 8.0
+ * /a1_gazebo/RL_calf_controller/pid/i: 0.0
+ * /a1_gazebo/RL_calf_controller/pid/p: 300.0
+ * /a1_gazebo/RL_calf_controller/type: unitree_legged_co...
+ * /a1_gazebo/RL_hip_controller/joint: RL_hip_joint
+ * /a1_gazebo/RL_hip_controller/pid/d: 5.0
+ * /a1_gazebo/RL_hip_controller/pid/i: 0.0
+ * /a1_gazebo/RL_hip_controller/pid/p: 100.0
+ * /a1_gazebo/RL_hip_controller/type: unitree_legged_co...
+ * /a1_gazebo/RL_thigh_controller/joint: RL_thigh_joint
+ * /a1_gazebo/RL_thigh_controller/pid/d: 8.0
+ * /a1_gazebo/RL_thigh_controller/pid/i: 0.0
+ * /a1_gazebo/RL_thigh_controller/pid/p: 300.0
+ * /a1_gazebo/RL_thigh_controller/type: unitree_legged_co...
+ * /a1_gazebo/RR_calf_controller/joint: RR_calf_joint
+ * /a1_gazebo/RR_calf_controller/pid/d: 8.0
+ * /a1_gazebo/RR_calf_controller/pid/i: 0.0
+ * /a1_gazebo/RR_calf_controller/pid/p: 300.0
+ * /a1_gazebo/RR_calf_controller/type: unitree_legged_co...
+ * /a1_gazebo/RR_hip_controller/joint: RR_hip_joint
+ * /a1_gazebo/RR_hip_controller/pid/d: 5.0
+ * /a1_gazebo/RR_hip_controller/pid/i: 0.0
+ * /a1_gazebo/RR_hip_controller/pid/p: 100.0
+ * /a1_gazebo/RR_hip_controller/type: unitree_legged_co...
+ * /a1_gazebo/RR_thigh_controller/joint: RR_thigh_joint
+ * /a1_gazebo/RR_thigh_controller/pid/d: 8.0
+ * /a1_gazebo/RR_thigh_controller/pid/i: 0.0
+ * /a1_gazebo/RR_thigh_controller/pid/p: 300.0
+ * /a1_gazebo/RR_thigh_controller/type: unitree_legged_co...
+ * /a1_gazebo/joint_state_controller/publish_rate: 1000
+ * /a1_gazebo/joint_state_controller/type: joint_state_contr...
+ * /gazebo/enable_ros_network: True
+ * /joy_node/autorepeat_rate: 20
+ * /joy_node/deadzone: 0.05
+ * /joy_node/dev: /dev/input/js0
+ * /robot_description: <?xml version="1....
+ * /robot_name: a1
+ * /rosdistro: noetic
+ * /rosversion: 1.17.4
+ * /use_sim_time: True
+ * /world_file: /home/ros/Guoyulu...
+
+NODES
+  /
+    gazebo (gazebo_ros/gzserver)
+    joy_node (joy/joy_node)
+    robot_state_publisher (robot_state_publisher/robot_state_publisher)
+    urdf_spawner (gazebo_ros/spawn_model)
+  /a1_gazebo/
+    controller_spawner (controller_manager/spawner)
+
+auto-starting new master
+[1mprocess[master]: started with pid [42759][0m
+[1mROS_MASTER_URI=http://localhost:11311[0m
+]2;/home/ros/Guoyulun/Competition/SimEnv/src/unitree_guide/unitree_guide/unitree_guide/launch/multi_floor_gazeboSim.launch http://localhost:11311
+[1msetting /run_id to f1868ef0-75cc-11f1-93c5-5b1798934e13[0m
+[1mprocess[rosout-1]: started with pid [42773][0m
+started core service [/rosout]
+[1mprocess[gazebo-2]: started with pid [42782][0m
+[1mprocess[urdf_spawner-3]: started with pid [42787][0m
+[1mprocess[a1_gazebo/controller_spawner-4]: started with pid [42789][0m
+[1mprocess[robot_state_publisher-5]: started with pid [42790][0m
+[1mprocess[joy_node-6]: started with pid [42791][0m
+[1m[urdf_spawner-3] process has finished cleanly
+log file: /home/ros/Guoyulun/Competition/SimEnv/logs/ros_elevator_trot_test/f1868ef0-75cc-11f1-93c5-5b1798934e13/urdf_spawner-3*.log[0m
+[joy_node-6] killing on exit
+[robot_state_publisher-5] killing on exit
+[a1_gazebo/controller_spawner-4] killing on exit
+[gazebo-2] killing on exit
+[rosout-1] killing on exit
+[master] killing on exit
+shutting down processing monitor...
+... shutting down processing monitor complete
+[1mdone[0m

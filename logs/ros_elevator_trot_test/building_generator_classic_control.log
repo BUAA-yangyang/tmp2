@@ -1,0 +1,40 @@
+[rospy.client][INFO] 2026-07-02 12:13:35,600: init_node, name[/building_generator_classic_control], pid[41641]
+[xmlrpc][INFO] 2026-07-02 12:13:35,601: XML-RPC server binding to 0.0.0.0:0
+[xmlrpc][INFO] 2026-07-02 12:13:35,601: Started XML-RPC server [http://LAPTOP-4NHCRNJ5:36387/]
+[rospy.init][INFO] 2026-07-02 12:13:35,601: ROS Slave URI: [http://LAPTOP-4NHCRNJ5:36387/]
+[rospy.impl.masterslave][INFO] 2026-07-02 12:13:35,601: _ready: http://LAPTOP-4NHCRNJ5:36387/
+[rospy.registration][INFO] 2026-07-02 12:13:35,602: Registering with master node http://localhost:11311
+[xmlrpc][INFO] 2026-07-02 12:13:35,602: xml rpc node: starting XML-RPC server
+[rospy.init][INFO] 2026-07-02 12:13:35,702: registered with master
+[rospy.rosout][INFO] 2026-07-02 12:13:35,702: initializing /rosout core topic
+[rospy.rosout][INFO] 2026-07-02 12:13:35,706: connected to core topic /rosout
+[rospy.simtime][INFO] 2026-07-02 12:13:35,706: initializing /clock core topic
+[rospy.simtime][INFO] 2026-07-02 12:13:35,708: connected to core topic /clock
+[rospy.internal][INFO] 2026-07-02 12:13:35,710: topic[/clock] adding connection to [http://LAPTOP-4NHCRNJ5:33387/], count 0
+[rosout][INFO] 2026-07-02 12:13:35,717: building_generator_classic_control ready
+[rospy.internal][INFO] 2026-07-02 12:13:35,901: topic[/rosout] adding connection to [/rosout], count 0
+[rospy.core][INFO] 2026-07-02 12:13:55,271: signal_shutdown [signal-15]
+[rospy.internal][INFO] 2026-07-02 12:13:55,274: topic[/rosout] removing connection to /rosout
+[rospy.internal][INFO] 2026-07-02 12:13:55,274: topic[/clock] removing connection to http://LAPTOP-4NHCRNJ5:33387/
+[rospy.impl.masterslave][INFO] 2026-07-02 12:13:55,274: signal-15
+[rospy.core][INFO] 2026-07-02 12:13:55,872: signal_shutdown [atexit]
+[rospy.client][INFO] 2026-07-02 12:17:37,381: init_node, name[/building_generator_classic_control], pid[42977]
+[xmlrpc][INFO] 2026-07-02 12:17:37,382: XML-RPC server binding to 0.0.0.0:0
+[xmlrpc][INFO] 2026-07-02 12:17:37,382: Started XML-RPC server [http://LAPTOP-4NHCRNJ5:44851/]
+[rospy.init][INFO] 2026-07-02 12:17:37,382: ROS Slave URI: [http://LAPTOP-4NHCRNJ5:44851/]
+[rospy.impl.masterslave][INFO] 2026-07-02 12:17:37,383: _ready: http://LAPTOP-4NHCRNJ5:44851/
+[rospy.registration][INFO] 2026-07-02 12:17:37,384: Registering with master node http://localhost:11311
+[xmlrpc][INFO] 2026-07-02 12:17:37,384: xml rpc node: starting XML-RPC server
+[rospy.init][INFO] 2026-07-02 12:17:37,483: registered with master
+[rospy.rosout][INFO] 2026-07-02 12:17:37,483: initializing /rosout core topic
+[rospy.rosout][INFO] 2026-07-02 12:17:37,487: connected to core topic /rosout
+[rospy.simtime][INFO] 2026-07-02 12:17:37,488: initializing /clock core topic
+[rospy.simtime][INFO] 2026-07-02 12:17:37,490: connected to core topic /clock
+[rospy.internal][INFO] 2026-07-02 12:17:37,492: topic[/clock] adding connection to [http://LAPTOP-4NHCRNJ5:36693/], count 0
+[rosout][INFO] 2026-07-02 12:17:37,503: building_generator_classic_control ready
+[rospy.internal][INFO] 2026-07-02 12:17:37,704: topic[/rosout] adding connection to [/rosout], count 0
+[rospy.core][INFO] 2026-07-02 12:18:23,916: signal_shutdown [signal-15]
+[rospy.internal][INFO] 2026-07-02 12:18:23,919: topic[/rosout] removing connection to /rosout
+[rospy.internal][INFO] 2026-07-02 12:18:23,920: topic[/clock] removing connection to http://LAPTOP-4NHCRNJ5:36693/
+[rospy.impl.masterslave][INFO] 2026-07-02 12:18:23,920: signal-15
+[rospy.core][INFO] 2026-07-02 12:18:24,518: signal_shutdown [atexit]
