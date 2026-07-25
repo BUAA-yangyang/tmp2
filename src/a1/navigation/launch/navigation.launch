@@ -1,0 +1,65 @@
+<launch>
+  <!-- ============================================================
+       a1_navigation：单楼层二维导航（move_base 封装）
+
+       输入：TF odom→base（定位，dev 期由 state_from_gazebo 提供，后期换 FAST-LIO2）
+             $(arg obstacle_cloud_topic)（障碍点云）
+             /move_base_simple/goal 或 move_base action（导航目标）
+       输出：/cmd_vel_nav
+
+       本 launch 只起 move_base，不含任何 dev 专用桥接。
+       联调/单独测试请用 navigation_dev.launch。
+       ============================================================ -->
+
+  <!-- 障碍点云来源。默认就是本模块的规范输入话题名；
+       指向别的话题时会自动起一个 relay 转进来 -->
+  <arg name="obstacle_cloud_topic" default="/a1_nav/obstacle_cloud"/>
+
+  <!-- 速度输出话题。MODULES.md 约束：本模块不得直接占用最终 /cmd_vel，
+       /cmd_vel 只能由 a1_cmd_mux 发布 -->
+  <arg name="cmd_vel_topic" default="/cmd_vel_nav"/>
+
+  <!-- 里程计话题。DWA 靠它读当前速度算可达速度窗口，指错了狗会走不起来。
+       dev 期是仿真的 /Odometry_gazebo（真值派生），后期换 a1_localization 的输出 -->
+  <arg name="odom_topic" default="/Odometry_gazebo"/>
+
+  <node pkg="move_base" type="move_base" name="move_base"
+        respawn="false" output="screen" clear_params="true">
+
+    <!-- 关键 remap：move_base 默认发 /cmd_vel，必须改到 /cmd_vel_nav。
+         忘了这一行就会和 a1_cmd_mux / 人工接管抢底层控制权 -->
+    <remap from="cmd_vel" to="$(arg cmd_vel_topic)"/>
+
+    <!-- move_base 本体 + 全局规划器参数 -->
+    <rosparam file="$(find a1_navigation)/config/move_base_params.yaml" command="load"/>
+
+    <!-- 局部规划器参数（DWA，速度上限按 A1 的 RL 策略范围设定） -->
+    <rosparam file="$(find a1_navigation)/config/dwa_local_planner_params.yaml" command="load"/>
+    <!-- 用 launch 参数覆盖 yaml 里的 odom_topic，方便切换定位来源 -->
+    <param name="DWAPlannerROS/odom_topic" value="$(arg odom_topic)"/>
+
+    <!-- costmap 层级参数：footprint 等，两个 costmap 各加载一份 -->
+    <rosparam file="$(find a1_navigation)/config/costmap_common_params.yaml"
+              command="load" ns="global_costmap"/>
+    <rosparam file="$(find a1_navigation)/config/costmap_common_params.yaml"
+              command="load" ns="local_costmap"/>
+
+    <!-- obstacle_layer 参数：必须落在 <costmap>/obstacle_layer 命名空间，
+         否则用了 plugins: 列表后会被静默忽略 -->
+    <rosparam file="$(find a1_navigation)/config/obstacle_layer_params.yaml"
+              command="load" ns="global_costmap/obstacle_layer"/>
+    <rosparam file="$(find a1_navigation)/config/obstacle_layer_params.yaml"
+              command="load" ns="local_costmap/obstacle_layer"/>
+
+    <!-- 两个 costmap 各自的坐标系/尺寸/分层配置（文件内自带顶层 key） -->
+    <rosparam file="$(find a1_navigation)/config/global_costmap_params.yaml" command="load"/>
+    <rosparam file="$(find a1_navigation)/config/local_costmap_params.yaml" command="load"/>
+  </node>
+
+  <!-- 障碍源不是规范话题名时，转发进来。
+       用 relay 而不是改 costmap 参数，是为了让"本模块只有一个障碍输入"这件事
+       在 rostopic 层面也看得见，方便排查 -->
+  <node if="$(eval arg('obstacle_cloud_topic') != '/a1_nav/obstacle_cloud')"
+        pkg="topic_tools" type="relay" name="obstacle_cloud_relay"
+        args="$(arg obstacle_cloud_topic) /a1_nav/obstacle_cloud" output="screen"/>
+</launch>
