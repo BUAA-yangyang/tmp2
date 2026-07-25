@@ -1,0 +1,18 @@
+[INFO] Realtime scheduler disabled. Set UNITREE_ENABLE_REALTIME=1 to request SCHED_FIFO.
+The control interface for ROS Gazebo simulation
+robot_name: a1
+controller dt: 0.004 s, frequency: 250.000 Hz
+src/unitree_guide/logs/policy_act_inference_stair.pt
+cuda::is_available():1
+load model is successed!
+load model to device!
+[WARNING] The waitTime=4000 of function absoluteWait is not enough!
+The program has already cost 18968us.
+Switched from passive to fixed stand
+[WARNING] The waitTime=4000 of function absoluteWait is not enough!
+The program has already cost 10041us.
+[WARNING] The waitTime=4000 of function absoluteWait is not enough!
+The program has already cost 9046us.
+Switched from fixed stand to RL
+[WARNING] The waitTime=20000 of function absoluteWait is not enough!
+The program has already cost 60000us.

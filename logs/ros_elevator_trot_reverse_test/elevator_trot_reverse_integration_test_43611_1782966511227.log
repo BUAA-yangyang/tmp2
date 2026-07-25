@@ -1,0 +1,18 @@
+[rospy.client][INFO] 2026-07-02 12:28:31,252: init_node, name[/elevator_trot_reverse_integration_test_43611_1782966511227], pid[43611]
+[xmlrpc][INFO] 2026-07-02 12:28:31,253: XML-RPC server binding to 0.0.0.0:0
+[xmlrpc][INFO] 2026-07-02 12:28:31,254: Started XML-RPC server [http://LAPTOP-4NHCRNJ5:33269/]
+[rospy.init][INFO] 2026-07-02 12:28:31,254: ROS Slave URI: [http://LAPTOP-4NHCRNJ5:33269/]
+[rospy.impl.masterslave][INFO] 2026-07-02 12:28:31,254: _ready: http://LAPTOP-4NHCRNJ5:33269/
+[rospy.registration][INFO] 2026-07-02 12:28:31,255: Registering with master node http://localhost:11311
+[xmlrpc][INFO] 2026-07-02 12:28:31,255: xml rpc node: starting XML-RPC server
+[rospy.init][INFO] 2026-07-02 12:28:31,354: registered with master
+[rospy.rosout][INFO] 2026-07-02 12:28:31,354: initializing /rosout core topic
+[rospy.rosout][INFO] 2026-07-02 12:28:31,358: connected to core topic /rosout
+[rospy.simtime][INFO] 2026-07-02 12:28:31,359: initializing /clock core topic
+[rospy.simtime][INFO] 2026-07-02 12:28:31,360: connected to core topic /clock
+[rospy.internal][INFO] 2026-07-02 12:28:31,363: topic[/clock] adding connection to [http://LAPTOP-4NHCRNJ5:33889/], count 0
+[rospy.internal][INFO] 2026-07-02 12:28:31,574: topic[/rosout] adding connection to [/rosout], count 0
+[rospy.core][INFO] 2026-07-02 12:28:40,686: signal_shutdown [atexit]
+[rospy.internal][INFO] 2026-07-02 12:28:40,688: topic[/rosout] removing connection to /rosout
+[rospy.internal][INFO] 2026-07-02 12:28:40,689: topic[/clock] removing connection to http://LAPTOP-4NHCRNJ5:33889/
+[rospy.impl.masterslave][INFO] 2026-07-02 12:28:40,689: atexit

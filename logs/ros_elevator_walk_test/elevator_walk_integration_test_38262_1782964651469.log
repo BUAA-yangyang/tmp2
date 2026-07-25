@@ -1,0 +1,22 @@
+[rospy.client][INFO] 2026-07-02 11:57:31,495: init_node, name[/elevator_walk_integration_test_38262_1782964651469], pid[38262]
+[xmlrpc][INFO] 2026-07-02 11:57:31,496: XML-RPC server binding to 0.0.0.0:0
+[xmlrpc][INFO] 2026-07-02 11:57:31,497: Started XML-RPC server [http://LAPTOP-4NHCRNJ5:36553/]
+[rospy.init][INFO] 2026-07-02 11:57:31,497: ROS Slave URI: [http://LAPTOP-4NHCRNJ5:36553/]
+[rospy.impl.masterslave][INFO] 2026-07-02 11:57:31,497: _ready: http://LAPTOP-4NHCRNJ5:36553/
+[rospy.registration][INFO] 2026-07-02 11:57:31,498: Registering with master node http://localhost:11311
+[xmlrpc][INFO] 2026-07-02 11:57:31,499: xml rpc node: starting XML-RPC server
+[rospy.init][INFO] 2026-07-02 11:57:31,598: registered with master
+[rospy.rosout][INFO] 2026-07-02 11:57:31,598: initializing /rosout core topic
+[rospy.rosout][INFO] 2026-07-02 11:57:31,601: connected to core topic /rosout
+[rospy.simtime][INFO] 2026-07-02 11:57:31,602: initializing /clock core topic
+[rospy.simtime][INFO] 2026-07-02 11:57:31,603: connected to core topic /clock
+[rospy.internal][INFO] 2026-07-02 11:57:31,605: topic[/clock] adding connection to [http://LAPTOP-4NHCRNJ5:35083/], count 0
+[rospy.internal][INFO] 2026-07-02 11:57:31,858: topic[/rosout] adding connection to [/rosout], count 0
+[rospy.internal][INFO] 2026-07-02 11:57:36,268: topic[/cmd_vel] adding connection to [/unitree_gazebo_servo], count 0
+[rospy.core][INFO] 2026-07-02 12:01:11,959: signal_shutdown [signal-2]
+[rospy.internal][INFO] 2026-07-02 12:01:11,964: topic[/rosout] removing connection to /rosout
+[rospy.internal][INFO] 2026-07-02 12:01:11,964: topic[/cmd_vel] removing connection to /unitree_gazebo_servo
+[rospy.internal][INFO] 2026-07-02 12:01:11,964: topic[/clock] removing connection to http://LAPTOP-4NHCRNJ5:35083/
+[rospy.impl.masterslave][INFO] 2026-07-02 12:01:11,965: signal-2
+[rospy.core][INFO] 2026-07-02 12:01:12,560: signal_shutdown [signal-2]
+[rospy.core][INFO] 2026-07-02 12:01:12,841: signal_shutdown [atexit]
