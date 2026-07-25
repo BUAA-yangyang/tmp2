@@ -2,8 +2,11 @@
 # ROS catkin
 #################################
 
-build/
-devel/
+/build/
+/devel/
+/logs/
+/generated_building/
+/results/
 
 
 #################################
