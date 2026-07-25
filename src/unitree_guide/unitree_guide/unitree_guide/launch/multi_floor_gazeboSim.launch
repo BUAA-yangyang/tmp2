@@ -11,8 +11,8 @@
     <arg name="debug" default="false"/>
     <arg name="user_debug" default="false"/>
     <arg name="enable_sensor_data" default="true"/>
-    <arg name="enable_livox" default="$(arg enable_sensor_data)"/>
-    <arg name="enable_livox_imu" default="$(arg enable_livox)"/>
+    <arg name="enable_livox" default="true"/>
+    <arg name="enable_livox_imu" default="false"/>
     <arg name="enable_realsense" default="$(arg enable_sensor_data)"/>
     <arg name="enable_front_camera" default="false"/>
     <arg name="enable_referee_odom" default="true"/>

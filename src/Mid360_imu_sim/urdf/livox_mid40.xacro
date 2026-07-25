@@ -18,7 +18,7 @@
           izz="0.01"/>
     </inertial>
   </xacro:macro>
-  <xacro:macro name="Livox_Mid_gazebo_sensor" params="visualize:=True update_rate:=10 resolution:=0.002 noise_mean:=0.0 noise_stddev:=0.01 name:=livox">
+  <xacro:macro name="Livox_Mid_gazebo_sensor" params="visualize:=False update_rate:=10 resolution:=0.002 noise_mean:=0.0 noise_stddev:=0.01 name:=livox">
     <gazebo reference="${name}">
       <sensor type="ray" name="laser_${name}">
         <pose>0 0 0 0 0 0</pose>
@@ -63,7 +63,7 @@
   </xacro:macro>
 
 
-  <xacro:macro name="Livox_Mid40" params="visualize:=True name:=livox">
+  <xacro:macro name="Livox_Mid40" params="visualize:=False name:=livox">
     <link name="${name}_base">
       <xacro:null_inertial/>
       <visual> 

@@ -2,7 +2,6 @@
 
 本目录为比赛仿真环境，面向 `ROS1 Noetic + Gazebo Classic + Unitree A1`。环境启动时会随机生成多楼层室内楼栋，并同步生成危险源、干扰源、门、电梯、传感器链路和机器人控制接口。
 
-比赛目标是控制机器狗完成未知室内环境探索，识别并输出危险源位置。危险源真值文件仅供裁判评估使用，参赛算法不应读取。
 
 ## 选手快速入口
 
@@ -61,6 +60,7 @@ ENABLE_SENSOR_DATA=0 ENABLE_LIVOX=1 ./auto.sh
 | `/cmd_vel` | `geometry_msgs/Twist` | 机器人速度指令输入 |
 | `/scan` | `sensor_msgs/PointCloud` | Livox Mid-360 原始点云 |
 | `/livox/Pointcloud2` | `sensor_msgs/PointCloud2` | 转换后的 Livox 点云 |
+| `/livox/lidar` | `livox_ros_driver/CustomMsg` | FAST-LIO2 使用的逐点时间戳点云 |
 | `/trunk_imu` | `sensor_msgs/Imu` | 机体 IMU |
 | `/livox/imu` | `sensor_msgs/Imu` | Livox 内置 IMU |
 | `/real_sense/rgb/image_raw` | `sensor_msgs/Image` | RealSense RGB 图像 |
