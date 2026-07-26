@@ -37,7 +37,7 @@ Visualization Manager:
       TF Prefix: ""
       Visual Enabled: true
       Collision Enabled: false
-    # 障碍点云：本模块的规范障碍输入
+    # 障碍点云：本模块的规范障碍输入（假障碍 / RealSense 走这个，类型 PointCloud2）
     - Class: rviz/PointCloud2
       Name: ObstacleCloud
       Enabled: true
@@ -47,6 +47,19 @@ Visualization Manager:
       Size (m): 0.03
       Style: Flat Squares
       Color: 255; 80; 80
+      Color Transformer: FlatColor
+      Decay Time: 0
+    # Livox Mid-360 原始点云。注意它的类型是 sensor_msgs/PointCloud（不是 PointCloud2），
+    # 所以必须用 rviz/PointCloud 这个显示插件，用错了看不到任何东西。
+    - Class: rviz/PointCloud
+      Name: LivoxScan
+      Enabled: true
+      Topic: /scan
+      Unreliable: false
+      Queue Size: 2
+      Size (m): 0.02
+      Style: Points
+      Color: 0; 255; 200
       Color Transformer: FlatColor
       Decay Time: 0
     # 全局代价地图（滚动窗口，含膨胀层）

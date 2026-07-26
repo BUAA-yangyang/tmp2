@@ -15,6 +15,10 @@
        指向别的话题时会自动起一个 relay 转进来 -->
   <arg name="obstacle_cloud_topic" default="/a1_nav/obstacle_cloud"/>
 
+  <!-- 障碍点云的消息类型，必须和上面话题的真实类型一致，写错是静默失效。
+       PointCloud2 = 假障碍 / RealSense；PointCloud = Livox 插件的 /scan -->
+  <arg name="obstacle_cloud_type" default="PointCloud2"/>
+
   <!-- 速度输出话题。MODULES.md 约束：本模块不得直接占用最终 /cmd_vel，
        /cmd_vel 只能由 a1_cmd_mux 发布 -->
   <arg name="cmd_vel_topic" default="/cmd_vel_nav"/>
@@ -37,6 +41,10 @@
     <rosparam file="$(find a1_navigation)/config/dwa_local_planner_params.yaml" command="load"/>
     <!-- 用 launch 参数覆盖 yaml 里的 odom_topic，方便切换定位来源 -->
     <param name="DWAPlannerROS/odom_topic" value="$(arg odom_topic)"/>
+
+    <!-- 障碍点云类型，两个 costmap 都要覆盖 -->
+    <param name="global_costmap/obstacle_layer/obstacle_cloud/data_type" value="$(arg obstacle_cloud_type)"/>
+    <param name="local_costmap/obstacle_layer/obstacle_cloud/data_type"  value="$(arg obstacle_cloud_type)"/>
 
     <!-- costmap 层级参数：footprint 等，两个 costmap 各加载一份 -->
     <rosparam file="$(find a1_navigation)/config/costmap_common_params.yaml"
