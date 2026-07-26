@@ -8,15 +8,19 @@ topics:
   occupancy_grid: /a1/floor_mapping/map
   status: /a1/floor_mapping/status
   diagnostics: /a1/floor_mapping/diagnostics
-timeouts: {tf_lookup: 0.10, input_lost: 3.0}
+timeouts: {tf_lookup: 0.10, input_degraded: 1.0, input_lost: 3.0, odom_max_age: 0.25}
+recovery: {valid_frames: 3}
 ground:
   search_radius: 2.5
   min_relative_z: -0.8
   max_relative_z: 0.15
   minimum_candidates: 80
+  minimum_inlier_ratio: 0.35
+  maximum_dispersion: 0.08
   initialization_frames: 6
   maximum_frame_delta: 0.08
   unsupported_floor_delta: 0.35
+  floor_change_frames: 10
 filter:
   self_clear_radius: 0.45
   minimum_range: 0.5
@@ -31,4 +35,6 @@ grid:
   height: 40.0
   publish_rate: 1.0
   p_free: 0.35
-  p_occupied: 0.70
+  p_occupied: 0.80
+  minimum_observations: 2
+services: {reset: /a1/floor_mapping/reset}
