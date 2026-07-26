@@ -1,0 +1,26 @@
+<launch>
+  <!--
+    a1_cmd_mux 独立验收。
+
+    会主动发布测试速度；请在独立 ROS master 中运行，或确保四足没有处于
+    RL /cmd_vel 模式。这里故意打开 ready 门控，由测试脚本发布心跳，
+    从而验证门控实现本身，不代表当前 unitree_guide 已有真实 ready 上游。
+  -->
+  <arg name="output_topic" default="/cmd_vel"/>
+  <arg name="ready_topic" default="/a1/controller_ready_test"/>
+  <arg name="safety_lock_topic" default="/a1_cmd_mux/safety_lock"/>
+
+  <include file="$(find a1_cmd_mux)/launch/cmd_mux.launch">
+    <arg name="output_topic" value="$(arg output_topic)"/>
+    <arg name="require_ready" value="true"/>
+    <arg name="ready_topic" value="$(arg ready_topic)"/>
+    <arg name="safety_lock_topic" value="$(arg safety_lock_topic)"/>
+  </include>
+
+  <node pkg="a1_navigation_tests" type="cmd_mux_acceptance.py"
+        name="cmd_mux_acceptance" output="screen" required="true">
+    <param name="output_topic" value="$(arg output_topic)"/>
+    <param name="ready_topic" value="$(arg ready_topic)"/>
+    <param name="safety_lock_topic" value="$(arg safety_lock_topic)"/>
+  </node>
+</launch>
