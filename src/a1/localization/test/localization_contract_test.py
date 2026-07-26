@@ -30,6 +30,12 @@ class LocalizationContractTest(unittest.TestCase):
         self.assertIn("ground_truth/base_w", text)
         self.assertIn("never republishes truth", text)
 
+    def test_validation_recorder_is_acceptance_only(self):
+        text = (ROOT / "scripts" / "localization_validation_recorder.py").read_text()
+        self.assertIn("ground_truth/base_w", text)
+        self.assertIn("never fed into localization", text)
+        self.assertNotIn("Publisher(", text)
+
     def test_standard_frame_contract(self):
         frames = (ROOT / "config" / "frames.yaml").read_text()
         launch = "\n".join(path.read_text() for path in

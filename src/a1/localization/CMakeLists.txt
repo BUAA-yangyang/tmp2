@@ -15,6 +15,7 @@ target_link_libraries(localization_map_manager ${catkin_LIBRARIES} ${PCL_LIBRARI
 install(TARGETS pointcloud_adapter localization_pose_adapter localization_map_manager RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 install(DIRECTORY config launch DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
 catkin_install_python(PROGRAMS scripts/localization_preflight_check.py scripts/localization_stability_gate.py scripts/localization_supervisor.py
+  scripts/localization_validation_recorder.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 if(CATKIN_ENABLE_TESTING)
   find_package(rostest REQUIRED)
