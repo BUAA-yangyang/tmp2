@@ -32,6 +32,7 @@ class DangerPerceptionNode:
         self.publish_debug_images = bool(rospy.get_param("~publish_debug_images", True))
         self.draw_rejected = bool(rospy.get_param("~draw_rejected_candidates", True))
         self.log_throttle_s = float(rospy.get_param("~log_throttle_s", 2.0))
+        self.max_confirm_depth_m = float(rospy.get_param("~max_confirm_depth_m", 5.5))
 
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
@@ -107,11 +108,17 @@ class DangerPerceptionNode:
             candidate.depth_std = estimate.depth_std
             if estimate.point is None:
                 candidate.status = estimate.status
+                candidate.is_danger = False
+                continue
+            if estimate.depth_median > self.max_confirm_depth_m:
+                candidate.status = "candidate_too_far_for_confirmation"
+                candidate.is_danger = False
                 continue
 
             point, status = self._transform_point(estimate.point)
             if point is None:
                 candidate.status = status
+                candidate.is_danger = False
                 continue
 
             detection = self._candidate_to_msg(candidate, point, track_id=0, status=status)
@@ -188,9 +195,9 @@ class DangerPerceptionNode:
             msg.position.z = track.position[2]
             msg.class_name = "danger_red_sphere"
             msg.confidence = float(track.confidence)
-            msg.track_id = int(track.track_id)
+            msg.track_id = int(track.source_id if track.source_id is not None else track.track_id)
             msg.is_valid = True
-            msg.status = "tracked"
+            msg.status = "confirmed_tracked"
             messages.append(msg)
         return messages
 
@@ -207,7 +214,7 @@ class DangerPerceptionNode:
             if candidate.is_danger:
                 color = (0, 0, 255)
             elif self.draw_rejected:
-                color = (0, 200, 255) if candidate.class_name == "red_box" else (0, 180, 0)
+                color = (0, 180, 0) if candidate.class_name == "green_sphere" else (0, 200, 255)
             else:
                 continue
 
@@ -249,6 +256,7 @@ class DangerPerceptionNode:
             min_aspect_ratio=float(rospy.get_param("~min_aspect_ratio", 0.55)),
             max_aspect_ratio=float(rospy.get_param("~max_aspect_ratio", 1.85)),
             min_circularity=float(rospy.get_param("~min_circularity", 0.65)),
+            min_enclosing_circle_fill=float(rospy.get_param("~min_enclosing_circle_fill", 0.85)),
             max_sphere_extent=float(rospy.get_param("~max_sphere_extent", 0.88)),
             morph_kernel_size=int(rospy.get_param("~morph_kernel_size", 5)),
             morph_iterations=int(rospy.get_param("~morph_iterations", 1)),
@@ -270,6 +278,7 @@ class DangerPerceptionNode:
     def _load_tracker_params(self) -> TrackerParams:
         return TrackerParams(
             merge_distance_m=float(rospy.get_param("~merge_distance_m", 0.60)),
+            confirmed_source_merge_distance_m=float(rospy.get_param("~confirmed_source_merge_distance_m", 0.80)),
             position_alpha=float(rospy.get_param("~track_position_alpha", 0.35)),
             stale_after_s=float(rospy.get_param("~track_stale_after_s", 20.0)),
             min_observations=int(rospy.get_param("~min_track_observations", 1)),

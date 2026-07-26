@@ -27,6 +27,7 @@ max_area: 200000.0
 min_aspect_ratio: 0.55
 max_aspect_ratio: 1.85
 min_circularity: 0.65
+min_enclosing_circle_fill: 0.85
 max_sphere_extent: 0.88
 morph_kernel_size: 5
 morph_iterations: 1
@@ -34,6 +35,7 @@ morph_iterations: 1
 # Depth validation and 3D point estimation.
 min_depth_m: 0.40
 max_depth_m: 8.0
+max_confirm_depth_m: 5.5
 depth_scale: 0.001
 depth_percentile: 50.0
 min_depth_valid_ratio: 0.35
@@ -52,9 +54,10 @@ tf_timeout: 0.10
 # Tracking and filtering.
 use_tracker: true
 merge_distance_m: 0.60
+confirmed_source_merge_distance_m: 0.80
 track_position_alpha: 0.35
 track_stale_after_s: 20.0
-min_track_observations: 1
+min_track_observations: 3
 publish_min_confidence: 0.45
 
 # Debug output.

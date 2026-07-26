@@ -24,6 +24,7 @@ class DetectorParams:
     min_aspect_ratio: float
     max_aspect_ratio: float
     min_circularity: float
+    min_enclosing_circle_fill: float
     max_sphere_extent: float
     morph_kernel_size: int
     morph_iterations: int
@@ -41,6 +42,7 @@ class Candidate:
     circularity: float
     aspect_ratio: float
     extent: float
+    enclosing_circle_fill: float
     confidence: float
     status: str
     depth_median: float = 0.0
@@ -112,6 +114,9 @@ class OpenCVDangerDetector:
         circularity = 0.0 if perimeter <= 1e-6 else float(4.0 * np.pi * area / (perimeter * perimeter))
         aspect_ratio = float(w) / float(h)
         extent = area / float(w * h)
+        (_, _), enclosing_radius = cv2.minEnclosingCircle(contour)
+        enclosing_circle_area = float(np.pi * enclosing_radius * enclosing_radius)
+        enclosing_circle_fill = 0.0 if enclosing_circle_area <= 1e-6 else area / enclosing_circle_area
         center_uv = self._contour_center(contour, x, y, w, h)
 
         status = "ok"
@@ -129,14 +134,20 @@ class OpenCVDangerDetector:
             confidence = 0.20
         elif color_name == "red":
             looks_round = circularity >= self.params.min_circularity
+            fills_enclosing_circle = enclosing_circle_fill >= self.params.min_enclosing_circle_fill
             looks_not_boxy = extent <= self.params.max_sphere_extent
-            if looks_round and looks_not_boxy:
+            if looks_round and fills_enclosing_circle and looks_not_boxy:
                 class_name = "red_sphere"
                 is_danger = True
-                confidence = self._shape_confidence(area, circularity, aspect_ratio, extent)
+                confidence = self._shape_confidence(area, circularity, aspect_ratio, extent, enclosing_circle_fill)
             else:
                 class_name = "red_box"
-                status = "reject_red_box_or_non_round"
+                if not looks_round:
+                    status = "reject_circularity"
+                elif not fills_enclosing_circle:
+                    status = "reject_enclosing_circle_fill"
+                else:
+                    status = "reject_red_box_or_non_round"
                 confidence = 0.25
 
         return Candidate(
@@ -150,6 +161,7 @@ class OpenCVDangerDetector:
             circularity=circularity,
             aspect_ratio=aspect_ratio,
             extent=extent,
+            enclosing_circle_fill=enclosing_circle_fill,
             confidence=confidence,
             status=status,
         )
@@ -160,15 +172,27 @@ class OpenCVDangerDetector:
         circularity: float,
         aspect_ratio: float,
         extent: float,
+        enclosing_circle_fill: float,
     ) -> float:
         circular_score = _clamp(
             (circularity - self.params.min_circularity)
             / max(1e-6, 1.0 - self.params.min_circularity)
         )
+        circle_fill_score = _clamp(
+            (enclosing_circle_fill - self.params.min_enclosing_circle_fill)
+            / max(1e-6, 1.0 - self.params.min_enclosing_circle_fill)
+        )
         aspect_score = _clamp(1.0 - abs(aspect_ratio - 1.0) / 0.75)
         extent_score = _clamp(1.0 - max(0.0, extent - 0.78) / max(1e-6, self.params.max_sphere_extent - 0.78))
         area_score = _clamp((area - self.params.min_area) / max(1.0, self.params.max_area - self.params.min_area))
-        return _clamp(0.35 + 0.30 * circular_score + 0.20 * aspect_score + 0.10 * extent_score + 0.05 * area_score)
+        return _clamp(
+            0.30
+            + 0.25 * circular_score
+            + 0.20 * circle_fill_score
+            + 0.15 * aspect_score
+            + 0.05 * extent_score
+            + 0.05 * area_score
+        )
 
     @staticmethod
     def _contour_center(

@@ -34,3 +34,4 @@ __pycache__/
 
 .vscode/
 .idea/
+tmp2_backup_before_flatten_*.tar.gz
