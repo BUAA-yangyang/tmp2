@@ -1,0 +1,13 @@
+<launch>
+  <node pkg="a1_localization" type="localization_map_manager" name="localization_map_manager_test" output="screen">
+    <param name="input_map_topic" value="/test/localization/map"/>
+    <param name="status_topic" value="/test/localization/status"/>
+    <param name="save_service" value="/test/localization/save_map"/>
+    <param name="expected_frame" value="odom"/>
+    <param name="output_root" value="/tmp/a1_localization_map_manager_test"/>
+    <param name="minimum_points" value="3"/>
+    <param name="map_timeout" value="30.0"/>
+  </node>
+  <test test-name="localization_map_manager_runtime" pkg="a1_localization"
+        type="localization_map_manager_runtime_test.py" time-limit="45"/>
+</launch>

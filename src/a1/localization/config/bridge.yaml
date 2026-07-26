@@ -1,0 +1,6 @@
+input_topic: /scan
+output_topic: /a1_localization/livox_pointcloud
+expected_frame: laser_livox
+strict_frame_check: true
+drop_non_finite: true
+default_intensity: 0.0

@@ -1,0 +1,12 @@
+<launch>
+  <node pkg="a1_localization" type="pointcloud_adapter" name="pointcloud_adapter" output="screen" ns="a1_localization">
+    <rosparam command="load" file="$(find a1_localization)/config/bridge.yaml"/>
+  </node>
+  <node pkg="a1_localization" type="localization_supervisor.py" name="localization_supervisor" output="screen" ns="a1_localization">
+    <rosparam command="load" file="$(find a1_localization)/config/supervisor.yaml"/>
+    <param name="managed_launch" value="$(find a1_localization)/launch/localization_estimator.launch"/>
+  </node>
+  <node pkg="a1_localization" type="localization_map_manager" name="localization_map_manager" output="screen" ns="a1_localization">
+    <rosparam command="load" file="$(find a1_localization)/config/map.yaml"/>
+  </node>
+</launch>
