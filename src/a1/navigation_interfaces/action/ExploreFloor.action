@@ -1,0 +1,28 @@
+# Long-running exploration request for a floor.
+# Navigation to individual goals should still use move_base_msgs/MoveBaseAction.
+
+int32 floor_id
+
+# Optional seed target. Leave frame_id empty if unused.
+geometry_msgs/PoseStamped seed_target
+
+# Stop once coverage_ratio reaches this value. 0 means module default.
+float32 target_coverage_ratio
+
+# Seconds. 0 means no explicit timeout.
+float32 timeout_s
+---
+bool success
+uint16 error_code
+string message
+float32 final_coverage_ratio
+---
+uint8 IDLE=0
+uint8 SELECTING_TARGET=1
+uint8 NAVIGATING=2
+uint8 RECOVERING=3
+
+uint8 state
+float32 coverage_ratio
+geometry_msgs/PoseStamped current_target
+string message

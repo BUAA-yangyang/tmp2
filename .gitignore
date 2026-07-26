@@ -9,6 +9,7 @@
 /results/
 /maps/
 /artifacts/localization_maps/
+/artifacts/localization_validation/
 
 # Generated assets and runtime artifacts under source trees
 /src/generated_building/
@@ -34,3 +35,4 @@ __pycache__/
 
 .vscode/
 .idea/
+tmp2_backup_before_flatten_*.tar.gz

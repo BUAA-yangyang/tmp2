@@ -1,0 +1,6 @@
+<launch>
+  <arg name="config" default="$(find a1_floor_mapping)/config/floor_mapping.yaml"/>
+  <node pkg="a1_floor_mapping" type="floor_mapping_node" name="floor_mapping" output="screen" required="true">
+    <rosparam command="load" file="$(arg config)"/>
+  </node>
+</launch>

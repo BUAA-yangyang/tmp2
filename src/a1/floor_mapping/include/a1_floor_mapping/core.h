@@ -1,0 +1,167 @@
+#pragma once
+
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <limits>
+#include <string>
+#include <vector>
+
+namespace a1_floor_mapping {
+
+struct GroundSample {
+  bool valid{false};
+  double z{0.0};
+  double dispersion{0.0};
+  std::size_t candidates{0};
+  std::size_t inliers{0};
+};
+
+class GroundEstimator {
+ public:
+  GroundEstimator(int initialization_frames, int floor_change_frames,
+                  double maximum_frame_delta, double unsupported_floor_delta)
+      : initialization_frames_(initialization_frames), floor_change_frames_(floor_change_frames),
+        maximum_frame_delta_(maximum_frame_delta), unsupported_floor_delta_(unsupported_floor_delta) {}
+
+  void reset() { history_.clear(); ready_ = false; floor_z_ = 0.0; change_count_ = 0; candidate_z_ = 0.0; }
+  bool ready() const { return ready_; }
+  double floorZ() const { return floor_z_; }
+  int changeCount() const { return change_count_; }
+  double candidateZ() const { return candidate_z_; }
+  double confidence() const {
+    if (!ready_) return std::min(0.99, static_cast<double>(history_.size()) / initialization_frames_);
+    return std::max(0.0, 1.0 - std::min(1.0, static_cast<double>(change_count_) / floor_change_frames_));
+  }
+  bool floorChangeDetected() const { return change_count_ >= floor_change_frames_; }
+
+  void update(const GroundSample& sample) {
+    if (!sample.valid) return;
+    candidate_z_ = sample.z;
+    if (!ready_) {
+      history_.push_back(sample.z);
+      if (static_cast<int>(history_.size()) >= initialization_frames_) {
+        auto middle = history_.begin() + history_.size() / 2;
+        std::nth_element(history_.begin(), middle, history_.end());
+        floor_z_ = *middle;
+        ready_ = true;
+      }
+      return;
+    }
+    const double delta = sample.z - floor_z_;
+    if (std::abs(delta) > unsupported_floor_delta_) {
+      ++change_count_;
+      return;
+    }
+    change_count_ = 0;
+    if (std::abs(delta) <= maximum_frame_delta_)
+      floor_z_ += std::max(-0.01, std::min(0.01, delta * 0.1));
+  }
+
+ private:
+  int initialization_frames_, floor_change_frames_;
+  double maximum_frame_delta_, unsupported_floor_delta_;
+  std::vector<double> history_;
+  bool ready_{false};
+  double floor_z_{0.0}, candidate_z_{0.0};
+  int change_count_{0};
+};
+
+class OccupancyIntegrator {
+ public:
+  OccupancyIntegrator(double resolution, double width_m, double height_m, double p_free, double p_occupied,
+                      unsigned minimum_observations)
+      : resolution_(resolution), width_(static_cast<unsigned>(std::ceil(width_m / resolution))),
+        height_(static_cast<unsigned>(std::ceil(height_m / resolution))),
+        origin_x_(-0.5 * width_ * resolution), origin_y_(-0.5 * height_ * resolution),
+        free_delta_(static_cast<float>(logit(p_free))), occupied_delta_(static_cast<float>(logit(p_occupied))),
+        minimum_observations_(minimum_observations) { reset(); }
+
+  void reset() {
+    evidence_.assign(width_ * height_, std::numeric_limits<float>::quiet_NaN());
+    observations_.assign(width_ * height_, 0);
+  }
+  unsigned width() const { return width_; }
+  unsigned height() const { return height_; }
+  double resolution() const { return resolution_; }
+  double originX() const { return origin_x_; }
+  double originY() const { return origin_y_; }
+
+  bool worldToCell(double x, double y, int& mx, int& my) const {
+    mx = static_cast<int>(std::floor((x - origin_x_) / resolution_));
+    my = static_cast<int>(std::floor((y - origin_y_) / resolution_));
+    return inside(mx, my);
+  }
+
+  bool raytrace(double sx, double sy, double ex, double ey, bool occupied) {
+    if (!clip(sx, sy, ex, ey)) return false;
+    int x0, y0, x1, y1;
+    if (!worldToCell(sx, sy, x0, y0) || !worldToCell(ex, ey, x1, y1)) return false;
+    int dx = std::abs(x1 - x0), step_x = x0 < x1 ? 1 : -1;
+    int dy = -std::abs(y1 - y0), step_y = y0 < y1 ? 1 : -1, error = dx + dy;
+    int x = x0, y = y0;
+    while (x != x1 || y != y1) {
+      add(x, y, free_delta_);
+      const int twice = 2 * error;
+      if (twice >= dy) { error += dy; x += step_x; }
+      if (twice <= dx) { error += dx; y += step_y; }
+    }
+    add(x1, y1, occupied ? occupied_delta_ : free_delta_);
+    return true;
+  }
+
+  std::vector<int8_t> data(std::size_t& occupied, std::size_t& free, std::size_t& unknown) const {
+    std::vector<int8_t> result(evidence_.size(), -1); occupied = free = unknown = 0;
+    for (std::size_t i = 0; i < evidence_.size(); ++i) {
+      if (!std::isfinite(evidence_[i]) || observations_[i] < minimum_observations_) { ++unknown; continue; }
+      const double probability = 1.0 / (1.0 + std::exp(-evidence_[i]));
+      if (probability >= 0.65) { result[i] = 100; ++occupied; }
+      else if (probability <= 0.4) { result[i] = 0; ++free; }
+      else ++unknown;
+    }
+    return result;
+  }
+
+  double boundaryMargin(double x, double y) const {
+    return std::min(std::min(x - origin_x_, origin_x_ + width_ * resolution_ - x),
+                    std::min(y - origin_y_, origin_y_ + height_ * resolution_ - y));
+  }
+
+ private:
+  static double logit(double p) { return std::log(p / (1.0 - p)); }
+  bool inside(int x, int y) const { return x >= 0 && y >= 0 && x < static_cast<int>(width_) && y < static_cast<int>(height_); }
+  void add(int x, int y, float delta) {
+    if (!inside(x, y)) return;
+    const std::size_t index = static_cast<std::size_t>(y) * width_ + x;
+    if (!std::isfinite(evidence_[index])) evidence_[index] = 0.0f;
+    evidence_[index] = std::max(-4.0f, std::min(4.0f, evidence_[index] + delta));
+    if (observations_[index] != std::numeric_limits<uint16_t>::max()) ++observations_[index];
+  }
+  bool clip(double& x0, double& y0, double& x1, double& y1) const {
+    const double xmin = origin_x_ + 1e-6, ymin = origin_y_ + 1e-6;
+    const double xmax = origin_x_ + width_ * resolution_ - 1e-6, ymax = origin_y_ + height_ * resolution_ - 1e-6;
+    double t0 = 0.0, t1 = 1.0, dx = x1 - x0, dy = y1 - y0;
+    const double p[4] = {-dx, dx, -dy, dy};
+    const double q[4] = {x0 - xmin, xmax - x0, y0 - ymin, ymax - y0};
+    for (int i = 0; i < 4; ++i) {
+      if (std::abs(p[i]) < 1e-12) { if (q[i] < 0.0) return false; continue; }
+      const double ratio = q[i] / p[i];
+      if (p[i] < 0.0) t0 = std::max(t0, ratio); else t1 = std::min(t1, ratio);
+      if (t0 > t1) return false;
+    }
+    const double ox = x0, oy = y0;
+    x0 = ox + t0 * dx; y0 = oy + t0 * dy;
+    x1 = ox + t1 * dx; y1 = oy + t1 * dy;
+    return true;
+  }
+
+  double resolution_;
+  unsigned width_, height_;
+  double origin_x_, origin_y_;
+  float free_delta_, occupied_delta_;
+  unsigned minimum_observations_;
+  std::vector<float> evidence_;
+  std::vector<uint16_t> observations_;
+};
+
+}  // namespace a1_floor_mapping
