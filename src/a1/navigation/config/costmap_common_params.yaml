@@ -1,0 +1,14 @@
+# 两个 costmap（global / local）共用的 **costmap 层级** 参数。
+# 原理：costmap_2d 是分层的(layered costmap)。每层往栅格写代价，最后叠加：
+#   - obstacle_layer  : 读传感器点云，标记障碍(marking) + 清除已消失的障碍(clearing)
+#   - inflation_layer : 把障碍向外"膨胀"一圈代价，规划出的路径自然远离墙壁
+# 里程碑1 不挂 static_layer（没有静态地图），后期 floor_mapping 出 OccupancyGrid 再加。
+#
+# 注意：这里只放 costmap 自身的参数。传感器相关参数必须放到 obstacle_layer 的命名空间，
+# 见 obstacle_layer_params.yaml —— 用了 plugins: 列表后，参数放错层会被静默忽略。
+
+# ---- 机器人几何 ----
+# A1 车体约 0.65m(长) x 0.30m(宽)。footprint 是 base 坐标系下的多边形（x 向前，y 向左）。
+# 用多边形而非 robot_radius：四足是长条形，用外接圆会过度保守，窄门过不去。
+footprint: [[0.30, 0.15], [0.30, -0.15], [-0.35, -0.15], [-0.35, 0.15]]
+footprint_padding: 0.02

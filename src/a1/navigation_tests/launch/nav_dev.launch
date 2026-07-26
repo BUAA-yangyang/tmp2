@@ -1,0 +1,75 @@
+<launch>
+  <!-- ============================================================
+       里程碑1 联调用 launch（dev-only，不进正式启动链）
+
+       前提：auto.sh 已经在跑，且已按 2 → 6 把 junior_ctrl 切到 RL /cmd_vel 模式
+             （必须在终端看到 "Entered RL /cmd_vel mode." 才算切成功）
+
+       这个 launch 干三件 dev 期才需要的事：
+         1. 起 a1_navigation（move_base，输出 /cmd_vel_nav）
+         2. 把 /cmd_vel_nav 桥到 /cmd_vel —— 因为 a1_cmd_mux 还没实现。
+            正式版必须删掉这一步，改由 cmd_mux 仲裁。
+         3. 障碍源：默认用假障碍，真实传感器修好后换 obstacle_cloud_topic
+
+       定位说明：本 launch 不起任何定位节点。TF odom→base 由仿真自带的
+       state_from_gazebo 提供（auto.sh 的 ENABLE_REFEREE_ODOM=1 默认开）。
+       它派生自 Gazebo 真值，是 **dev-only 替身**，后期换成 a1_localization 的 FAST-LIO2。
+       因为两者都以标准 TF 对外，替换时本模块配置无需改动。
+       ============================================================ -->
+
+  <!-- 障碍源：
+       fake      = 假障碍发布器（默认，不依赖任何传感器）
+       realsense = /real_sense/depth/points（注意：软渲染下会拖垮实时因子把狗搞趴）
+       livox     = /livox/Pointcloud2（注意：Livox 插件当前会崩 gzserver） -->
+  <arg name="obstacle_source" default="fake"/>
+  <arg name="use_rviz" default="true"/>
+
+  <!-- 假墙几何（odom 坐标）。默认放在出生点前方；做绕障测试时改这些参数，
+       把墙摆到狗和目标之间，逼它从缺口绕过去 -->
+  <arg name="wall_y"     default="-1.5"/>
+  <arg name="half_width" default="2.5"/>
+  <arg name="gap_center" default="1.0"/>
+  <arg name="gap_width"  default="0.9"/>
+
+  <!-- dev 期把导航速度直接桥到底层。正式版由 a1_cmd_mux 负责，届时删除 -->
+  <arg name="bridge_cmd_vel" default="true"/>
+
+  <!-- ===== 障碍源 ===== -->
+  <group if="$(eval arg('obstacle_source') == 'fake')">
+    <node pkg="a1_navigation_tests" type="fake_obstacle_publisher.py"
+          name="fake_obstacle_publisher" output="screen">
+      <param name="topic" value="/a1_nav/obstacle_cloud"/>
+      <param name="world_frame" value="odom"/>
+      <param name="sensor_frame" value="base"/>
+      <param name="max_range" value="6.0"/>
+      <param name="rate" value="5.0"/>
+      <param name="wall_y"     value="$(arg wall_y)"/>
+      <param name="half_width" value="$(arg half_width)"/>
+      <param name="gap_center" value="$(arg gap_center)"/>
+      <param name="gap_width"  value="$(arg gap_width)"/>
+    </node>
+  </group>
+
+  <!-- ===== 导航 ===== -->
+  <include file="$(find a1_navigation)/launch/navigation.launch">
+    <arg name="obstacle_cloud_topic"
+         value="$(eval '/real_sense/depth/points' if arg('obstacle_source') == 'realsense'
+                  else ('/livox/Pointcloud2' if arg('obstacle_source') == 'livox'
+                  else '/a1_nav/obstacle_cloud'))"/>
+    <arg name="cmd_vel_topic" value="/cmd_vel_nav"/>
+  </include>
+
+  <!-- ===== dev 专用：/cmd_vel_nav → /cmd_vel ===== -->
+  <!-- ⚠️ 仅联调用。State_RL 对 /cmd_vel 既不限幅也不超时，停止发布后狗会保持
+       最后速度继续走 —— 这正是 MODULES.md 要求 cmd_mux 做超时归零的原因。
+       测试结束请先按 Space/切模式，别只 Ctrl-C 这个 launch。 -->
+  <node if="$(arg bridge_cmd_vel)"
+        pkg="topic_tools" type="relay" name="cmd_vel_dev_bridge"
+        args="/cmd_vel_nav /cmd_vel" output="screen"/>
+
+  <!-- ===== RViz ===== -->
+  <!-- RViz 的 "2D Nav Goal" 按钮就是本模块天然的测试界面：
+       它往 /move_base_simple/goal 发一个 PoseStamped，move_base 收到后开始规划 -->
+  <node if="$(arg use_rviz)" pkg="rviz" type="rviz" name="rviz"
+        args="-d $(find a1_navigation)/rviz/a1_nav.rviz" output="screen"/>
+</launch>
