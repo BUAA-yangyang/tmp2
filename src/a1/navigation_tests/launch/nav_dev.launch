@@ -50,12 +50,27 @@
     </node>
   </group>
 
+  <!-- Livox 原始 /scan 必须先过盲区过滤再喂 costmap：插件把无回波射线也发成 (0,0,0)，
+       实测一帧 24000 点里有 11463 个是这种空回波，会在机器人脚下糊出一坨跟着走的致命障碍 -->
+  <group if="$(eval arg('obstacle_source') == 'livox')">
+    <node pkg="a1_navigation" type="scan_to_obstacle_cloud.py"
+          name="scan_to_obstacle_cloud" output="screen">
+      <param name="input_topic"  value="/scan"/>
+      <param name="output_topic" value="/a1_nav/obstacle_cloud"/>
+      <param name="min_range"    value="0.6"/>
+      <param name="max_range"    value="20.0"/>
+    </node>
+  </group>
+
   <!-- ===== 导航 ===== -->
   <include file="$(find a1_navigation)/launch/navigation.launch">
+    <!-- livox 经 scan_to_obstacle_cloud 过滤后直接落在 /a1_nav/obstacle_cloud，
+         所以这里不用改话题。不走 /livox/Pointcloud2 是因为它在
+         use_ground_truth_odom=1 时用真值 odom 做了坐标变换，比赛不能用 -->
     <arg name="obstacle_cloud_topic"
          value="$(eval '/real_sense/depth/points' if arg('obstacle_source') == 'realsense'
-                  else ('/livox/Pointcloud2' if arg('obstacle_source') == 'livox'
-                  else '/a1_nav/obstacle_cloud'))"/>
+                  else '/a1_nav/obstacle_cloud')"/>
+    <arg name="obstacle_cloud_type" value="PointCloud2"/>
     <arg name="cmd_vel_topic" value="/cmd_vel_nav"/>
   </include>
 

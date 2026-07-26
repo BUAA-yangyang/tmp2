@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>a1_result_manager</name>
+  <version>0.0.1</version>
+  <description>Final danger-source result aggregation and JSON writer for the A1 competition environment.</description>
+
+  <maintainer email="todo@example.com">A1 Team</maintainer>
+  <license>UNLICENSED</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <build_depend>a1_navigation_interfaces</build_depend>
+  <build_depend>rospy</build_depend>
+  <build_depend>std_msgs</build_depend>
+
+  <exec_depend>a1_navigation_interfaces</exec_depend>
+  <exec_depend>rospy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+
+  <export/>
+</package>

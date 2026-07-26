@@ -25,6 +25,10 @@ combination_method: 1        # 1 = 与其他层取最大代价
 # 由 launch 的 obstacle_cloud_topic 参数决定实际订阅哪个：
 #   假障碍(联调) / RealSense / Livox / 未来 floor_mapping 的投影结果。
 # 这样换传感器后端不需要改这份配置。
+# 注意 data_type 要和实际话题类型对上，对不上是静默失效（costmap 收不到任何障碍）：
+#   Livox 插件的 /scan 是 sensor_msgs/PointCloud（不是 LaserScan，也不是 PointCloud2）
+#   RealSense 的 /real_sense/depth/points 和假障碍是 sensor_msgs/PointCloud2
+# 由 navigation.launch 的 obstacle_cloud_type 参数覆盖。
 observation_sources: obstacle_cloud
 obstacle_cloud:
   data_type: PointCloud2
