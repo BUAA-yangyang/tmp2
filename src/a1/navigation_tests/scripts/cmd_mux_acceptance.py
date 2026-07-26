@@ -19,6 +19,7 @@ import sys
 import threading
 
 import rospy
+from a1_navigation_interfaces.msg import CmdMuxStatus
 from geometry_msgs.msg import Twist
 from std_msgs.msg import Bool
 
@@ -59,6 +60,8 @@ class Harness(object):
             "~ready_topic", "/a1/controller_ready")
         self.safety_topic = rospy.get_param(
             "~safety_lock_topic", "/a1_cmd_mux/safety_lock")
+        self.status_topic = rospy.get_param(
+            "~status_topic", "/a1/cmd_mux/status")
 
         self.pubs = {
             key: rospy.Publisher(topic, Twist, queue_size=1)
@@ -74,9 +77,12 @@ class Harness(object):
         self.safety_value = False
         self.data_lock = threading.Lock()
         self.samples = []
+        self.statuses = []
 
         rospy.Subscriber(
             self.output_topic, Twist, self.on_out, queue_size=500)
+        rospy.Subscriber(
+            self.status_topic, CmdMuxStatus, self.on_status, queue_size=20)
         rospy.Timer(rospy.Duration(0.05), self.pump)
 
     def on_out(self, msg):
@@ -87,6 +93,10 @@ class Harness(object):
                 msg.linear.y,
                 msg.angular.z,
             ))
+
+    def on_status(self, msg):
+        with self.data_lock:
+            self.statuses.append(msg)
 
     def pump(self, _event):
         with self.data_lock:
@@ -118,6 +128,10 @@ class Harness(object):
     def rows(self):
         with self.data_lock:
             return list(self.samples)
+
+    def latest_status(self):
+        with self.data_lock:
+            return self.statuses[-1] if self.statuses else None
 
     @staticmethod
     def now():
@@ -195,6 +209,17 @@ def main():
         ready_vx is not None and abs(ready_vx - 0.30) < 0.04,
         "期望 +0.30，实测 %s" % (
             "无输出" if ready_vx is None else "%+.3f" % ready_vx),
+    )
+    status = harness.latest_status()
+    status_ok = (status is not None
+                 and status.active_source == CmdMuxStatus.SOURCE_NAVIGATION
+                 and status.output_enabled
+                 and not status.emergency_stop
+                 and abs(status.last_cmd.linear.x - 0.30) < 0.04)
+    check(
+        "6d. CmdMuxStatus 共享接口",
+        status_ok,
+        "导航源、输出使能和 last_cmd 字段正确=%s" % status_ok,
     )
 
     harness.clear()
@@ -280,7 +305,7 @@ def main():
     harness.clear()
     emergency_at = harness.now()
     harness.set_sources(nav=0.45, est=1.0)
-    rospy.sleep(0.4)
+    rospy.sleep(0.7)
     rows = harness.rows()
     delay = first_zero_delay(rows, emergency_at)
     tail_zero = bool(rows) and all(is_zero(row) for row in rows[-10:])
@@ -289,6 +314,17 @@ def main():
         delay is not None and delay <= 0.15 and tail_zero,
         "故意输入非零急停，归零延迟=%s，保持零=%s" % (
             "未归零" if delay is None else "%.3fs" % delay, tail_zero),
+    )
+    status = harness.latest_status()
+    estop_status_ok = (status is not None
+                       and status.active_source == CmdMuxStatus.SOURCE_ESTOP
+                       and status.emergency_stop
+                       and not status.output_enabled)
+    check(
+        "2e. CmdMuxStatus 急停状态",
+        estop_status_ok,
+        "SOURCE_ESTOP、emergency_stop 和 output_enabled 正确=%s"
+        % estop_status_ok,
     )
     harness.set_sources(nav=0.35)
     rows = collect(harness, 0.4, settle=0.9)

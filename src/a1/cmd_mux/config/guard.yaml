@@ -44,6 +44,8 @@ decelerate_to_stop: true
 # 发布端需要以高于 2Hz 持续发布；停发 0.5s 后自动释放。
 emergency_topic: /cmd_vel_emergency
 emergency_timeout: 0.5
+# 仅用于 CmdMuxStatus 的源身份/年龄跟踪；真正仲裁仍由 twist_mux 完成。
+source_timeout: 0.5
 
 # std_msgs/Bool。True 立即锁死为零，并保持到明确收到 False；
 # 用于 mission_manager 故障保护，不会因为发布者崩溃而自动解锁。
@@ -62,5 +64,5 @@ ready_topic: /a1/controller_ready
 ready_timeout: 1.0
 
 # ---- 诊断 ----
-status_topic: /a1_cmd_mux/status
+status_topic: /a1/cmd_mux/status
 status_rate: 2.0

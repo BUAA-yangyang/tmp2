@@ -19,8 +19,9 @@ import threading
 import time
 
 import rospy
+from a1_navigation_interfaces.msg import CmdMuxStatus
 from geometry_msgs.msg import Twist
-from std_msgs.msg import Bool, String
+from std_msgs.msg import Bool
 
 
 def clamp(v, lo, hi):
@@ -62,13 +63,17 @@ class CmdVelGuard(object):
         self.require_ready = g("~require_ready", False)
         self.ready_timeout = g("~ready_timeout", 1.0)
         self.emergency_timeout = g("~emergency_timeout", 0.5)
+        self.source_timeout = g("~source_timeout", 0.5)
 
         in_topic = g("~input_topic", "/cmd_vel_muxed")
         out_topic = g("~output_topic", "/cmd_vel")
+        navigation_topic = g("~navigation_topic", "/cmd_vel_nav")
+        behavior_topic = g("~behavior_topic", "/cmd_vel_behavior")
+        teleop_topic = g("~teleop_topic", "/cmd_vel_teleop")
         ready_topic = g("~ready_topic", "/a1/controller_ready")
         emergency_topic = g("~emergency_topic", "/cmd_vel_emergency")
         safety_lock_topic = g("~safety_lock_topic", "/a1_cmd_mux/safety_lock")
-        status_topic = g("~status_topic", "/a1_cmd_mux/status")
+        status_topic = g("~status_topic", "/a1/cmd_mux/status")
         self.status_rate = g("~status_rate", 2.0)
 
         if self.rate_hz <= 0.0:
@@ -76,7 +81,8 @@ class CmdVelGuard(object):
         if min(self.max_vx, self.max_vy, self.max_wz,
                self.acc_x, self.acc_y, self.acc_th,
                self.input_timeout, self.ready_timeout,
-               self.emergency_timeout, self.max_timer_dt) < 0.0:
+               self.emergency_timeout, self.source_timeout,
+               self.max_timer_dt) < 0.0:
             raise ValueError("速度、加速度和超时参数不得为负数")
 
         self.lock = threading.Lock()
@@ -86,13 +92,31 @@ class CmdVelGuard(object):
         self.ready = False
         self.last_ready = None
         self.last_emergency = None
+        self.source_stamps = {
+            CmdMuxStatus.SOURCE_NAVIGATION: None,
+            CmdMuxStatus.SOURCE_BEHAVIOR: None,
+            CmdMuxStatus.SOURCE_TELEOP: None,
+            CmdMuxStatus.SOURCE_ESTOP: None,
+        }
         self.safety_locked = False
         self.last_tick = None
         self.state = "init"
 
         self.pub = rospy.Publisher(out_topic, Twist, queue_size=1)
-        self.status_pub = rospy.Publisher(status_topic, String, queue_size=1, latch=True)
+        self.status_pub = rospy.Publisher(
+            status_topic, CmdMuxStatus, queue_size=1, latch=True)
         rospy.Subscriber(in_topic, Twist, self.on_cmd, queue_size=1)
+        # 这些订阅只用于生成团队共享的 CmdMuxStatus；真正仲裁仍只由
+        # twist_mux 完成，guard 不会自行选择或转发这些原始速度。
+        rospy.Subscriber(
+            navigation_topic, Twist, self.on_source,
+            callback_args=CmdMuxStatus.SOURCE_NAVIGATION, queue_size=1)
+        rospy.Subscriber(
+            behavior_topic, Twist, self.on_source,
+            callback_args=CmdMuxStatus.SOURCE_BEHAVIOR, queue_size=1)
+        rospy.Subscriber(
+            teleop_topic, Twist, self.on_source,
+            callback_args=CmdMuxStatus.SOURCE_TELEOP, queue_size=1)
         # 急停同时进入 twist_mux 和 guard：mux 保证优先级，guard 保证不受减速度
         # 限制影响，在下一个发布周期立即归零。消息内容会被忽略，任何新消息都表示急停。
         rospy.Subscriber(emergency_topic, Twist, self.on_emergency, queue_size=1)
@@ -134,7 +158,13 @@ class CmdVelGuard(object):
 
     def on_emergency(self, _msg):
         with self.lock:
-            self.last_emergency = rospy.Time.now()
+            now = rospy.Time.now()
+            self.last_emergency = now
+            self.source_stamps[CmdMuxStatus.SOURCE_ESTOP] = now
+
+    def on_source(self, _msg, source_id):
+        with self.lock:
+            self.source_stamps[source_id] = rospy.Time.now()
 
     def on_safety_lock(self, msg):
         with self.lock:
@@ -176,6 +206,8 @@ class CmdVelGuard(object):
                 self.last_in = None
                 self.last_ready = None
                 self.last_emergency = None
+                for source_id in self.source_stamps:
+                    self.source_stamps[source_id] = None
                 self.out = Twist()
                 self.state = "time_jump_zero"
             else:
@@ -231,11 +263,41 @@ class CmdVelGuard(object):
 
         self.pub.publish(out)
 
+    def _active_source(self, now):
+        candidates = (
+            (CmdMuxStatus.SOURCE_ESTOP, self.emergency_timeout),
+            (CmdMuxStatus.SOURCE_TELEOP, self.source_timeout),
+            (CmdMuxStatus.SOURCE_BEHAVIOR, self.source_timeout),
+            (CmdMuxStatus.SOURCE_NAVIGATION, self.source_timeout),
+        )
+        for source_id, timeout in candidates:
+            stamp = self.source_stamps[source_id]
+            if self._fresh(stamp, now, timeout):
+                return source_id, (now - stamp).to_sec()
+        return CmdMuxStatus.SOURCE_NONE, -1.0
+
     def publish_status(self, _):
+        now = rospy.Time.now()
         with self.lock:
-            s = "%s vx=%+.3f vy=%+.3f wz=%+.3f" % (
-                self.state, self.out.linear.x, self.out.linear.y, self.out.angular.z)
-        self.status_pub.publish(String(data=s))
+            tracked_source, source_age = self._active_source(now)
+            if self.state == "emergency_stop":
+                active_source = CmdMuxStatus.SOURCE_ESTOP
+            elif self.state == "active":
+                active_source = tracked_source
+            else:
+                active_source = CmdMuxStatus.SOURCE_NONE
+                source_age = -1.0
+
+            msg = CmdMuxStatus()
+            msg.header.stamp = now
+            msg.active_source = active_source
+            msg.emergency_stop = self._fresh(
+                self.last_emergency, now, self.emergency_timeout)
+            msg.output_enabled = self.state == "active"
+            msg.last_cmd = self.out
+            msg.active_source_age_s = source_age
+            msg.status = self.state
+        self.status_pub.publish(msg)
 
     def stop_on_shutdown(self):
         """正常 Ctrl-C/rosnode kill 时，在连接断开前尽力把最后指令改成零。"""

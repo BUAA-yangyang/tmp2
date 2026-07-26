@@ -43,7 +43,7 @@
 | `/cmd_vel_emergency` | `geometry_msgs/Twist` | 输入 | 急停心跳；消息内容忽略，持续发布即保持急停 |
 | `/a1_cmd_mux/safety_lock` | `std_msgs/Bool` | 输入 | `True` 立即锁零，明确收到 `False` 才释放 |
 | `/a1/controller_ready` | `std_msgs/Bool` | 可选输入 | 控制器 ready 心跳 |
-| `/a1_cmd_mux/status` | `std_msgs/String` | 输出 | guard 当前状态与实际输出 |
+| `/a1/cmd_mux/status` | `a1_navigation_interfaces/CmdMuxStatus` | 输出 | 当前控制源、急停、输出使能、实际速度和源年龄 |
 | `/cmd_vel` | `geometry_msgs/Twist` | 输出 | 唯一底层速度出口 |
 
 急停发布频率必须高于 2Hz；停发 0.5s 后自动释放。即使急停发布者误发了非零
@@ -60,6 +60,11 @@ roslaunch a1_cmd_mux cmd_mux.launch \
   require_ready:=true \
   ready_topic:=/实际的控制器就绪话题
 ```
+
+状态话题复用团队共享的 `CmdMuxStatus.msg`，不在本包重复定义接口。普通激活状态
+会报告 `SOURCE_NAVIGATION / BEHAVIOR / TELEOP`，急停报告 `SOURCE_ESTOP`；
+锁定、未 ready、断流或时钟回拨时报告 `SOURCE_NONE`、`output_enabled=false`，
+且 `active_source_age_s=-1.0`。
 
 ## 安装与启动
 

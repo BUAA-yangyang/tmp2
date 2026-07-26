@@ -9,12 +9,14 @@
   <arg name="output_topic" default="/cmd_vel"/>
   <arg name="ready_topic" default="/a1/controller_ready_test"/>
   <arg name="safety_lock_topic" default="/a1_cmd_mux/safety_lock"/>
+  <arg name="status_topic" default="/a1/cmd_mux/status"/>
 
   <include file="$(find a1_cmd_mux)/launch/cmd_mux.launch">
     <arg name="output_topic" value="$(arg output_topic)"/>
     <arg name="require_ready" value="true"/>
     <arg name="ready_topic" value="$(arg ready_topic)"/>
     <arg name="safety_lock_topic" value="$(arg safety_lock_topic)"/>
+    <arg name="status_topic" value="$(arg status_topic)"/>
   </include>
 
   <node pkg="a1_navigation_tests" type="cmd_mux_acceptance.py"
@@ -22,5 +24,6 @@
     <param name="output_topic" value="$(arg output_topic)"/>
     <param name="ready_topic" value="$(arg ready_topic)"/>
     <param name="safety_lock_topic" value="$(arg safety_lock_topic)"/>
+    <param name="status_topic" value="$(arg status_topic)"/>
   </node>
 </launch>

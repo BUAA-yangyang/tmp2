@@ -23,6 +23,7 @@
   <arg name="emergency_topic" default="/cmd_vel_emergency"/>
   <arg name="emergency_timeout" default="0.5"/>
   <arg name="safety_lock_topic" default="/a1_cmd_mux/safety_lock"/>
+  <arg name="status_topic" default="/a1/cmd_mux/status"/>
 
   <!-- 当前 unitree_guide 没有 FSM ready 话题，所以系统联调默认 false。
        验收测试会设为 true，未来由 bringup 接入真实控制器状态。 -->
@@ -47,6 +48,7 @@
     <param name="emergency_topic" value="$(arg emergency_topic)"/>
     <param name="emergency_timeout" value="$(arg emergency_timeout)"/>
     <param name="safety_lock_topic" value="$(arg safety_lock_topic)"/>
+    <param name="status_topic" value="$(arg status_topic)"/>
     <param name="require_ready" value="$(arg require_ready)"/>
     <param name="ready_topic" value="$(arg ready_topic)"/>
     <param name="ready_timeout" value="$(arg ready_timeout)"/>
