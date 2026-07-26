@@ -1,0 +1,34 @@
+frames: {odom: odom, base: base, sensor: laser_livox}
+topics:
+  pointcloud: /a1_localization/livox_pointcloud
+  odom: /a1/localization/odom
+  localization_status: /a1/localization/status
+  supervisor_status: /a1/localization/supervisor_status
+  obstacle_cloud: /a1/floor_mapping/obstacle_cloud
+  occupancy_grid: /a1/floor_mapping/map
+  status: /a1/floor_mapping/status
+  diagnostics: /a1/floor_mapping/diagnostics
+timeouts: {tf_lookup: 0.10, input_lost: 3.0}
+ground:
+  search_radius: 2.5
+  min_relative_z: -0.8
+  max_relative_z: 0.15
+  minimum_candidates: 80
+  initialization_frames: 6
+  maximum_frame_delta: 0.08
+  unsupported_floor_delta: 0.35
+filter:
+  self_clear_radius: 0.45
+  minimum_range: 0.5
+  maximum_range: 8.0
+  ground_band_below: 0.05
+  ground_clearance: 0.08
+  maximum_obstacle_height: 1.50
+  voxel_leaf_size: 0.05
+grid:
+  resolution: 0.05
+  width: 40.0
+  height: 40.0
+  publish_rate: 1.0
+  p_free: 0.35
+  p_occupied: 0.70
