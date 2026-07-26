@@ -2,9 +2,22 @@
 # ROS catkin
 #################################
 
-build/
-devel/
-logs/
+/build/
+/devel/
+/logs/
+/generated_building/
+/results/
+/maps/
+/artifacts/localization_maps/
+
+# Generated assets and runtime artifacts under source trees
+/src/generated_building/
+/src/unitree_guide/unitree_guide/generated_building/
+/src/third_party/**/build/
+/src/third_party/**/devel/
+/src/third_party/**/logs/
+/src/third_party/**/results/
+/.sdk-export/
 
 
 #################################

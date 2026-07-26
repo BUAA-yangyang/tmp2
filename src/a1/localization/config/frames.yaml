@@ -1,0 +1,50 @@
+input_odom_topic: /a1_localization/fast_lio/odom_raw
+output_odom_topic: /a1/localization/odom
+input_registered_cloud_topic: /a1_localization/fast_lio/cloud_registered_raw
+output_registered_cloud_topic: /a1/localization/cloud_registered
+input_map_topic: /a1_localization/fast_lio/map_raw
+output_map_topic: /a1/localization/map
+
+input_world_frame: camera_init
+input_body_frame: body
+odom_frame: odom
+base_frame: base
+
+# FAST-LIO's body state is the configured trunk IMU frame. In the current A1
+# URDF, base -> trunk -> imu_link are fixed identity transforms, so imu -> base
+# is also identity. Keep this explicit so a future URDF change fails review
+# instead of silently changing the localization pose semantics.
+imu_to_base_translation: [0.0, 0.0, 0.0]
+imu_to_base_rotation_xyzw: [0.0, 0.0, 0.0, 1.0]
+
+publish_tf: true
+strict_input_frames: true
+rewrite_registered_cloud_frame: true
+rewrite_map_frame: true
+
+# FAST-LIO does not populate nav_msgs/Odometry.twist. Keep the zero-valued
+# placeholder visibly untrusted instead of advertising an all-zero covariance.
+unknown_twist_variance: 1000000.0
+
+# Health and output-validity gate. All timeout values are measured with wall
+# time, so a stopped /clock can still invalidate localization.
+health_enabled: true
+# Monitor the validated PointCloud2 produced by pointcloud_adapter. The raw
+# simulator /scan uses sensor_msgs/PointCloud and cannot be subscribed as PointCloud2.
+input_pointcloud_topic: /a1_localization/livox_pointcloud
+input_imu_topic: /trunk_imu
+clock_topic: /clock
+monitor_clock: true
+status_topic: /a1/localization/status
+diagnostics_topic: /a1/localization/diagnostics
+# The current Gazebo scene commonly runs below real time under full sensor load.
+# Wall-time thresholds therefore allow short scheduling gaps without flapping.
+sensor_warn_timeout: 1.0
+sensor_lost_timeout: 3.0
+odom_warn_timeout: 1.0
+odom_lost_timeout: 3.0
+clock_warn_timeout: 1.0
+clock_lost_timeout: 3.0
+initialization_samples: 5
+max_translation_jump: 1.0
+max_rotation_jump: 1.0

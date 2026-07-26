@@ -1,0 +1,12 @@
+cmake_minimum_required(VERSION 3.0.2)
+project(a1_navigation)
+
+find_package(catkin REQUIRED)
+
+catkin_package()
+
+# 本包目前是纯配置/启动包（move_base 是现成节点，无需自己写 C++）。
+# 安装 launch/config/rviz，便于 $(find a1_navigation) 在任何工作空间下解析。
+install(DIRECTORY launch config rviz
+        DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+        OPTIONAL)
