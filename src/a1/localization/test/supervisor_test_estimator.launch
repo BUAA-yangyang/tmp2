@@ -1,0 +1,4 @@
+<launch>
+  <node pkg="a1_localization" type="supervisor_test_estimator.py"
+        name="supervisor_test_estimator" output="screen" required="true"/>
+</launch>

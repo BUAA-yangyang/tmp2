@@ -11,6 +11,7 @@
 #include <gazebo/physics/World.hh>
 #include <gazebo/sensors/RaySensor.hh>
 #include <gazebo/transport/Node.hh>
+#include <cmath>
 #include "livox_laser_simulation/csv_reader.hpp"
 #include "livox_laser_simulation/livox_ode_multiray_shape.h"
 #include <sdf/sdf_config.h>
@@ -21,13 +22,19 @@ GZ_REGISTER_SENSOR_PLUGIN(LivoxPointsPlugin)
 
 LivoxPointsPlugin::LivoxPointsPlugin() {}
 
-LivoxPointsPlugin::~LivoxPointsPlugin() {}
+LivoxPointsPlugin::~LivoxPointsPlugin() {
+    initialized.store(false, std::memory_order_release);
+    activationConnection.reset();
+    if (raySensor) {
+        raySensor->SetActive(false);
+    }
+}
 
 void convertDataToRotateInfo(const std::vector<std::vector<double>> &datas, std::vector<AviaRotateInfo> &avia_infos) {
     avia_infos.reserve(datas.size());
     double deg_2_rad = M_PI / 180.0;
     for (auto &data : datas) {
-        if (data.size() == 3) {
+        if (data.size() == 3 && std::isfinite(data[0]) && std::isfinite(data[1]) && std::isfinite(data[2])) {
             avia_infos.emplace_back();
             avia_infos.back().time = data[0];
             avia_infos.back().azimuth = data[1] * deg_2_rad;
@@ -39,6 +46,14 @@ void convertDataToRotateInfo(const std::vector<std::vector<double>> &datas, std:
 }
 
 void LivoxPointsPlugin::Load(gazebo::sensors::SensorPtr _parent, sdf::ElementPtr sdf) {
+    initialized.store(false, std::memory_order_release);
+    // Model insertion can start the sensor update thread while this plugin is
+    // still creating its private ODE multiray collision. With another sensor
+    // (notably the optional Mid360 IMU) loading concurrently, Gazebo's native
+    // RaySensor may enter ODEMultiRayShape::UpdateRays against a partially
+    // constructed space hierarchy. Keep the parent sensor inactive until all
+    // custom rays are ready.
+    _parent->SetActive(false);
     std::vector<std::vector<double>> datas;
     // std::string file_name = sdf->Get<std::string>("csv_file_name");
     // ROS_INFO_STREAM("load csv file name:" << file_name);
@@ -65,6 +80,10 @@ void LivoxPointsPlugin::Load(gazebo::sensors::SensorPtr _parent, sdf::ElementPtr
 
     
     sdfPtr = sdf;
+    if (!sdfPtr->HasElement("ray")) {
+        ROS_ERROR_STREAM("Livox plugin is missing required <ray> configuration");
+        return;
+    }
     auto rayElem = sdfPtr->GetElement("ray");
     auto scanElem = rayElem->GetElement("scan");
     auto rangeElem = rayElem->GetElement("range");
@@ -88,6 +107,10 @@ void LivoxPointsPlugin::Load(gazebo::sensors::SensorPtr _parent, sdf::ElementPtr
     convertDataToRotateInfo(datas, aviaInfos);
     ROS_INFO_STREAM("scan info size:" << aviaInfos.size());
     maxPointSize = aviaInfos.size();
+    if (maxPointSize == 0) {
+        ROS_ERROR_STREAM("Livox CSV produced no valid scan entries");
+        return;
+    }
 
     RayPlugin::Load(_parent, sdfPtr);
     laserMsg.mutable_scan()->set_frame(_parent->ParentName());
@@ -104,6 +127,10 @@ void LivoxPointsPlugin::Load(gazebo::sensors::SensorPtr _parent, sdf::ElementPtr
     downSample = sdfPtr->Get<int>("downsample");
     if (downSample < 1) {
         downSample = 1;
+    }
+    if (samplesStep <= 0) {
+        ROS_ERROR_STREAM("Livox plugin requires positive <samples>");
+        return;
     }
     ROS_INFO_STREAM("sample:" << samplesStep);
     ROS_INFO_STREAM("downsample:" << downSample);
@@ -124,9 +151,23 @@ void LivoxPointsPlugin::Load(gazebo::sensors::SensorPtr _parent, sdf::ElementPtr
         end_point = maxDist * axis + offset.Pos();
         rayShape->AddRay(start_point, end_point);
     }
+    initialized.store(true, std::memory_order_release);
+    // Reactivate only after model insertion has completed and Gazebo enters a
+    // world-update boundary. Reactivating directly in Load() still lets the
+    // native ODEMultiRayShape race with the remaining sensor construction.
+    activationConnection = event::Events::ConnectWorldUpdateBegin(
+        [this](const common::UpdateInfo&) {
+            if (raySensor) {
+                raySensor->SetActive(true);
+            }
+            activationConnection.reset();
+        });
 }
 
 void LivoxPointsPlugin::OnNewLaserScans() {
+    if (!initialized.load(std::memory_order_acquire)) {
+        return;
+    }
     if (rayShape) {
         std::vector<std::pair<int, AviaRotateInfo>> points_pair;
         InitializeRays(points_pair, rayShape);
@@ -160,9 +201,9 @@ void LivoxPointsPlugin::OnNewLaserScans() {
             //   auto index = (verticalRayCount - verticle_index - 1) * rayCount + horizon_index;
                 auto range = rayShape->GetRange(pair.first);
                 auto intensity = rayShape->GetRetro(pair.first);
-                if (range >= RangeMax()) {
+                if (!std::isfinite(range) || range >= maxDist) {
                     range = 0;
-                } else if (range <= RangeMin()) {
+                } else if (range <= minDist) {
                     range = 0;
                 }
                 //scan->set_ranges(index, range);

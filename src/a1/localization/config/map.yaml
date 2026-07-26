@@ -1,0 +1,21 @@
+input_map_topic: /a1/localization/map
+status_topic: /a1/localization/status
+save_service: /a1/localization/save_map
+expected_frame: odom
+map_timeout: 5.0
+minimum_points: 10
+
+# Runtime products are artifacts and must not be committed. Override these
+# parameters in deployment or immediately before calling save_map.
+output_root: /tmp/a1_localization_maps
+map_id: latest
+overwrite: false
+product_version: 1
+localization_version: 0.1.0
+fast_lio_version: FAST_LIO-local-adapter
+scene_manifest_id: unspecified
+input_pointcloud_topic: /a1_localization/livox_pointcloud
+input_imu_topic: /trunk_imu
+map_resolution: 0.3
+extrinsic_translation: [0.2, 0.0, 0.08]
+extrinsic_rotation: [0.7073883, 0.0, 0.7068252, 0.0, 1.0, 0.0, -0.7068252, 0.0, 0.7073883]

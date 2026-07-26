@@ -6,6 +6,8 @@
 #define SRC_GAZEBO_CSV_READER_HPP
 
 #include <fstream>
+#include <cmath>
+#include <iostream>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -18,20 +20,32 @@ class CsvReader {
         if (file_stream.is_open()) {
             std::string header;
             std::getline(file_stream, header, '\n');
-            while (!file_stream.eof()) {
-                std::string line_str;
-                std::getline(file_stream, line_str, '\n');
+            std::string line_str;
+            while (std::getline(file_stream, line_str)) {
+                if (line_str.empty()) {
+                    continue;
+                }
                 std::stringstream line_stream;
                 line_stream << line_str;
                 std::vector<double> data;
-                try {
-                    while (!line_stream.eof()) {
-                        std::string value;
-                        std::getline(line_stream, value, ',');
-                        data.push_back(std::stod(value));
+                std::string value;
+                bool valid = true;
+                while (std::getline(line_stream, value, ',')) {
+                    try {
+                        std::size_t parsed = 0;
+                        const double number = std::stod(value, &parsed);
+                        if (parsed != value.size() || !std::isfinite(number)) {
+                            valid = false;
+                            break;
+                        }
+                        data.push_back(number);
+                    } catch (const std::exception&) {
+                        valid = false;
+                        break;
                     }
-                } catch (...) {
-                    std::cerr << "cannot convert str:" << line_str << "\n";
+                }
+                if (!valid || data.size() != 3) {
+                    std::cerr << "invalid csv row: " << line_str << "\n";
                     continue;
                 }
                 datas.push_back(data);
