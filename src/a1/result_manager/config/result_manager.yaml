@@ -1,0 +1,22 @@
+# Confirmed danger detections from a1_danger_perception.
+detections_topic: /danger_perception/detections
+
+# Competition output file.
+result_file: /workspace/SimEnv/results/detected_danger.json
+
+# Final result aggregation.
+merge_distance_m: 1.0
+track_id_match_distance_m: 1.0
+position_alpha: 0.35
+min_confidence: 0.45
+require_confirmed_status: true
+accepted_frames: [world, map]
+
+# Keep already written results if this node restarts during a run.
+load_existing_results: true
+write_empty_on_start: true
+write_rate_hz: 1.0
+output_precision: 3
+
+# Debug logging.
+log_throttle_s: 2.0

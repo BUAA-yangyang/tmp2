@@ -1,0 +1,15 @@
+<launch>
+  <arg name="target_frame" default="map"/>
+  <arg name="enable_tf" default="true"/>
+  <arg name="publish_debug_images" default="true"/>
+
+  <node pkg="a1_danger_perception"
+        type="danger_perception_node.py"
+        name="danger_perception"
+        output="screen">
+    <rosparam command="load" file="$(find a1_danger_perception)/config/danger_perception.yaml"/>
+    <param name="target_frame" value="$(arg target_frame)"/>
+    <param name="enable_tf" value="$(arg enable_tf)"/>
+    <param name="publish_debug_images" value="$(arg publish_debug_images)"/>
+  </node>
+</launch>
