@@ -45,7 +45,7 @@ class LocalizationMapManagerRuntimeTest(unittest.TestCase):
         message.values = [KeyValue("results_valid", "true" if tracking else "false")]
         self.status_pub.publish(message)
 
-    def publish_cloud(self, points, frame="odom"):
+    def publish_cloud(self, points, frame="world"):
         message = PointCloud2()
         message.header.stamp = rospy.Time.now()
         message.header.frame_id = frame
@@ -67,7 +67,7 @@ class LocalizationMapManagerRuntimeTest(unittest.TestCase):
     def test_rejects_unavailable_invalid_and_wrong_frame_maps(self):
         self.assertFalse(self.save().success)
         self.publish_status(True)
-        self.publish_cloud([(0, 0, 0, 1), (1, 1, 1, 2), (2, 2, 2, 3)], "map")
+        self.publish_cloud([(0, 0, 0, 1), (1, 1, 1, 2), (2, 2, 2, 3)], "odom")
         time.sleep(0.2)
         self.assertFalse(self.save().success)
         self.publish_cloud([(0, 0, 0, 1), (1, 1, 1, 2), (float("nan"), 2, 2, 3)])
@@ -87,7 +87,8 @@ class LocalizationMapManagerRuntimeTest(unittest.TestCase):
         metadata = (product / "metadata.yaml").read_text()
         self.assertTrue(pcd.is_file())
         self.assertIn("point_count: 3", metadata)
-        self.assertIn("frame: odom", metadata)
+        self.assertIn("frame: world", metadata)
+        self.assertIn("alignment_mode: fixed_start", metadata)
         self.assertIn("min: [-1", metadata)
         self.assertIn("max: [3", metadata)
         self.assertIn(hashlib.sha256(pcd.read_bytes()).hexdigest(), metadata)

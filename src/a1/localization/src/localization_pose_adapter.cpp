@@ -2,6 +2,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -14,6 +15,7 @@
 #include <rosgraph_msgs/Clock.h>
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/PointCloud2.h>
+#include <sensor_msgs/point_cloud2_iterator.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Transform.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
@@ -138,6 +140,8 @@ private:
         pnh_.param("input_body_frame", input_body_frame_, std::string("body"));
         pnh_.param("odom_frame", odom_frame_, std::string("odom"));
         pnh_.param("base_frame", base_frame_, std::string("base"));
+        pnh_.param("world_alignment_enabled", world_alignment_enabled_, true);
+        pnh_.param("world_frame", world_frame_, std::string("world"));
         pnh_.param("publish_tf", publish_tf_, true);
         pnh_.param("strict_input_frames", strict_input_frames_, true);
         pnh_.param("rewrite_registered_cloud_frame", rewrite_registered_cloud_frame_, true);
@@ -183,6 +187,28 @@ private:
         quaternion.normalize();
         imu_to_base_.setOrigin(tf2::Vector3(translation[0], translation[1], translation[2]));
         imu_to_base_.setRotation(quaternion);
+
+        if (world_alignment_enabled_)
+        {
+            std::vector<double> world_translation;
+            std::vector<double> world_rotation;
+            valid_configuration_ =
+                loadVector(pnh_, "initial_world_to_base_translation", 3, &world_translation) &&
+                loadVector(pnh_, "initial_world_to_base_rotation_xyzw", 4, &world_rotation);
+            if (!valid_configuration_) return;
+            tf2::Quaternion world_quaternion(world_rotation[0], world_rotation[1],
+                                             world_rotation[2], world_rotation[3]);
+            if (world_quaternion.length2() < 1e-12)
+            {
+                ROS_FATAL("~initial_world_to_base_rotation_xyzw must not be a zero quaternion");
+                valid_configuration_ = false;
+                return;
+            }
+            world_quaternion.normalize();
+            initial_world_to_base_.setOrigin(tf2::Vector3(
+                world_translation[0], world_translation[1], world_translation[2]));
+            initial_world_to_base_.setRotation(world_quaternion);
+        }
     }
 
     bool observe(InputWatch* watch, const ros::Time& stamp, const std::string& rollback_reason)
@@ -278,6 +304,7 @@ private:
     {
         consecutive_valid_ = 0;
         have_previous_pose_ = false;
+        if (reinitialization_required) world_anchor_established_ = false;
         // Preserve the first fatal cause until the estimator process is restarted.
         // Secondary sensor timeouts after a reset must not hide CLOCK_TIME_ROLLBACK.
         if (reinitialization_required_)
@@ -316,6 +343,13 @@ private:
         tf2::Transform odom_to_imu;
         tf2::fromMsg(input->pose.pose, odom_to_imu);
         const tf2::Transform odom_to_base = odom_to_imu * imu_to_base_;
+        if (world_alignment_enabled_ && !world_anchor_established_)
+        {
+            world_to_odom_ = initial_world_to_base_ * odom_to_base.inverse();
+            world_anchor_established_ = true;
+            ROS_INFO_STREAM("fixed-start world anchor established: world=" << world_frame_
+                            << " local=" << odom_frame_);
+        }
         if (poseJumped(odom_to_base))
         {
             invalidate("ODOM_POSE_JUMP", true);
@@ -369,6 +403,15 @@ private:
         // a deterministic transient lookup race even within this process.
         if (publish_tf_)
         {
+            if (world_alignment_enabled_ && world_anchor_established_)
+            {
+                geometry_msgs::TransformStamped world_transform;
+                world_transform.header.stamp = output.header.stamp;
+                world_transform.header.frame_id = world_frame_;
+                world_transform.child_frame_id = odom_frame_;
+                world_transform.transform = tf2::toMsg(world_to_odom_);
+                tf_broadcaster_.sendTransform(world_transform);
+            }
             geometry_msgs::TransformStamped transform;
             transform.header.stamp = output.header.stamp;
             transform.header.frame_id = odom_frame_;
@@ -388,7 +431,11 @@ private:
             return;
         }
         sensor_msgs::PointCloud2 output = *input;
-        if (rewrite_registered_cloud_frame_) output.header.frame_id = odom_frame_;
+        if (world_alignment_enabled_)
+        {
+            if (!transformCloud(&output)) return;
+        }
+        else if (rewrite_registered_cloud_frame_) output.header.frame_id = odom_frame_;
         registered_cloud_pub_.publish(output);
     }
 
@@ -401,8 +448,43 @@ private:
             return;
         }
         sensor_msgs::PointCloud2 output = *input;
-        if (rewrite_map_frame_) output.header.frame_id = odom_frame_;
+        if (world_alignment_enabled_)
+        {
+            if (!transformCloud(&output)) return;
+        }
+        else if (rewrite_map_frame_) output.header.frame_id = odom_frame_;
         map_pub_.publish(output);
+    }
+
+    bool transformCloud(sensor_msgs::PointCloud2* cloud)
+    {
+        if (!world_anchor_established_)
+        {
+            invalidate("WORLD_ANCHOR_NOT_ESTABLISHED");
+            return false;
+        }
+        try
+        {
+            sensor_msgs::PointCloud2Iterator<float> x(*cloud, "x");
+            sensor_msgs::PointCloud2Iterator<float> y(*cloud, "y");
+            sensor_msgs::PointCloud2Iterator<float> z(*cloud, "z");
+            for (; x != x.end(); ++x, ++y, ++z)
+            {
+                const tf2::Vector3 transformed =
+                    world_to_odom_ * tf2::Vector3(*x, *y, *z);
+                *x = static_cast<float>(transformed.x());
+                *y = static_cast<float>(transformed.y());
+                *z = static_cast<float>(transformed.z());
+            }
+        }
+        catch (const std::runtime_error& exception)
+        {
+            ROS_ERROR_STREAM("cannot transform localization cloud: " << exception.what());
+            invalidate("CLOUD_LAYOUT_INVALID");
+            return false;
+        }
+        cloud->header.frame_id = world_frame_;
+        return true;
     }
 
     const char* stateName() const
@@ -444,6 +526,12 @@ private:
                                          state_ == State::TRACKING ? "true" : "false"));
         status.values.push_back(keyValue("reinitialization_required",
                                          reinitialization_required_ ? "true" : "false"));
+        status.values.push_back(keyValue("world_alignment_enabled",
+                                         world_alignment_enabled_ ? "true" : "false"));
+        status.values.push_back(keyValue("world_anchor_established",
+                                         world_anchor_established_ ? "true" : "false"));
+        status.values.push_back(keyValue("map_frame",
+                                         world_alignment_enabled_ ? world_frame_ : odom_frame_));
         status.values.push_back(keyValue("consecutive_valid_odometry",
                                          std::to_string(consecutive_valid_)));
         status.values.push_back(keyValue("pointcloud_age_sec", std::to_string(age(pointcloud_watch_))));
@@ -470,18 +558,19 @@ private:
     ros::Publisher odom_pub_, registered_cloud_pub_, map_pub_, status_pub_, diagnostics_pub_;
     ros::Timer health_timer_;
     tf2_ros::TransformBroadcaster tf_broadcaster_;
-    tf2::Transform imu_to_base_, previous_pose_;
+    tf2::Transform imu_to_base_, previous_pose_, initial_world_to_base_, world_to_odom_;
     InputWatch pointcloud_watch_, imu_watch_, odom_watch_, clock_watch_;
 
     std::string input_odom_topic_, output_odom_topic_;
     std::string input_registered_cloud_topic_, output_registered_cloud_topic_;
     std::string input_map_topic_, output_map_topic_, input_pointcloud_topic_, input_imu_topic_;
     std::string clock_topic_, status_topic_, diagnostics_topic_;
-    std::string input_world_frame_, input_body_frame_, odom_frame_, base_frame_;
+    std::string input_world_frame_, input_body_frame_, odom_frame_, base_frame_, world_frame_;
     bool publish_tf_{true}, strict_input_frames_{true};
     bool rewrite_registered_cloud_frame_{true}, rewrite_map_frame_{true};
     bool health_enabled_{true}, monitor_clock_{true}, valid_configuration_{false};
     bool have_previous_pose_{false};
+    bool world_alignment_enabled_{true}, world_anchor_established_{false};
     bool reinitialization_required_{false};
     double unknown_twist_variance_{1.0e6};
     double sensor_warn_timeout_{0.5}, sensor_lost_timeout_{1.5};

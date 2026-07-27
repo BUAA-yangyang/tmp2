@@ -10,6 +10,14 @@ input_body_frame: body
 odom_frame: odom
 base_frame: base
 
+# Fixed-start world alignment. These values are the configured A1 departure
+# pose in Gazebo world (auto.sh ROBOT_X/Y/Z/YAW defaults). No truth topic is
+# consumed. A generation must only start while the robot is at this pose.
+world_alignment_enabled: true
+world_frame: world
+initial_world_to_base_translation: [0.0, -3.2, 0.6]
+initial_world_to_base_rotation_xyzw: [0.0, 0.0, 0.7071081, 0.7071055]
+
 # FAST-LIO's body state is the configured trunk IMU frame. In the current A1
 # URDF, base -> trunk -> imu_link are fixed identity transforms, so imu -> base
 # is also identity. Keep this explicit so a future URDF change fails review
