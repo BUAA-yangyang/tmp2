@@ -10,6 +10,7 @@
 /maps/
 /artifacts/localization_maps/
 /artifacts/localization_validation/
+/artifacts/
 
 # Generated assets and runtime artifacts under source trees
 /src/generated_building/

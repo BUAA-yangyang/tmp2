@@ -17,6 +17,8 @@ install(DIRECTORY config launch DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
 catkin_install_python(PROGRAMS scripts/localization_preflight_check.py scripts/localization_stability_gate.py scripts/localization_supervisor.py
   scripts/localization_validation_recorder.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+install(PROGRAMS scripts/localization_indoor_visual_test.sh
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 if(CATKIN_ENABLE_TESTING)
   find_package(rostest REQUIRED)
   catkin_install_python(PROGRAMS test/localization_pose_adapter_runtime_test.py
