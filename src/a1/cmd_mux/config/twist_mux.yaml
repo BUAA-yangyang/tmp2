@@ -1,0 +1,47 @@
+# twist_mux 固定优先级仲裁配置。
+#
+# 原理：twist_mux 同时订阅下面所有话题，谁在发就用谁；多个同时在发时用 priority
+# 最大的那个。每个源有独立 timeout —— 超过 timeout 没收到新消息，这个源就被视为
+# "已沉默"，仲裁自动降级到下一个还在发的源；全部沉默时 twist_mux 停止输出
+# （注意：是停止输出，不是输出零，所以下游 guard 还要再做一层全局超时归零）。
+#
+# 优先级：急停 > 人工接管 > 特殊行为 > 导航
+# 尚未上线的源在这里预留话题位即可，没人发布就自然沉默，不影响仲裁。
+
+topics:
+  # 紧急停止。最高优先级，任何时候都能压住所有人。
+  # 约定：急停时持续发布零速 Twist（而不是停止发布），这样它才能"压住"下面的源；
+  # 一旦停发，timeout 后自动解除急停。
+  - name:     emergency_stop
+    topic:    /cmd_vel_emergency
+    timeout:  0.5
+    priority: 100
+
+  # 人工接管（手柄 / 键盘 / 调试脚本）。比自主行为高，方便随时抢回控制权。
+  - name:     teleop
+    topic:    /cmd_vel_teleop
+    timeout:  0.5
+    priority: 90
+
+  # 特殊行为：门、电梯、楼梯等不能当普通二维导航处理的动作。
+  # 由 a1_building_behavior 发布（该模块尚未实现，此处预留）。
+  - name:     behavior
+    topic:    /cmd_vel_behavior
+    timeout:  0.5
+    priority: 50
+
+  # 常规单楼层导航。优先级最低——特殊行为一介入就该盖住它。
+  - name:     navigation
+    topic:    /cmd_vel_nav
+    timeout:  0.5
+    priority: 10
+
+# 锁：话题类型是 std_msgs/Bool。True 时，只有 priority 不低于锁优先级的源
+# 才能通过。这里设为 95，因此会屏蔽 teleop / behavior / navigation，
+# 但仍允许优先级 100 的 emergency 源进入；下游 guard 同时直接订阅此锁，
+# True 后在下一个 50Hz 周期立即归零，并保持到明确收到 False。
+locks:
+  - name:     safety_lock
+    topic:    /a1_cmd_mux/safety_lock
+    timeout:  0.0
+    priority: 95

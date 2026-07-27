@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(a1_navigation_tests)
+project(a1_cmd_mux)
 
 find_package(catkin REQUIRED COMPONENTS
   a1_navigation_interfaces
@@ -11,10 +11,9 @@ catkin_package(
 )
 
 catkin_install_python(PROGRAMS
-  scripts/fake_obstacle_publisher.py
-  scripts/cmd_mux_acceptance.py
+  scripts/cmd_vel_guard.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 
-install(DIRECTORY launch
+install(DIRECTORY launch config
         DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
         OPTIONAL)

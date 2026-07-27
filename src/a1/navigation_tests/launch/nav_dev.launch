@@ -7,8 +7,7 @@
 
        这个 launch 干三件 dev 期才需要的事：
          1. 起 a1_navigation（move_base，输出 /cmd_vel_nav）
-         2. 把 /cmd_vel_nav 桥到 /cmd_vel —— 因为 a1_cmd_mux 还没实现。
-            正式版必须删掉这一步，改由 cmd_mux 仲裁。
+         2. 起 a1_cmd_mux，完成多源仲裁并作为 /cmd_vel 唯一出口。
          3. 障碍源：默认用假障碍，真实传感器修好后换 obstacle_cloud_topic
 
        定位说明：本 launch 不起任何定位节点。TF odom→base 由仿真自带的
@@ -31,8 +30,8 @@
   <arg name="gap_center" default="1.0"/>
   <arg name="gap_width"  default="0.9"/>
 
-  <!-- dev 期把导航速度直接桥到底层。正式版由 a1_cmd_mux 负责，届时删除 -->
-  <arg name="bridge_cmd_vel" default="true"/>
+  <!-- 只在外部 bringup 已经启动同一个 cmd_mux 时设为 false，避免重复出口 -->
+  <arg name="use_cmd_mux" default="true"/>
 
   <!-- ===== 障碍源 ===== -->
   <group if="$(eval arg('obstacle_source') == 'fake')">
@@ -74,13 +73,10 @@
     <arg name="cmd_vel_topic" value="/cmd_vel_nav"/>
   </include>
 
-  <!-- ===== dev 专用：/cmd_vel_nav → /cmd_vel ===== -->
-  <!-- ⚠️ 仅联调用。State_RL 对 /cmd_vel 既不限幅也不超时，停止发布后狗会保持
-       最后速度继续走 —— 这正是 MODULES.md 要求 cmd_mux 做超时归零的原因。
-       测试结束请先按 Space/切模式，别只 Ctrl-C 这个 launch。 -->
-  <node if="$(arg bridge_cmd_vel)"
-        pkg="topic_tools" type="relay" name="cmd_vel_dev_bridge"
-        args="/cmd_vel_nav /cmd_vel" output="screen"/>
+  <!-- ===== 正式速度出口：a1_cmd_mux ===== -->
+  <!-- move_base 只发 /cmd_vel_nav；twist_mux 仲裁后由 guard 限幅、限加速度，
+       上游全部断开约 0.87s 内归零，并继续以 50Hz 发布零速度。 -->
+  <include if="$(arg use_cmd_mux)" file="$(find a1_cmd_mux)/launch/cmd_mux.launch"/>
 
   <!-- ===== RViz ===== -->
   <!-- RViz 的 "2D Nav Goal" 按钮就是本模块天然的测试界面：
