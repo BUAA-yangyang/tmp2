@@ -1,0 +1,6 @@
+<launch>
+  <arg name="config" default="$(find a1_floor_mapping)/config/floor_mapping.yaml"/>
+  <arg name="stop_topic" default="/cmd_vel"/>
+  <include file="$(find a1_floor_mapping)/launch/floor_mapping.launch"><arg name="config" value="$(arg config)"/></include>
+  <node pkg="a1_floor_mapping" type="floor_mapping_health_gate.py" name="floor_mapping_health_gate" output="screen"><param name="stop_topic" value="$(arg stop_topic)"/></node>
+</launch>

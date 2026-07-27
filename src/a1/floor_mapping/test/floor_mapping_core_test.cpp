@@ -5,6 +5,21 @@
 using a1_floor_mapping::GroundEstimator;
 using a1_floor_mapping::GroundSample;
 using a1_floor_mapping::OccupancyIntegrator;
+using a1_floor_mapping::selectGroundSample;
+
+TEST(GroundSelection, SupportsIndoorColdStartAndAnchoredTracking) {
+  std::vector<double> doorway(100, 0.0);
+  doorway.insert(doorway.end(), 400, 0.45);
+  EXPECT_TRUE(selectGroundSample(doorway, false, 0.0, 80, 0.20, 0.08).valid);
+  EXPECT_FALSE(selectGroundSample(doorway, false, 0.0, 80, 0.35, 0.08).valid);
+
+  std::vector<double> wall_dominated(80, 0.0);
+  wall_dominated.insert(wall_dominated.end(), 720, 0.45);
+  const auto tracked = selectGroundSample(wall_dominated, true, 0.01, 80, 0.20, 0.08);
+  EXPECT_TRUE(tracked.valid);
+  EXPECT_EQ(tracked.inliers, 80u);
+  EXPECT_NEAR(tracked.z, 0.0, 1e-6);
+}
 
 TEST(GroundEstimator, RequiresStableInitializationAndPersistentFloorChange) {
   GroundEstimator estimator(3, 4, 0.08, 0.35);

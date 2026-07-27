@@ -170,7 +170,6 @@ private:
         }
         latest_map_ = cloud;
         latest_stamp_ = message->header.stamp;
-        latest_wall_time_ = ros::WallTime::now();
     }
 
     bool save(std_srvs::Trigger::Request&, std_srvs::Trigger::Response& response)
@@ -180,7 +179,8 @@ private:
         pnh_.param("overwrite", overwrite_, overwrite_);
         if (!tracking_) return fail("localization is not TRACKING", response);
         if (!latest_map_) return fail("no valid online map is available", response);
-        if ((ros::WallTime::now() - latest_wall_time_).toSec() > map_timeout_)
+        if (latest_stamp_.isZero() || ros::Time::now().isZero() ||
+            std::max(0.0, (ros::Time::now() - latest_stamp_).toSec()) > map_timeout_)
             return fail("online map is stale", response);
         if (!safeMapId(map_id_)) return fail("map_id may only contain letters, digits, '-' and '_'", response);
 
@@ -278,7 +278,6 @@ private:
     ros::ServiceServer save_server_;
     pcl::PointCloud<pcl::PointXYZI>::Ptr latest_map_;
     ros::Time latest_stamp_;
-    ros::WallTime latest_wall_time_;
     std::string input_map_topic_, status_topic_, save_service_, expected_frame_, output_root_, map_id_;
     std::string pointcloud_topic_, imu_topic_, localization_version_, fast_lio_version_;
     std::string scene_manifest_id_;

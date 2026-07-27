@@ -17,6 +17,31 @@ struct GroundSample {
   std::size_t inliers{0};
 };
 
+inline GroundSample selectGroundSample(std::vector<double> candidates, bool floor_ready,
+                                       double floor_z, std::size_t minimum_candidates,
+                                       double minimum_inlier_ratio, double maximum_dispersion) {
+  GroundSample empty; empty.candidates = candidates.size();
+  if (candidates.size() < minimum_candidates) return empty;
+  const auto fit_band = [&](double center, bool require_ratio) {
+    GroundSample sample; sample.candidates = candidates.size(); std::vector<double> band; band.reserve(candidates.size());
+    for (double z : candidates) if (std::abs(z - center) <= 0.06) band.push_back(z);
+    sample.inliers = band.size();
+    if (band.empty()) return sample;
+    auto middle = band.begin() + band.size() / 2; std::nth_element(band.begin(), middle, band.end()); sample.z = *middle;
+    if (band.size() < minimum_candidates ||
+        (require_ratio && static_cast<double>(band.size()) / candidates.size() < minimum_inlier_ratio)) return sample;
+    std::vector<double> deviations; deviations.reserve(band.size());
+    for (double z : band) deviations.push_back(std::abs(z - sample.z));
+    auto deviation_middle = deviations.begin() + deviations.size() / 2;
+    std::nth_element(deviations.begin(), deviation_middle, deviations.end()); sample.dispersion = *deviation_middle;
+    sample.valid = sample.dispersion <= maximum_dispersion; return sample;
+  };
+  if (floor_ready) { const auto tracked = fit_band(floor_z, false); if (tracked.valid) return tracked; }
+  const std::size_t lower_decile = candidates.size() / 10;
+  std::nth_element(candidates.begin(), candidates.begin() + lower_decile, candidates.end());
+  return fit_band(candidates[lower_decile], true);
+}
+
 class GroundEstimator {
  public:
   GroundEstimator(int initialization_frames, int floor_change_frames,

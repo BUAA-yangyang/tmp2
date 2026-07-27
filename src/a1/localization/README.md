@@ -69,6 +69,11 @@ localization_supervisor
     +--> /a1/localization/supervisor_status
 ```
 
+时间语义：传感器新鲜度、clock/odom/点云时间一致性和 estimator 健康门控使用
+ROS 时间；在Gazebo中即为`/clock`仿真时间。墙钟仅用于进程退出、重启关闭和外部
+测试watchdog。低实时因子会拉长墙钟耗时，但不应把仿真时间内连续的10 Hz输入误报为
+`INPUT_TIMEOUT`。
+
 `pointcloud_adapter` 和 `localization_map_manager` 在主 launch 生命周期内持续运行。
 FAST-LIO 与 `localization_pose_adapter` 组成受 supervisor 管理的 estimator 进程组，发生必须
 重新初始化的故障时整体停止并以新 generation 启动，避免多个 FAST-LIO 实例并存。

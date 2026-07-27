@@ -88,6 +88,7 @@ def main():
     parser.add_argument("--truth-topic", default="/ground_truth/base_w")
     parser.add_argument("--status-topic", default="/a1/localization/status")
     parser.add_argument("--max-time-difference", type=float, default=0.10)
+    parser.add_argument("--wall-timeout-factor", type=float, default=20.0)
     args = parser.parse_args(rospy.myargv()[1:])
 
     os.makedirs(args.output_dir, exist_ok=True)
@@ -105,9 +106,10 @@ def main():
                          values.get("reason", ""), values.get("results_valid", "")))
 
     rospy.Subscriber(args.status_topic, DiagnosticStatus, status_callback, queue_size=20)
-    deadline = time.monotonic() + args.duration
+    started_sim = rospy.Time.now()
+    started_wall = time.monotonic()
     rate = rospy.Rate(20)
-    while not rospy.is_shutdown() and time.monotonic() < deadline:
+    while not rospy.is_shutdown() and (rospy.Time.now() - started_sim).to_sec() < args.duration and time.monotonic() - started_wall < max(60.0, args.duration * args.wall_timeout_factor):
         rate.sleep()
 
     write_csv(os.path.join(args.output_dir, "localization_trajectory.csv"),
@@ -125,7 +127,8 @@ def main():
         "localization_samples": len(localization),
         "ground_truth_samples": len(truth),
         "status_samples": len(statuses),
-        "duration_wall_sec": args.duration,
+        "duration_sim_sec": (rospy.Time.now() - started_sim).to_sec(),
+        "duration_wall_sec": time.monotonic() - started_wall,
         "alignment": "initial planar pose (SE2)",
         "truth_usage": "acceptance-only; never republished or fed into localization",
     })

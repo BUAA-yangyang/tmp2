@@ -1,0 +1,10 @@
+limits:
+  linear: 0.30
+  angular: 0.40
+segments:
+  - {name: rotate_left, duration: 4.0, angular: 0.35}
+  - {name: rotate_right, duration: 4.0, angular: -0.35}
+  - {name: forward, duration: 8.0, linear: 0.25}
+  - {name: inspect_left, duration: 3.0, angular: 0.30}
+  - {name: inspect_right, duration: 3.0, angular: -0.30}
+  - {name: reverse_repeat, duration: 8.0, linear: -0.25}

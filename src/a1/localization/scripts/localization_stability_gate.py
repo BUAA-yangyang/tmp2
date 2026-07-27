@@ -42,17 +42,20 @@ def main():
         state["last"] = (stable, msg.pose.pose.position.z, math.degrees(roll),
                          math.degrees(pitch), speed, yaw_rate)
         if stable and state["since"] is None:
-            state["since"] = time.monotonic()
+            state["since"] = rospy.Time.now()
         elif not stable:
             state["since"] = None
 
     rospy.Subscriber(args.topic, Odometry, callback, queue_size=1)
-    deadline = time.monotonic() + args.timeout
+    started_sim = rospy.Time.now()
+    started_wall = time.monotonic()
     rate = rospy.Rate(20)
-    while not rospy.is_shutdown() and time.monotonic() < deadline:
-        if state["since"] is not None and time.monotonic() - state["since"] >= args.window:
+    while not rospy.is_shutdown() and time.monotonic() - started_wall < max(60.0, args.timeout * 20.0):
+        if state["since"] is not None and (rospy.Time.now() - state["since"]).to_sec() >= args.window:
             rospy.loginfo("localization stability gate passed")
             return 0
+        if time.monotonic() - started_wall >= max(60.0, args.timeout * 20.0):
+            break
         rate.sleep()
     rospy.logerr("localization stability gate failed: no stable %.1fs window", args.window)
     if state["last"]:

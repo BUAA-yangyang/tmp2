@@ -24,8 +24,10 @@ class CostmapTest(unittest.TestCase):
         cls.sup_pub = rospy.Publisher("/test/costmap/supervisor", DiagnosticStatus, queue_size=2, latch=True)
         cls.costmaps = []
         cls.mapping_clouds = []
+        cls.mapping_grids = []
         rospy.Subscriber("/test_costmap/costmap/costmap", OccupancyGrid, cls.costmaps.append)
         rospy.Subscriber("/test/costmap/mapping_cloud", PointCloud2, cls.mapping_clouds.append)
+        rospy.Subscriber("/test/costmap/mapping_grid", OccupancyGrid, cls.mapping_grids.append)
         cls.tf = tf2_ros.TransformBroadcaster()
         time.sleep(1.0)
 
@@ -71,9 +73,18 @@ class CostmapTest(unittest.TestCase):
 
     def test_marking_clearing_and_sensor_origin(self):
         self.publish_health()
+        marked_at=time.monotonic()
         self.wait_value(100, True, 8.0)
+        self.assertLess(time.monotonic()-marked_at,8.0)
+        cleared_at=time.monotonic()
         self.wait_value(0, False, 6.0)
+        self.assertLess(time.monotonic()-cleared_at,3.0)
         self.assertTrue(self.costmaps)
+        end=time.time()+4.0
+        while time.time()<end and (not self.mapping_grids or self.region_max(self.mapping_grids[-1],2.0,0.0)>0):
+            self.publish_frame(False);time.sleep(.1)
+        self.assertTrue(self.mapping_grids)
+        self.assertLessEqual(self.region_max(self.mapping_grids[-1],2.0,0.0),0,"temporary obstacle persisted in cumulative grid")
 
 
 if __name__ == "__main__":

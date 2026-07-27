@@ -1,0 +1,9 @@
+<launch>
+  <node pkg="a1_floor_mapping" type="floor_mapping_health_gate.py" name="mapping_gate" output="screen" required="true">
+    <param name="status_topic" value="/test/gate/status"/>
+    <param name="stop_topic" value="/test/gate/cmd_vel"/>
+    <param name="status_timeout" value="0.3"/>
+    <param name="expected_generation" value="7"/>
+  </node>
+  <test pkg="a1_floor_mapping" type="floor_mapping_health_gate_test.py" test-name="floor_mapping_health_gate" time-limit="15"/>
+</launch>

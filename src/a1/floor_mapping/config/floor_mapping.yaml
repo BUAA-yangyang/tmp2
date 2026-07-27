@@ -8,19 +8,33 @@ topics:
   occupancy_grid: /a1/floor_mapping/map
   status: /a1/floor_mapping/status
   diagnostics: /a1/floor_mapping/diagnostics
-timeouts: {tf_lookup: 0.10, input_degraded: 1.0, input_lost: 3.0, odom_max_age: 0.25}
+timeouts:
+  # Point clouds and the localization TF for the same sensor stamp travel
+  # through different processing chains. Queue clouds until their exact TF is
+  # available; ROS time bounds normal simulation progress and wall time bounds
+  # a frozen simulator/process.
+  tf_queue_ros: 0.30
+  tf_queue_wall: 2.0
+  tf_queue_poll_wall: 0.01
+  input_degraded: 1.0
+  input_lost: 3.0
+queues: {pointcloud: 10}
 recovery: {valid_frames: 3}
 ground:
   search_radius: 2.5
   min_relative_z: -0.8
   max_relative_z: 0.15
   minimum_candidates: 80
-  minimum_inlier_ratio: 0.35
+  # Applied to initialization and unsupported-new-floor candidates. Once a
+  # floor is ready, its local height band uses minimum_candidates as an
+  # absolute support threshold so nearby walls do not dilute floor coverage.
+  minimum_inlier_ratio: 0.20
   maximum_dispersion: 0.08
   initialization_frames: 6
   maximum_frame_delta: 0.08
   unsupported_floor_delta: 0.35
   floor_change_frames: 10
+  invalid_frame_tolerance: 3
 filter:
   self_clear_radius: 0.45
   minimum_range: 0.5
