@@ -11,6 +11,8 @@ from diagnostic_msgs.msg import DiagnosticStatus
 from nav_msgs.msg import Odometry
 from rosgraph_msgs.msg import Clock
 from sensor_msgs.msg import Imu, PointCloud2
+from sensor_msgs import point_cloud2
+from std_msgs.msg import Header
 
 
 class LocalizationPoseAdapterRuntimeTest(unittest.TestCase):
@@ -23,6 +25,9 @@ class LocalizationPoseAdapterRuntimeTest(unittest.TestCase):
         cls.cloud_pub = rospy.Publisher(
             "/a1_localization/fast_lio/cloud_registered_raw", PointCloud2, queue_size=1
         )
+        cls.map_pub = rospy.Publisher(
+            "/a1_localization/fast_lio/map_raw", PointCloud2, queue_size=1
+        )
         cls.sensor_cloud_pub = rospy.Publisher(
             "/a1_localization/livox_pointcloud", PointCloud2, queue_size=1
         )
@@ -33,7 +38,7 @@ class LocalizationPoseAdapterRuntimeTest(unittest.TestCase):
 
     def wait_for_connections(self):
         deadline = time.monotonic() + 5.0
-        publishers = [self.odom_pub, self.cloud_pub, self.sensor_cloud_pub,
+        publishers = [self.odom_pub, self.cloud_pub, self.map_pub, self.sensor_cloud_pub,
                       self.imu_pub, self.clock_pub]
         while not rospy.is_shutdown() and time.monotonic() < deadline:
             if all(pub.get_num_connections() for pub in publishers):
@@ -75,6 +80,7 @@ class LocalizationPoseAdapterRuntimeTest(unittest.TestCase):
         self.wait_for_connections()
         received_odom = []
         received_cloud = []
+        received_map = []
         received_status = []
         odom_sub = rospy.Subscriber(
             "/a1/localization/odom", Odometry, received_odom.append, queue_size=10
@@ -83,6 +89,9 @@ class LocalizationPoseAdapterRuntimeTest(unittest.TestCase):
             "/a1/localization/cloud_registered", PointCloud2,
             received_cloud.append, queue_size=10
         )
+        map_sub = rospy.Subscriber(
+            "/a1/localization/map", PointCloud2, received_map.append, queue_size=10
+        )
         status_sub = rospy.Subscriber(
             "/a1/localization/status", DiagnosticStatus,
             received_status.append, queue_size=20
@@ -90,6 +99,7 @@ class LocalizationPoseAdapterRuntimeTest(unittest.TestCase):
         deadline = time.monotonic() + 5.0
         while time.monotonic() < deadline:
             if odom_sub.get_num_connections() and cloud_sub.get_num_connections() \
+                    and map_sub.get_num_connections() \
                     and status_sub.get_num_connections():
                 break
             time.sleep(0.05)
@@ -110,16 +120,16 @@ class LocalizationPoseAdapterRuntimeTest(unittest.TestCase):
         self.assertTrue(received_odom, "standard odometry was not received after health gate")
         self.assertTrue(any(message.message == "TRACKING" for message in received_status))
 
-        cloud = PointCloud2()
-        cloud.header.stamp = tracking_stamp
-        cloud.header.frame_id = "camera_init"
-        cloud.height = 1
-        cloud.is_dense = True
+        cloud = point_cloud2.create_cloud_xyz32(
+            Header(stamp=tracking_stamp, frame_id="camera_init"), [(1.0, 0.0, 0.0)]
+        )
         self.cloud_pub.publish(cloud)
+        self.map_pub.publish(cloud)
         deadline = time.monotonic() + 2.0
         while time.monotonic() < deadline and not received_cloud:
             time.sleep(0.02)
         self.assertTrue(received_cloud, "registered cloud was not published while TRACKING")
+        self.assertTrue(received_map, "world-aligned map was not published while TRACKING")
 
         output = received_odom[-1]
         self.assertEqual(output.header.frame_id, "odom")
@@ -127,11 +137,18 @@ class LocalizationPoseAdapterRuntimeTest(unittest.TestCase):
         self.assertAlmostEqual(output.pose.pose.position.x, 1.25, places=6)
         self.assertAlmostEqual(output.pose.covariance[0], 0.04, places=6)
         self.assertEqual(output.twist.covariance[0], 1000000.0)
-        self.assertEqual(received_cloud[-1].header.frame_id, "odom")
+        self.assertEqual(received_cloud[-1].header.frame_id, "world")
+        self.assertEqual(received_map[-1].header.frame_id, "world")
         transform = self.tf_buffer.lookup_transform(
             "odom", "base", rospy.Time(0), rospy.Duration(2.0)
         )
         self.assertAlmostEqual(transform.transform.translation.x, 1.25, places=6)
+        world_base = self.tf_buffer.lookup_transform(
+            "world", "base", rospy.Time(0), rospy.Duration(2.0)
+        )
+        self.assertAlmostEqual(world_base.transform.translation.x, 0.0, places=5)
+        self.assertAlmostEqual(world_base.transform.translation.y, -3.2, places=5)
+        self.assertAlmostEqual(world_base.transform.translation.z, 0.6, places=5)
 
         # Stop all inputs: warn first, then LOST. No further public result may appear.
         odom_count = len(received_odom)
@@ -206,6 +223,7 @@ class LocalizationPoseAdapterRuntimeTest(unittest.TestCase):
 
         odom_sub.unregister()
         cloud_sub.unregister()
+        map_sub.unregister()
         status_sub.unregister()
 
 

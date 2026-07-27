@@ -100,9 +100,10 @@ FAST-LIO 与 `localization_pose_adapter` 组成受 supervisor 管理的 estimato
 | 接口 | 类型 | frame/语义 |
 |---|---|---|
 | `/a1/localization/odom` | `nav_msgs/Odometry` | `header.frame_id=odom`，`child_frame_id=base` |
-| `/a1/localization/cloud_registered` | `sensor_msgs/PointCloud2` | 注册到当前 generation 的 `odom` |
-| `/a1/localization/map` | `sensor_msgs/PointCloud2` | FAST-LIO 当前 ikd-tree 地图，frame 为 `odom` |
+| `/a1/localization/cloud_registered` | `sensor_msgs/PointCloud2` | 固定起点模式下转换到 `world` |
+| `/a1/localization/map` | `sensor_msgs/PointCloud2` | FAST-LIO 当前 ikd-tree 地图，固定起点模式下 frame 为 `world` |
 | `odom -> base` | TF | 与标准 odometry 同时间戳 |
+| `world -> odom` | TF | 由配置的固定出发位姿和首个有效 FAST-LIO 位姿建立 |
 | `/a1/localization/status` | `diagnostic_msgs/DiagnosticStatus` | 定位状态与结果有效性 |
 | `/a1/localization/diagnostics` | `diagnostic_msgs/DiagnosticArray` | 诊断聚合输出 |
 | `/a1/localization/supervisor_status` | `diagnostic_msgs/DiagnosticStatus` | estimator generation 和重启状态 |
@@ -134,10 +135,19 @@ FAST-LIO 内部使用 `camera_init -> body`。pose adapter 将其转换为项目
 odom -> base
 ```
 
+仿真默认启用固定出发点 world 对齐。适配器在每个 estimator generation 的首个有效
+FAST-LIO 位姿处建立固定的 `world -> odom`，使配置的初始 base 位姿为
+`(0.0, -3.2, 0.6, yaw=1.5708)`。该过程不订阅 Gazebo 真值；参数位于
+`config/frames.yaml`，必须与仿真出生参数同步。注册点云和在线地图的点坐标会实际转换到
+`world`，并以 `frame_id=world` 发布，而不是只改 frame 标签。
+
+固定出发点模式要求新 generation 只在机器人回到配置起点后建立。在任意位置直接重启
+estimator 会把当前位置误认为配置起点；这种情况下必须先执行机器人 reset 并等待稳定。
+
 当前 A1 URDF 中 `base -> trunk -> imu_link` 为固定等价关系，因此配置的 `imu -> base` 变换
 为单位变换。若 URDF 改变，必须同步审查 `config/frames.yaml`。
 
-这里的 `odom` 是每个 FAST-LIO estimator generation 启动时建立的局部连续坐标：
+这里的 `odom` 仍是每个 FAST-LIO estimator generation 启动时建立的局部连续坐标：
 
 - 同一 generation 内应保持连续；
 - 受控重新初始化后会建立新原点；
@@ -293,13 +303,13 @@ map_product/
 
 - localization 为 `TRACKING` 且 `results_valid=true`；
 - 已收到有效在线地图；
-- 地图 frame 为 `odom`；
+- 固定起点模式下地图 frame 为 `world`；
 - 地图不超过配置的时效；
 - 点数达到最小值；
 - XYZI 全部有限；
 - PCD 写入后能够重新读取并保持点数一致。
 
-元数据包含点数、边界、分辨率、输入话题、外参、版本和 SHA-256。保存成功表示文件和基础
+元数据包含点数、边界、分辨率、输入话题、外参、固定世界起点、版本和 SHA-256。保存成功表示文件和基础
 数据契约有效，不表示地图几何必然无漂移或无重影。
 
 `overwrite=true` 当前未实现原子替换；重复保存应使用新的 `map_id`。

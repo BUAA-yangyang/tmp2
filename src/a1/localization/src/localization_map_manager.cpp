@@ -110,6 +110,7 @@ public:
         pnh_.param("localization_version", localization_version_, std::string("unknown"));
         pnh_.param("fast_lio_version", fast_lio_version_, std::string("unknown"));
         pnh_.param("scene_manifest_id", scene_manifest_id_, std::string("unspecified"));
+        pnh_.param("alignment_mode", alignment_mode_, std::string("local_only"));
         pnh_.param("input_pointcloud_topic", pointcloud_topic_, std::string());
         pnh_.param("input_imu_topic", imu_topic_, std::string());
         pnh_.param("map_resolution", map_resolution_, 0.0);
@@ -218,6 +219,7 @@ private:
                  << "\nlocalization_version: " << localization_version_
                  << "\nfast_lio_version: " << fast_lio_version_
                  << "\nscene_manifest_id: " << scene_manifest_id_
+                 << "\nalignment_mode: " << alignment_mode_
                  << "\nframe: " << expected_frame_ << "\npoint_count: " << latest_map_->size()
                  << "\nresolution: " << map_resolution_
                  << "\nbounds:\n  min: [" << minimum.x << ", " << minimum.y << ", " << minimum.z
@@ -227,6 +229,8 @@ private:
                  << "\ninput_imu_topic: " << imu_topic_ << "\n";
         writeArrayParameter(metadata, "extrinsic_translation");
         writeArrayParameter(metadata, "extrinsic_rotation");
+        writeArrayParameter(metadata, "configured_world_start_translation");
+        writeArrayParameter(metadata, "configured_world_start_rotation_xyzw");
         metadata.close();
         if (!metadata) return cleanupFail(temporary_directory, "failed to finish metadata", response);
         if (rename(temporary_directory.c_str(), final_directory.c_str()) != 0)
@@ -279,6 +283,7 @@ private:
     pcl::PointCloud<pcl::PointXYZI>::Ptr latest_map_;
     ros::Time latest_stamp_;
     std::string input_map_topic_, status_topic_, save_service_, expected_frame_, output_root_, map_id_;
+    std::string alignment_mode_;
     std::string pointcloud_topic_, imu_topic_, localization_version_, fast_lio_version_;
     std::string scene_manifest_id_;
     bool tracking_{false}, overwrite_{false};
