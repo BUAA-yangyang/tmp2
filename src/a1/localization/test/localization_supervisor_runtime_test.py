@@ -50,15 +50,22 @@ class SupervisorRuntimeTest(unittest.TestCase):
 
     def test_three_controlled_reinitializations(self):
         self.wait_generation(1)
+        connection_deadline = time.monotonic() + 5.0
+        while time.monotonic() < connection_deadline and not self.health_pub.get_num_connections():
+            time.sleep(0.05)
+        self.assertTrue(self.health_pub.get_num_connections(),
+                        "supervisor did not subscribe to health status")
         for expected_generation in range(2, 5):
             fault = DiagnosticStatus()
             fault.values = [KeyValue("reinitialization_required", "true"),
                             KeyValue("reason", "CLOCK_TIME_ROLLBACK")]
-            self.health_pub.publish(fault)
             # Pre-fault samples must never satisfy the recovery gate. This
             # specifically protects reset cases where a sensor plugin stops.
-            fault_deadline = time.monotonic() + 2.0
+            # The managed roslaunch is allowed to consume shutdown_timeout
+            # before the supervisor can publish WAITING_FOR_INPUTS.
+            fault_deadline = time.monotonic() + 8.0
             while time.monotonic() < fault_deadline:
+                self.health_pub.publish(fault)
                 if self.statuses and self.statuses[-1].message == "WAITING_FOR_INPUTS":
                     break
                 time.sleep(0.05)

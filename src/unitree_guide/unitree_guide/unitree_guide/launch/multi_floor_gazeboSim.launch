@@ -61,6 +61,9 @@
 
     <node if="$(arg enable_referee_odom)" pkg="unitree_guide" type="state_from_gazebo" name="state_from_gazebo" args="0 0 0 0 0 0" output="screen">
         <param name="robot_name" value="$(arg rname)" />
+        <!-- Referee odometry is validation-only. The localization stack owns
+             the formal odom -> base TF and must remain its sole publisher. -->
+        <param name="publish_tf" value="false" />
     </node>
 
     <rosparam file="$(arg dollar)$(arg robot_path)/config/robot_control.yaml" command="load"/>

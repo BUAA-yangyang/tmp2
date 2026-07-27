@@ -22,7 +22,8 @@ class LocalizationSupervisor:
         self.restart_reason = "INITIAL_START"
         self.restart_requested_at = None
         self.fresh_since = None
-        self.last_input = {"pointcloud": None, "imu": None, "clock": None}
+        self.last_input_stamp = {"pointcloud": None, "imu": None, "clock": None}
+        self.last_input_wall = {"pointcloud": None, "imu": None, "clock": None}
         self.launch = rospy.get_param("~managed_launch")
         self.automatic = rospy.get_param("~automatic_reinitialize", True)
         self.monitor_clock = rospy.get_param("~monitor_clock", True)
@@ -37,21 +38,22 @@ class LocalizationSupervisor:
         rospy.Subscriber(rospy.get_param("~status_topic"), DiagnosticStatus,
                          self.health_callback, queue_size=10)
         rospy.Subscriber(rospy.get_param("~pointcloud_topic"), PointCloud2,
-                         lambda _: self.observe("pointcloud"), queue_size=1)
+                         lambda message: self.observe("pointcloud", message.header.stamp), queue_size=1)
         rospy.Subscriber(rospy.get_param("~imu_topic"), Imu,
-                         lambda _: self.observe("imu"), queue_size=1)
+                         lambda message: self.observe("imu", message.header.stamp), queue_size=1)
         if self.monitor_clock:
             rospy.Subscriber(rospy.get_param("~clock_topic"), Clock,
-                             lambda _: self.observe("clock"), queue_size=1)
+                             lambda message: self.observe("clock", message.clock), queue_size=1)
         rospy.Service(rospy.get_param("~reinitialize_service"), Trigger,
                       self.manual_restart)
         self.timer = rospy.Timer(rospy.Duration(0.1), self.tick)
         rospy.on_shutdown(self.shutdown)
         self.start_estimator("INITIAL_START")
 
-    def observe(self, name):
+    def observe(self, name, stamp):
         with self.lock:
-            self.last_input[name] = time.monotonic()
+            self.last_input_stamp[name] = stamp
+            self.last_input_wall[name] = time.monotonic()
 
     def health_callback(self, status):
         values = {item.key: item.value for item in status.values}
@@ -79,12 +81,15 @@ class LocalizationSupervisor:
             self.fresh_since = None
         return TriggerResponse(True, "controlled reinitialization requested")
 
-    def inputs_fresh(self, now):
+    def inputs_fresh(self, now_ros):
         names = ["pointcloud", "imu"] + (["clock"] if self.monitor_clock else [])
-        return all(self.last_input[name] is not None and
+        return all(self.last_input_stamp[name] is not None and
+                   not self.last_input_stamp[name].is_zero() and
+                   not now_ros.is_zero() and
                    (self.restart_requested_at is None or
-                    self.last_input[name] >= self.restart_requested_at) and
-                   now - self.last_input[name] <= self.input_timeout for name in names)
+                    self.last_input_wall[name] >= self.restart_requested_at) and
+                   0.0 <= (now_ros - self.last_input_stamp[name]).to_sec() <= self.input_timeout
+                   for name in names)
 
     def stop_estimator(self):
         process = self.process
@@ -137,6 +142,7 @@ class LocalizationSupervisor:
     def tick(self, _event):
         with self.lock:
             now = time.monotonic()
+            now_ros = rospy.Time.now()
             if self.process is not None and self.process.poll() is not None:
                 code = self.process.returncode
                 self.process = None
@@ -154,13 +160,13 @@ class LocalizationSupervisor:
             if not self.automatic and self.restart_reason != "MANUAL_REQUEST":
                 self.publish("WAITING_FOR_MANUAL_REINITIALIZE", self.restart_reason)
                 return
-            if not self.inputs_fresh(now):
+            if not self.inputs_fresh(now_ros):
                 self.fresh_since = None
                 self.publish("WAITING_FOR_INPUTS", self.restart_reason)
                 return
             if self.fresh_since is None:
-                self.fresh_since = now
-            if now - self.fresh_since < self.settle_time:
+                self.fresh_since = now_ros
+            if now_ros < self.fresh_since or (now_ros - self.fresh_since).to_sec() < self.settle_time:
                 self.publish("WAITING_FOR_INPUT_SETTLING", self.restart_reason)
                 return
             reason = self.restart_reason

@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -95,8 +96,8 @@ public:
                                            &LocalizationPoseAdapter::clockCallback, this);
             }
         }
-        health_timer_ = nh_.createWallTimer(ros::WallDuration(0.1),
-                                             &LocalizationPoseAdapter::healthTimer, this);
+        health_timer_ = nh_.createTimer(ros::Duration(0.1),
+                                        &LocalizationPoseAdapter::healthTimer, this);
         setState(health_enabled_ ? State::WAITING_FOR_SENSORS : State::TRACKING,
                  health_enabled_ ? "WAITING_FOR_INPUTS" : "HEALTH_GATE_DISABLED");
     }
@@ -221,11 +222,18 @@ private:
 
     double age(const InputWatch& watch) const
     {
+        const ros::Time now = ros::Time::now();
+        if (!watch.received || watch.stamp.isZero() || now.isZero()) return INFINITY;
+        return std::max(0.0, (now - watch.stamp).toSec());
+    }
+
+    double wallAge(const InputWatch& watch) const
+    {
         if (!watch.received) return INFINITY;
         return (ros::WallTime::now() - watch.wall_time).toSec();
     }
 
-    void healthTimer(const ros::WallTimerEvent&)
+    void healthTimer(const ros::TimerEvent&)
     {
         if (!health_enabled_)
         {
@@ -356,8 +364,9 @@ private:
         output.twist.covariance.fill(0.0);
         for (std::size_t index = 0; index < 6; ++index)
             output.twist.covariance[index * 6 + index] = unknown_twist_variance_;
-        odom_pub_.publish(output);
-
+        // Publish the transform first. Consumers commonly receive odometry and
+        // immediately query TF for the same stamp; reversing this order creates
+        // a deterministic transient lookup race even within this process.
         if (publish_tf_)
         {
             geometry_msgs::TransformStamped transform;
@@ -367,6 +376,7 @@ private:
             transform.transform = tf2::toMsg(odom_to_base);
             tf_broadcaster_.sendTransform(transform);
         }
+        odom_pub_.publish(output);
     }
 
     void registeredCloudCallback(const sensor_msgs::PointCloud2::ConstPtr& input)
@@ -441,6 +451,11 @@ private:
         status.values.push_back(keyValue("odom_age_sec", std::to_string(age(odom_watch_))));
         if (monitor_clock_)
             status.values.push_back(keyValue("clock_age_sec", std::to_string(age(clock_watch_))));
+        status.values.push_back(keyValue("pointcloud_wall_heartbeat_age_sec", std::to_string(wallAge(pointcloud_watch_))));
+        status.values.push_back(keyValue("imu_wall_heartbeat_age_sec", std::to_string(wallAge(imu_watch_))));
+        status.values.push_back(keyValue("odom_wall_heartbeat_age_sec", std::to_string(wallAge(odom_watch_))));
+        if (monitor_clock_)
+            status.values.push_back(keyValue("clock_wall_heartbeat_age_sec", std::to_string(wallAge(clock_watch_))));
         status_pub_.publish(status);
         diagnostic_msgs::DiagnosticArray array;
         array.header.stamp = ros::Time::now();
@@ -453,7 +468,7 @@ private:
     ros::Subscriber odom_sub_, registered_cloud_sub_, map_sub_;
     ros::Subscriber pointcloud_health_sub_, imu_health_sub_, clock_sub_;
     ros::Publisher odom_pub_, registered_cloud_pub_, map_pub_, status_pub_, diagnostics_pub_;
-    ros::WallTimer health_timer_;
+    ros::Timer health_timer_;
     tf2_ros::TransformBroadcaster tf_broadcaster_;
     tf2::Transform imu_to_base_, previous_pose_;
     InputWatch pointcloud_watch_, imu_watch_, odom_watch_, clock_watch_;
