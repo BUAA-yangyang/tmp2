@@ -3,7 +3,7 @@
     <rosparam command="load" file="$(find a1_floor_mapping)/config/floor_mapping.yaml"/>
     <param name="topics/pointcloud" value="/test/costmap/cloud"/><param name="topics/odom" value="/test/costmap/odom"/>
     <param name="topics/localization_status" value="/test/costmap/localization"/><param name="topics/supervisor_status" value="/test/costmap/supervisor"/>
-    <param name="topics/obstacle_cloud" value="/test/costmap/mapping_cloud"/><param name="topics/occupancy_grid" value="/test/costmap/mapping_grid"/>
+    <param name="topics/obstacle_cloud" value="/test/costmap/mapping_cloud"/><param name="topics/clearing_cloud" value="/test/costmap/clearing_cloud"/><param name="topics/occupancy_grid" value="/test/costmap/mapping_grid"/>
     <param name="topics/status" value="/test/costmap/status"/><param name="topics/diagnostics" value="/test/costmap/diagnostics"/>
     <param name="services/reset" value="/test/costmap/reset"/><param name="ground/initialization_frames" value="3"/>
     <param name="ground/minimum_candidates" value="20"/><param name="recovery/valid_frames" value="1"/>

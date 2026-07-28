@@ -4,9 +4,16 @@ topics:
   odom: /a1/localization/odom
   localization_status: /a1/localization/status
   supervisor_status: /a1/localization/supervisor_status
+  # Pure obstacle returns used for marking and door/wall perception.
   obstacle_cloud: /a1/floor_mapping/obstacle_cloud
+  # Ground + obstacle returns retaining the LiDAR-origin ray semantics for
+  # costmap clearing. It must not be used as a wall-detector input.
+  clearing_cloud: /a1/floor_mapping/clearing_cloud
   occupancy_grid: /a1/floor_mapping/map
+  walls: /a1/floor_mapping/walls
+  doorways: /a1/floor_mapping/doorways
   status: /a1/floor_mapping/status
+  structure_status: /a1/floor_mapping/structure_status
   diagnostics: /a1/floor_mapping/diagnostics
 timeouts:
   # Point clouds and the localization TF for the same sensor stamp travel
@@ -51,4 +58,35 @@ grid:
   p_free: 0.35
   p_occupied: 0.80
   minimum_observations: 2
+door_wall:
+  enabled: true
+  extraction_cell_size: 0.08
+  line_fit_error: 0.08
+  max_segment_gap: 0.24
+  minimum_wall_length: 0.80
+  minimum_wall_height: 0.60
+  minimum_wall_support: 12
+  max_ransac_iterations: 360
+  max_segments_per_frame: 24
+  wall_track_distance: 0.15
+  wall_track_angle_rad: 0.15
+  wall_stable_frames: 3
+  max_wall_misses: 6
+  collinear_distance: 0.12
+  opening_min_width: 1.00
+  opening_max_width: 2.20
+  opening_stable_frames: 3
+  doorway_match_distance: 0.30
+  max_doorway_misses: 45
+  state_min_height: 0.25
+  state_band_depth: 0.14
+  free_ray_clearance: 0.15
+  state_bins: 8
+  minimum_state_bins: 3
+  open_fraction: 0.50
+  closed_fraction: 0.65
+  state_stable_frames: 3
+  robot_radius: 0.35
+  traversable_margin: 0.15
+  approach_offset: 0.70
 services: {reset: /a1/floor_mapping/reset}
