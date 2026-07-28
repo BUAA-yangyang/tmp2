@@ -2,8 +2,9 @@
   <!-- ============================================================
        里程碑1 联调用 launch（dev-only，不进正式启动链）
 
-       前提：auto.sh 已经在跑，且已按 2 → 6 把 junior_ctrl 切到 RL /cmd_vel 模式
-             （必须在终端看到 "Entered RL /cmd_vel mode." 才算切成功）
+       前提：仿真已用 PUBLISH_REFEREE_TF=1 启动，并按 2 → 5 把 junior_ctrl
+             切到官方 move_base 经典步态速度模式
+             （必须在终端看到 "Switched from fixed stand to move_base"）
 
        这个 launch 干三件 dev 期才需要的事：
          1. 起 a1_navigation（move_base，输出 /cmd_vel_nav）
@@ -11,15 +12,15 @@
          3. 障碍源：默认用假障碍，真实传感器修好后换 obstacle_cloud_topic
 
        定位说明：本 launch 不起任何定位节点。TF odom→base 由仿真自带的
-       state_from_gazebo 提供（auto.sh 的 ENABLE_REFEREE_ODOM=1 默认开）。
+       state_from_gazebo 提供（ENABLE_REFEREE_ODOM=1 且 PUBLISH_REFEREE_TF=1）。
        它派生自 Gazebo 真值，是 **dev-only 替身**，后期换成 a1_localization 的 FAST-LIO2。
        因为两者都以标准 TF 对外，替换时本模块配置无需改动。
        ============================================================ -->
 
   <!-- 障碍源：
        fake      = 假障碍发布器（默认，不依赖任何传感器）
-       realsense = /real_sense/depth/points（注意：软渲染下会拖垮实时因子把狗搞趴）
-       livox     = /livox/Pointcloud2（注意：Livox 插件当前会崩 gzserver） -->
+       realsense = /real_sense/depth/points（软渲染下可能显著降低实时因子）
+       livox     = /scan 经盲区过滤后的 /a1_nav/obstacle_cloud -->
   <arg name="obstacle_source" default="fake"/>
   <arg name="use_rviz" default="true"/>
 
@@ -71,6 +72,10 @@
                   else '/a1_nav/obstacle_cloud')"/>
     <arg name="obstacle_cloud_type" value="PointCloud2"/>
     <arg name="cmd_vel_topic" value="/cmd_vel_nav"/>
+    <!-- Gazebo 的瞬时 base twist 含摆腿高频角速度（实测可到约 1.5rad/s）。
+         提高 DWA 的动态减速窗口，防止它因“当前速度来不及降到配置上限”
+         而采样出超过 max_vel_theta 的命令；最终输出仍由 guard 限加速度。 -->
+    <arg name="dwa_acc_lim_theta" value="10.0"/>
   </include>
 
   <!-- ===== 正式速度出口：a1_cmd_mux ===== -->

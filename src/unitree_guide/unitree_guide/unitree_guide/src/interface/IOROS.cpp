@@ -90,12 +90,37 @@ bool IOROS::hasFullStateFeedback() const{
 
 void IOROS::sendCmd(const LowlevelCmd *lowCmd){
     for(int i(0); i < 12; ++i){
-        _lowCmd.motorCmd[i].mode = lowCmd->motorCmd[i].mode;
-        _lowCmd.motorCmd[i].q = lowCmd->motorCmd[i].q;
-        _lowCmd.motorCmd[i].dq = lowCmd->motorCmd[i].dq;
-        _lowCmd.motorCmd[i].tau = lowCmd->motorCmd[i].tau;
-        _lowCmd.motorCmd[i].Kd = lowCmd->motorCmd[i].Kd;
-        _lowCmd.motorCmd[i].Kp = lowCmd->motorCmd[i].Kp;
+        const auto &source = lowCmd->motorCmd[i];
+        if(!std::isfinite(source.q) ||
+           !std::isfinite(source.dq) ||
+           !std::isfinite(source.tau) ||
+           !std::isfinite(source.Kp) ||
+           !std::isfinite(source.Kd)){
+            ROS_ERROR_STREAM_THROTTLE(
+                1.0,
+                "Blocking non-finite motor command at joint index " << i
+                << ": q=" << source.q
+                << " dq=" << source.dq
+                << " tau=" << source.tau
+                << " Kp=" << source.Kp
+                << " Kd=" << source.Kd);
+            _lowCmd.motorCmd[i].mode = 10;
+            _lowCmd.motorCmd[i].q =
+                std::isfinite(_lowState.motorState[i].q)
+                    ? _lowState.motorState[i].q
+                    : 0.0f;
+            _lowCmd.motorCmd[i].dq = 0.0f;
+            _lowCmd.motorCmd[i].tau = 0.0f;
+            _lowCmd.motorCmd[i].Kp = 0.0f;
+            _lowCmd.motorCmd[i].Kd = 2.0f;
+            continue;
+        }
+        _lowCmd.motorCmd[i].mode = source.mode;
+        _lowCmd.motorCmd[i].q = source.q;
+        _lowCmd.motorCmd[i].dq = source.dq;
+        _lowCmd.motorCmd[i].tau = source.tau;
+        _lowCmd.motorCmd[i].Kd = source.Kd;
+        _lowCmd.motorCmd[i].Kp = source.Kp;
     }
     for(int m(0); m < 12; ++m){
         _servo_pub[m].publish(_lowCmd.motorCmd[m]);

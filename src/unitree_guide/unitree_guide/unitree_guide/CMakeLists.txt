@@ -35,7 +35,7 @@ set(CATKIN_MAKE ON)
 set(SIMULATION ON)
 set(REAL_ROBOT OFF)
 set(DEBUG OFF)
-set(MOVE_BASE OFF)
+option(MOVE_BASE "Build the Unitree move_base velocity-control FSM state" ON)
 
 
 if(NOT DEFINED ROBOT_TYPE)

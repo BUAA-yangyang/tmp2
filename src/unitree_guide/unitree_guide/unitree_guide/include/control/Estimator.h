@@ -4,6 +4,7 @@
 #ifndef ESTIMATOR_H
 #define ESTIMATOR_H
 
+#include <memory>
 #include <vector>
 #include "common/unitreeRobot.h"
 #include "common/LowPassFilter.h"
@@ -99,10 +100,11 @@ private:
 #ifdef COMPILE_WITH_MOVE_BASE
     ros::NodeHandle _nh;
     ros::Publisher _pub;
-    tf::TransformBroadcaster _odomBroadcaster;
+    std::unique_ptr<tf::TransformBroadcaster> _odomBroadcaster;
     ros::Time _currentTime;
     geometry_msgs::TransformStamped _odomTF;
     nav_msgs::Odometry _odomMsg;
+    bool _publishOdomTf = false;
     int _count = 0;
     double _pubFreq = 10;
 

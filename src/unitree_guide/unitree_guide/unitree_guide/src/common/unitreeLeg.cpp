@@ -2,6 +2,7 @@
  Copyright (c) 2020-2023, Unitree Robotics.Co.Ltd. All rights reserved.
 ***********************************************************************/
 #include "common/unitreeLeg.h"
+#include <algorithm>
 #include <iostream>
 
 
@@ -75,7 +76,7 @@ Vec3 QuadrupedLeg::calcQ(Vec3 pEe, FrameType frame){
     float q1, q2, q3;
     Vec3 qResult;
     float px, py, pz;
-    float b2y, b3z, b4z, a, b, c;
+    float b2y, b3z, b4z, a, b;
 
     px = pEe2H(0);
     py = pEe2H(1);
@@ -85,8 +86,13 @@ Vec3 QuadrupedLeg::calcQ(Vec3 pEe, FrameType frame){
     b3z = -_hipLinkLength;
     b4z = -_kneeLinkLength;
     a = _abadLinkLength;
-    c = sqrt(pow(px, 2) + pow(py, 2) + pow(pz, 2)); // whole length
-    b = sqrt(pow(c, 2) - pow(a, 2)); // distance between shoulder and footpoint
+    const float legRadiusSquared =
+        px * px + py * py + pz * pz;
+    // Targets can land a few millimetres inside the abad link's exact
+    // workspace during an FSM/gait transition.  Project that numerical
+    // overshoot onto the reachable boundary instead of passing a negative
+    // radicand downstream and generating NaN joint commands.
+    b = sqrt(std::max(0.0f, legRadiusSquared - a * a));
 
     q1 = q1_ik(py, pz, b2y);
     q3 = q3_ik(b3z, b4z, b);
@@ -148,7 +154,9 @@ Mat3 QuadrupedLeg::calcJaco(Vec3 q){
 
 float QuadrupedLeg::q1_ik(float py, float pz, float l1){
     float q1;
-    float L = sqrt(pow(py,2)+pow(pz,2)-pow(l1,2));
+    const float lateralReachSquared =
+        py * py + pz * pz - l1 * l1;
+    const float L = sqrt(std::max(0.0f, lateralReachSquared));
     q1 = atan2(pz*l1+py*L, py*l1-pz*L);
     return q1;
 }
