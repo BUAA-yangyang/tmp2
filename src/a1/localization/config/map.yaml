@@ -1,7 +1,7 @@
 input_map_topic: /a1/localization/map
 status_topic: /a1/localization/status
 save_service: /a1/localization/save_map
-expected_frame: odom
+expected_frame: world
 map_timeout: 5.0
 minimum_points: 10
 
@@ -14,6 +14,9 @@ product_version: 1
 localization_version: 0.1.0
 fast_lio_version: FAST_LIO-local-adapter
 scene_manifest_id: unspecified
+alignment_mode: fixed_start
+configured_world_start_translation: [0.0, -3.2, 0.6]
+configured_world_start_rotation_xyzw: [0.0, 0.0, 0.7071081, 0.7071055]
 input_pointcloud_topic: /a1_localization/livox_pointcloud
 input_imu_topic: /trunk_imu
 map_resolution: 0.3
