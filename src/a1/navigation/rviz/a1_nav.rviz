@@ -70,6 +70,13 @@ Visualization Manager:
       Color Scheme: costmap
       Draw Behind: true
       Alpha: 0.5
+    - Class: rviz/Map
+      Name: PersistentFloorMap
+      Enabled: true
+      Topic: /a1/floor_mapping/map
+      Color Scheme: map
+      Draw Behind: true
+      Alpha: 0.75
     # 局部代价地图
     - Class: rviz/Map
       Name: LocalCostmap
@@ -100,6 +107,33 @@ Visualization Manager:
       Enabled: true
       Topic: /move_base/global_costmap/footprint
       Color: 255; 255; 0
+      Alpha: 1
+    - Class: rviz/MarkerArray
+      Name: ExplorationFrontiers
+      Enabled: true
+      Marker Topic: /a1/exploration/frontiers
+      Queue Size: 2
+    - Class: rviz/Marker
+      Name: SingleFloorExplorationScope
+      Enabled: true
+      Marker Topic: /a1/exploration/scope
+      Queue Size: 2
+    - Class: rviz/Marker
+      Name: ExplorationTarget
+      Enabled: true
+      Marker Topic: /a1/exploration/selected_target
+      Queue Size: 2
+    - Class: rviz/Marker
+      Name: FailedExplorationTargets
+      Enabled: true
+      Marker Topic: /a1/exploration/failed_targets
+      Queue Size: 2
+    - Class: rviz/Path
+      Name: ActualExplorationTrajectory
+      Enabled: true
+      Topic: /a1/exploration/trajectory
+      Color: 255; 80; 255
+      Line Style: Lines
       Alpha: 1
   Tools:
     - Class: rviz/MoveCamera

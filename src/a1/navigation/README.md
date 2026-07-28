@@ -144,6 +144,25 @@ roslaunch a1_navigation navigation.launch
 | `cmd_vel_topic` | `/cmd_vel_nav` | 导航速度输出 |
 | `odom_topic` | `/Odometry_gazebo` | DWA 速度输入，正式版必须替换 |
 
+### 累计楼层地图模式
+
+当 `/a1/floor_mapping/status` 为 `MAPPING` 且 map/cloud 均有效时，可启动：
+
+```bash
+roslaunch a1_navigation navigation_floor_mapping.launch
+```
+
+该入口保持标准 `/move_base` Action 和 `/cmd_vel_nav` 输出不变，但：
+
+- global costmap 使用 `/a1/floor_mapping/map` 的 static layer，不再滚动；
+- GlobalPlanner 禁止路径穿越未知区，frontier 目标必须位于已知自由区；
+- 地面和障碍共用的 mapping cloud 以 marking/clearing 两个 observation
+  source 接入，保留真实 Livox 传感器原点；
+- map 的 generation/session 有效性由 `a1_exploration` 强制门控；move_base
+  不应脱离上层健康门独自接收自动探索目标。
+
+原 `navigation.launch` 的已验证无地图滚动窗口模式仍是默认，未被替换。
+
 ## 速度与安全链
 
 `State_move_base` 复用 Unitree 的 `State_Trotting` 经典步态，不使用当前无法有效行走的 RL
