@@ -106,6 +106,15 @@ def main():
                          values.get("reason", ""), values.get("results_valid", "")))
 
     rospy.Subscriber(args.status_topic, DiagnosticStatus, status_callback, queue_size=20)
+    # A fresh process may observe zero before its first /clock callback. Starting
+    # the duration window there makes an active simulation appear to finish
+    # immediately when time jumps to the current value.
+    clock_deadline = time.monotonic() + 10.0
+    while rospy.Time.now().is_zero() and time.monotonic() < clock_deadline:
+        time.sleep(0.01)
+    if rospy.Time.now().is_zero():
+        rospy.logerr("simulation clock did not become available")
+        return 2
     started_sim = rospy.Time.now()
     started_wall = time.monotonic()
     rate = rospy.Rate(20)

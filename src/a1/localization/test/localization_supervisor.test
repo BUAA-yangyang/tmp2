@@ -9,8 +9,12 @@
     <param name="reinitialize_service" value="/test/localization/reinitialize"/>
     <param name="supervisor_status_topic" value="/test/localization/supervisor_status"/>
     <param name="automatic_reinitialize" value="true"/>
+    <param name="max_automatic_restarts_per_reason" value="1"/>
+    <param name="require_controller_ready" value="false"/>
     <param name="input_timeout" value="1.0"/>
     <param name="settle_time" value="0.2"/>
+    <param name="imu_stability_window" value="0.2"/>
+    <param name="imu_min_samples" value="5"/>
     <param name="shutdown_timeout" value="3.0"/>
   </node>
   <test test-name="localization_supervisor_runtime_test"

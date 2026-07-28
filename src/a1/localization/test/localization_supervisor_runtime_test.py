@@ -44,18 +44,25 @@ class SupervisorRuntimeTest(unittest.TestCase):
         cloud.header.stamp = stamp
         imu = Imu()
         imu.header.stamp = stamp
+        imu.linear_acceleration.z = 9.81
         self.cloud_pub.publish(cloud)
         self.imu_pub.publish(imu)
         self.clock_pub.publish(Clock(clock=stamp))
 
-    def test_three_controlled_reinitializations(self):
+    def test_controlled_reinitialization_and_restart_limit(self):
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            self.publish_inputs()
+            if self.statuses and self.statuses[-1].message == "RUNNING":
+                break
+            time.sleep(0.02)
         self.wait_generation(1)
         connection_deadline = time.monotonic() + 5.0
         while time.monotonic() < connection_deadline and not self.health_pub.get_num_connections():
             time.sleep(0.05)
         self.assertTrue(self.health_pub.get_num_connections(),
                         "supervisor did not subscribe to health status")
-        for expected_generation in range(2, 5):
+        for expected_generation in range(2, 4):
             fault = DiagnosticStatus()
             fault.values = [KeyValue("reinitialization_required", "true"),
                             KeyValue("reason", "CLOCK_TIME_ROLLBACK")]
@@ -66,21 +73,34 @@ class SupervisorRuntimeTest(unittest.TestCase):
             fault_deadline = time.monotonic() + 8.0
             while time.monotonic() < fault_deadline:
                 self.health_pub.publish(fault)
-                if self.statuses and self.statuses[-1].message == "WAITING_FOR_INPUTS":
+                if self.statuses and self.statuses[-1].message in (
+                        "WAITING_FOR_INPUTS", "RESTART_LIMIT_REACHED"):
                     break
                 time.sleep(0.05)
             self.assertLess(int(self.values(self.statuses[-1])["generation"]),
                             expected_generation)
-            self.assertEqual(self.statuses[-1].message, "WAITING_FOR_INPUTS")
-            deadline = time.monotonic() + 6.0
+            if expected_generation == 3:
+                self.assertEqual(self.statuses[-1].message, "RESTART_LIMIT_REACHED")
+            else:
+                self.assertEqual(self.statuses[-1].message, "WAITING_FOR_INPUTS")
+            deadline = time.monotonic() + 12.0
             while time.monotonic() < deadline:
                 self.publish_inputs()
-                if self.statuses and self.statuses[-1].message in (
-                        "WAITING_FOR_INPUT_SETTLING", "RUNNING"):
-                    if int(self.values(self.statuses[-1])["generation"]) >= expected_generation:
-                        break
-                time.sleep(0.05)
-            self.wait_generation(expected_generation)
+                if (expected_generation == 3 and self.statuses and
+                        self.statuses[-1].message == "RESTART_LIMIT_REACHED"):
+                    break
+                if (self.statuses and self.statuses[-1].message == "RUNNING" and
+                        int(self.values(self.statuses[-1])["generation"]) >=
+                        expected_generation):
+                    break
+                time.sleep(0.02)
+            if expected_generation == 3:
+                self.assertEqual(self.statuses[-1].message, "RESTART_LIMIT_REACHED")
+                self.assertEqual(int(self.values(self.statuses[-1])["generation"]), 2)
+                self.assertEqual(self.values(self.statuses[-1])[
+                    "same_reason_restart_count"], "2")
+                break
+            self.wait_generation(expected_generation, timeout=1.0)
             node_deadline = time.monotonic() + 5.0
             estimator_nodes = []
             while time.monotonic() < node_deadline:
