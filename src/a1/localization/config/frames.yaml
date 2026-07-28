@@ -56,3 +56,13 @@ clock_lost_timeout: 3.0
 initialization_samples: 5
 max_translation_jump: 1.0
 max_rotation_jump: 1.0
+# Detect the observed FAST-LIO failure mode: continuous horizontal motion while
+# the controller declares fixed stand, or while RL receives a fresh zero command.
+stationary_error_check_enabled: true
+stationary_error_requires_reinitialization: true
+controller_state_topic: /a1/controller/state
+cmd_vel_topic: /cmd_vel
+stationary_error_window: 1.0
+stationary_translation_limit: 0.12
+stationary_command_timeout: 0.5
+stationary_command_threshold: 0.02

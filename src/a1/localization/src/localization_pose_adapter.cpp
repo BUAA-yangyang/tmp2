@@ -10,12 +10,14 @@
 #include <diagnostic_msgs/DiagnosticStatus.h>
 #include <diagnostic_msgs/KeyValue.h>
 #include <geometry_msgs/TransformStamped.h>
+#include <geometry_msgs/Twist.h>
 #include <nav_msgs/Odometry.h>
 #include <ros/ros.h>
 #include <rosgraph_msgs/Clock.h>
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <sensor_msgs/point_cloud2_iterator.h>
+#include <std_msgs/String.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Transform.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
@@ -82,6 +84,10 @@ public:
 
         odom_sub_ = nh_.subscribe(input_odom_topic_, 20,
                                   &LocalizationPoseAdapter::odomCallback, this);
+        controller_state_sub_ = nh_.subscribe(controller_state_topic_, 5,
+            &LocalizationPoseAdapter::controllerStateCallback, this);
+        cmd_vel_sub_ = nh_.subscribe(cmd_vel_topic_, 10,
+            &LocalizationPoseAdapter::cmdVelCallback, this);
         registered_cloud_sub_ = nh_.subscribe(input_registered_cloud_topic_, 5,
             &LocalizationPoseAdapter::registeredCloudCallback, this);
         map_sub_ = nh_.subscribe(input_map_topic_, 1,
@@ -158,13 +164,25 @@ private:
         pnh_.param("initialization_samples", initialization_samples_, 5);
         pnh_.param("max_translation_jump", max_translation_jump_, 1.0);
         pnh_.param("max_rotation_jump", max_rotation_jump_, 1.0);
+        pnh_.param("controller_state_topic", controller_state_topic_,
+                    std::string("/a1/controller/state"));
+        pnh_.param("cmd_vel_topic", cmd_vel_topic_, std::string("/cmd_vel"));
+        pnh_.param("stationary_error_check_enabled", stationary_error_check_enabled_, true);
+        pnh_.param("stationary_error_requires_reinitialization",
+                    stationary_error_requires_reinitialization_, true);
+        pnh_.param("stationary_error_window", stationary_error_window_, 1.0);
+        pnh_.param("stationary_translation_limit", stationary_translation_limit_, 0.12);
+        pnh_.param("stationary_command_timeout", stationary_command_timeout_, 0.5);
+        pnh_.param("stationary_command_threshold", stationary_command_threshold_, 0.02);
 
         valid_configuration_ = std::isfinite(unknown_twist_variance_) &&
             unknown_twist_variance_ > 0.0 && sensor_warn_timeout_ > 0.0 &&
             sensor_lost_timeout_ > sensor_warn_timeout_ && odom_warn_timeout_ > 0.0 &&
             odom_lost_timeout_ > odom_warn_timeout_ && clock_warn_timeout_ > 0.0 &&
             clock_lost_timeout_ > clock_warn_timeout_ && initialization_samples_ > 0 &&
-            max_translation_jump_ > 0.0 && max_rotation_jump_ > 0.0;
+            max_translation_jump_ > 0.0 && max_rotation_jump_ > 0.0 &&
+            stationary_error_window_ > 0.0 && stationary_translation_limit_ > 0.0 &&
+            stationary_command_timeout_ > 0.0 && stationary_command_threshold_ > 0.0;
         if (!valid_configuration_)
         {
             ROS_FATAL("invalid localization health threshold configuration");
@@ -240,6 +258,32 @@ private:
         observe(&clock_watch_, input->clock, "CLOCK_TIME_ROLLBACK");
     }
 
+    void controllerStateCallback(const std_msgs::String::ConstPtr& input)
+    {
+        controller_state_ = input->data;
+        controller_state_received_ = true;
+        stationary_anchor_established_ = false;
+    }
+
+    void cmdVelCallback(const geometry_msgs::Twist::ConstPtr& input)
+    {
+        cmd_vel_received_ = true;
+        cmd_vel_wall_time_ = ros::WallTime::now();
+        command_is_zero_ = std::hypot(input->linear.x, input->linear.y) <=
+                               stationary_command_threshold_ &&
+                           std::abs(input->linear.z) <= stationary_command_threshold_ &&
+                           std::abs(input->angular.z) <= stationary_command_threshold_;
+    }
+
+    bool commandedStationary() const
+    {
+        if (!controller_state_received_) return false;
+        if (controller_state_ == "fixed stand") return true;
+        return controller_state_ == "RL" && cmd_vel_received_ && command_is_zero_ &&
+            (ros::WallTime::now() - cmd_vel_wall_time_).toSec() <=
+                stationary_command_timeout_;
+    }
+
     bool allRequiredInputsReceived() const
     {
         return pointcloud_watch_.received && imu_watch_.received && odom_watch_.received &&
@@ -304,6 +348,7 @@ private:
     {
         consecutive_valid_ = 0;
         have_previous_pose_ = false;
+        stationary_anchor_established_ = false;
         if (reinitialization_required) world_anchor_established_ = false;
         // Preserve the first fatal cause until the estimator process is restarted.
         // Secondary sensor timeouts after a reset must not hide CLOCK_TIME_ROLLBACK.
@@ -356,6 +401,32 @@ private:
             previous_pose_ = odom_to_base;
             have_previous_pose_ = true;
             return;
+        }
+        if (stationary_error_check_enabled_ && commandedStationary())
+        {
+            if (!stationary_anchor_established_)
+            {
+                stationary_anchor_ = odom_to_base;
+                stationary_anchor_stamp_ = input->header.stamp;
+                stationary_anchor_established_ = true;
+            }
+            else if ((input->header.stamp - stationary_anchor_stamp_).toSec() >=
+                     stationary_error_window_)
+            {
+                const tf2::Vector3 delta = odom_to_base.getOrigin() -
+                                           stationary_anchor_.getOrigin();
+                const double planar_error = std::hypot(delta.x(), delta.y());
+                if (planar_error > stationary_translation_limit_)
+                {
+                    invalidate("STATIONARY_TRANSLATION_DRIFT",
+                               stationary_error_requires_reinitialization_);
+                    return;
+                }
+            }
+        }
+        else
+        {
+            stationary_anchor_established_ = false;
         }
         previous_pose_ = odom_to_base;
         have_previous_pose_ = true;
@@ -555,10 +626,12 @@ private:
     ros::NodeHandle pnh_;
     ros::Subscriber odom_sub_, registered_cloud_sub_, map_sub_;
     ros::Subscriber pointcloud_health_sub_, imu_health_sub_, clock_sub_;
+    ros::Subscriber controller_state_sub_, cmd_vel_sub_;
     ros::Publisher odom_pub_, registered_cloud_pub_, map_pub_, status_pub_, diagnostics_pub_;
     ros::Timer health_timer_;
     tf2_ros::TransformBroadcaster tf_broadcaster_;
     tf2::Transform imu_to_base_, previous_pose_, initial_world_to_base_, world_to_odom_;
+    tf2::Transform stationary_anchor_;
     InputWatch pointcloud_watch_, imu_watch_, odom_watch_, clock_watch_;
 
     std::string input_odom_topic_, output_odom_topic_;
@@ -566,17 +639,26 @@ private:
     std::string input_map_topic_, output_map_topic_, input_pointcloud_topic_, input_imu_topic_;
     std::string clock_topic_, status_topic_, diagnostics_topic_;
     std::string input_world_frame_, input_body_frame_, odom_frame_, base_frame_, world_frame_;
+    std::string controller_state_topic_, cmd_vel_topic_, controller_state_;
     bool publish_tf_{true}, strict_input_frames_{true};
     bool rewrite_registered_cloud_frame_{true}, rewrite_map_frame_{true};
     bool health_enabled_{true}, monitor_clock_{true}, valid_configuration_{false};
     bool have_previous_pose_{false};
     bool world_alignment_enabled_{true}, world_anchor_established_{false};
     bool reinitialization_required_{false};
+    bool stationary_error_check_enabled_{true};
+    bool stationary_error_requires_reinitialization_{true};
+    bool controller_state_received_{false}, cmd_vel_received_{false};
+    bool command_is_zero_{false}, stationary_anchor_established_{false};
+    ros::WallTime cmd_vel_wall_time_;
+    ros::Time stationary_anchor_stamp_;
     double unknown_twist_variance_{1.0e6};
     double sensor_warn_timeout_{0.5}, sensor_lost_timeout_{1.5};
     double odom_warn_timeout_{0.5}, odom_lost_timeout_{1.5};
     double clock_warn_timeout_{0.5}, clock_lost_timeout_{1.5};
     double max_translation_jump_{1.0}, max_rotation_jump_{1.0};
+    double stationary_error_window_{1.0}, stationary_translation_limit_{0.12};
+    double stationary_command_timeout_{0.5}, stationary_command_threshold_{0.02};
     int initialization_samples_{5};
     int consecutive_valid_{0};
     State state_{State::STOPPED};

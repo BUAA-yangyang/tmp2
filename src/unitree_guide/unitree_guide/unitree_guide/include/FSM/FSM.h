@@ -15,6 +15,8 @@
 #include "FSM/State_StepTest.h"
 #include "common/enumClass.h"
 #include "control/CtrlComponents.h"
+#include <ros/ros.h>
+#include <std_msgs/String.h>
 #ifdef COMPILE_WITH_MOVE_BASE
     #include "FSM/State_move_base.h"
 #endif  // COMPILE_WITH_MOVE_BASE
@@ -63,6 +65,7 @@ private:
     bool resetGazeboRobot();
     void forcePassiveState();
     void setResetDownCommand();
+    void publishState() const;
     CtrlComponents *_ctrlComp;
     FSMState *_currentState;
     FSMState *_nextState;
@@ -74,6 +77,8 @@ private:
     bool _waitingForStateFeedback = false;
     bool _resetCommandLatched = false;
     bool _fallSafetyLatched = false;
+    ros::NodeHandle _statusNode;
+    ros::Publisher _statePublisher;
 };
 
 

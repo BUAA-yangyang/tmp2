@@ -13,6 +13,7 @@ from rosgraph_msgs.msg import Clock
 from sensor_msgs.msg import Imu, PointCloud2
 from sensor_msgs import point_cloud2
 from std_msgs.msg import Header
+from std_msgs.msg import String
 
 
 class LocalizationPoseAdapterRuntimeTest(unittest.TestCase):
@@ -33,13 +34,15 @@ class LocalizationPoseAdapterRuntimeTest(unittest.TestCase):
         )
         cls.imu_pub = rospy.Publisher("/trunk_imu", Imu, queue_size=1)
         cls.clock_pub = rospy.Publisher("/clock", Clock, queue_size=1)
+        cls.controller_pub = rospy.Publisher("/a1/controller/state", String, queue_size=1,
+                                             latch=True)
         cls.tf_buffer = tf2_ros.Buffer()
         cls.tf_listener = tf2_ros.TransformListener(cls.tf_buffer)
 
     def wait_for_connections(self):
         deadline = time.monotonic() + 5.0
         publishers = [self.odom_pub, self.cloud_pub, self.map_pub, self.sensor_cloud_pub,
-                      self.imu_pub, self.clock_pub]
+                      self.imu_pub, self.clock_pub, self.controller_pub]
         while not rospy.is_shutdown() and time.monotonic() < deadline:
             if all(pub.get_num_connections() for pub in publishers):
                 return
@@ -78,6 +81,7 @@ class LocalizationPoseAdapterRuntimeTest(unittest.TestCase):
 
     def test_health_gate_standard_outputs_and_invalidation(self):
         self.wait_for_connections()
+        self.controller_pub.publish(String(data="fixed stand"))
         received_odom = []
         received_cloud = []
         received_map = []
@@ -193,6 +197,28 @@ class LocalizationPoseAdapterRuntimeTest(unittest.TestCase):
 
         for index in range(5):
             self.publish_healthy_sample(rospy.Time.now() + rospy.Duration(0.2 + index * 0.01))
+            time.sleep(0.05)
+            if received_status[-1].message == "TRACKING":
+                break
+        self.assertEqual(received_status[-1].message, "TRACKING")
+
+        # Small per-frame changes that evade the jump gate must still be
+        # rejected when they accumulate during an explicit stationary state.
+        drift_start = rospy.Time.now() + rospy.Duration(0.3)
+        for index in range(6):
+            self.publish_healthy_sample(
+                drift_start + rospy.Duration(index * 0.05), 1.25 + index * 0.03)
+            time.sleep(0.06)
+            if received_status[-1].message == "LOST":
+                break
+        self.assertEqual(received_status[-1].message, "LOST")
+        self.assertEqual(self.status_values(received_status[-1])["reason"],
+                         "STATIONARY_TRANSLATION_DRIFT")
+        self.assertEqual(self.status_values(received_status[-1])["results_valid"], "false")
+
+        for index in range(5):
+            self.publish_healthy_sample(
+                rospy.Time.now() + rospy.Duration(0.7 + index * 0.01), 1.40)
             time.sleep(0.05)
             if received_status[-1].message == "TRACKING":
                 break
