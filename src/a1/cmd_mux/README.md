@@ -25,7 +25,7 @@
 - 上游断流后减速到零，并以 50Hz 持续发布零；
 - 拒绝 NaN 和 Inf；
 - 急停或 safety lock 时绕过减速度限制，下一发布周期立即归零；
-- 可选的控制器 ready 心跳门控；
+- 控制器 ready 心跳门控；
 - 仿真 `/clock` 回拨时清空旧指令并立即归零。
 - 正常 Ctrl-C/节点关闭前连续发送零速度，单节点异常退出时由 roslaunch 重启。
 
@@ -42,7 +42,7 @@
 | `/cmd_vel_teleop` | `geometry_msgs/Twist` | 输入 | 人工接管 |
 | `/cmd_vel_emergency` | `geometry_msgs/Twist` | 输入 | 急停心跳；消息内容忽略，持续发布即保持急停 |
 | `/a1_cmd_mux/safety_lock` | `std_msgs/Bool` | 输入 | `True` 立即锁零，明确收到 `False` 才释放 |
-| `/a1/controller_ready` | `std_msgs/Bool` | 可选输入 | 控制器 ready 心跳 |
+| `/a1/controller_ready` | `std_msgs/Bool` | 输入 | `State_move_base` 控制循环 ready 心跳 |
 | `/a1/cmd_mux/status` | `a1_navigation_interfaces/CmdMuxStatus` | 输出 | 当前控制源、急停、输出使能、实际速度和源年龄 |
 | `/cmd_vel` | `geometry_msgs/Twist` | 输出 | 唯一底层速度出口 |
 
@@ -50,16 +50,13 @@
 Twist，guard 仍然只会输出零。`safety_lock=True` 则不会因发布者退出自动释放，
 避免故障进程死亡后意外恢复运动。
 
-ready 门控接口已经实现，但当前 `unitree_guide` 没有提供可靠的 FSM 状态话题，
-默认 `require_ready=false`。不能用“存在 `/cmd_vel` 订阅者”代替 ready，因为
-`State_RL` 对象在未进入 RL `/cmd_vel` 模式时也可能已经建立订阅。未来应由底层
-或 `mission_manager/bringup` 提供真实、持续的 Bool 心跳，再启用：
+ready 门控默认开启。`unitree_guide` 只在进入 `State_move_base`（模式 5）后以
+10Hz 发布 `True` 心跳，退出该状态前发布 `False`；控制循环卡住或进程退出时，
+guard 会在 1.0s 心跳超时后自动锁零。不能用“存在 `/cmd_vel` 订阅者”代替 ready，
+因为状态对象在未激活时也可能已经建立订阅。
 
-```bash
-roslaunch a1_cmd_mux cmd_mux.launch \
-  require_ready:=true \
-  ready_topic:=/实际的控制器就绪话题
-```
+仅在不启动 Unitree 控制器的隔离测试中，才显式使用 `require_ready:=false`。
+该心跳采用标准 `std_msgs/Bool`，不需要在 `a1_navigation_interfaces` 中重复定义。
 
 状态话题复用团队共享的 `CmdMuxStatus.msg`，不在本包重复定义接口。普通激活状态
 会报告 `SOURCE_NAVIGATION / BEHAVIOR / TELEOP`，急停报告 `SOURCE_ESTOP`；

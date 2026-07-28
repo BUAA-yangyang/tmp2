@@ -35,6 +35,7 @@ ENABLE_REALSENSE_INPUT="${ENABLE_REALSENSE:-${ENABLE_DEPTH_CAMERA:-$ENABLE_SENSO
 ENABLE_REALSENSE="$(as_ros_bool "$ENABLE_REALSENSE_INPUT")"
 ENABLE_FRONT_CAMERA="$(as_ros_bool "${ENABLE_FRONT_CAMERA:-0}")"
 ENABLE_REFEREE_ODOM="$(as_ros_bool "${ENABLE_REFEREE_ODOM:-1}")"
+PUBLISH_REFEREE_TF="$(as_ros_bool "${PUBLISH_REFEREE_TF:-0}")"
 ENABLE_GROUND_TRUTH="$(as_ros_bool "${ENABLE_GROUND_TRUTH:-1}")"
 ENABLE_FOOT_CONTACT_SENSOR="$(as_ros_bool "${ENABLE_FOOT_CONTACT_SENSOR:-0}")"
 ENABLE_FOOT_FORCE_VISUAL="$(as_ros_bool "${ENABLE_FOOT_FORCE_VISUAL:-0}")"
@@ -100,12 +101,18 @@ wait_for_robot_spawn() {
   exit 1
 }
 
-echo "Terminating previous Gazebo, launch, controller, and optional joystick processes..."
+echo "Terminating previous Gazebo, ROS master, launch, controller, and optional joystick processes..."
 pkill -f "roslaunch unitree_guide multi_floor_gazeboSim.launch" 2>/dev/null || true
+pkill -f "roslaunch a1_navigation_tests nav_dev.launch" 2>/dev/null || true
 pkill -f "building_generator_classic_control" 2>/dev/null || true
 pkill -f "gzserver|gzclient|gazebo" 2>/dev/null || true
 pkill -f "junior_ctrl" 2>/dev/null || true
 pkill -f "virtual_joy.py" 2>/dev/null || true
+# This container owns a single ROS graph. Clearing an interrupted graph prevents
+# a stale rosmaster/rosout pair from racing the next simulation startup.
+pkill -f "/opt/ros/noetic/bin/rosmaster" 2>/dev/null || true
+pkill -x rosout 2>/dev/null || true
+sleep 1
 
 echo "Sourcing ROS environment..."
 set +u
@@ -182,6 +189,7 @@ echo "  Front RGB camera: $ENABLE_FRONT_CAMERA"
 echo "  PointCloud2 converter: $ENABLE_POINTCLOUD_CONVERTER"
 echo "  Ground truth topics: $ENABLE_GROUND_TRUTH"
 echo "  Referee odom: $ENABLE_REFEREE_ODOM"
+echo "  Referee odom TF (dev-only): $PUBLISH_REFEREE_TF"
 echo "  Foot contact sensors: $ENABLE_FOOT_CONTACT_SENSOR"
 echo "  Foot force visual: $ENABLE_FOOT_FORCE_VISUAL"
 echo "  Gazebo starts paused: $PAUSED"
@@ -216,6 +224,7 @@ roslaunch unitree_guide multi_floor_gazeboSim.launch \
   enable_realsense:="$ENABLE_REALSENSE" \
   enable_front_camera:="$ENABLE_FRONT_CAMERA" \
   enable_referee_odom:="$ENABLE_REFEREE_ODOM" \
+  publish_referee_tf:="$PUBLISH_REFEREE_TF" \
   enable_ground_truth:="$ENABLE_GROUND_TRUTH" \
   enable_foot_contact_sensor:="$ENABLE_FOOT_CONTACT_SENSOR" \
   enable_foot_force_visual:="$ENABLE_FOOT_FORCE_VISUAL" \
@@ -240,7 +249,7 @@ if [ "$START_CONTROLLER" = "1" ]; then
   if [ "$CONTROLLER_FOREGROUND" = "1" ]; then
     echo "Starting junior_ctrl controller in the foreground."
     echo "UNITREE_CTRL_DT=$UNITREE_CTRL_DT seconds."
-    echo "Use keyboard input in this terminal: 2 = stand, 4 = RL keyboard walk, 6 = RL /cmd_vel mode, 8 = reset."
+    echo "Use keyboard input in this terminal: 2 = stand, 5 = navigation /cmd_vel mode, 4 = RL keyboard (experimental), 6 = RL /cmd_vel (experimental), 8 = reset."
     echo "In RL keyboard walk mode: W/S = forward/back, A/D = left/right, J/L = turn, Space = stop."
     schedule_unpause_physics
     "$WORKSPACE_DIR/devel/lib/unitree_guide/junior_ctrl" || true
@@ -260,5 +269,5 @@ else
 fi
 
 echo "Simulation startup command completed."
-echo "Controller mode remains governed by unitree_guide keyboard/joy input. Mode 4 uses RL with keyboard axes; mode 6 keeps the original RL /cmd_vel logic."
+echo "Controller mode remains governed by unitree_guide keyboard/joy input. Navigation uses mode 5 (State_move_base); RL modes 4/6 are experimental."
 wait "$LAUNCH_PID"

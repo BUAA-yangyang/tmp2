@@ -15,29 +15,23 @@ oscillation_timeout: 10.0
 oscillation_distance: 0.20
 
 # ---- 恢复行为 ----
-# 原理：规划失败时 move_base 依次执行恢复动作（清空 costmap、原地旋转）再重试。
-# 先允许开着，但要知道"原地旋转"对四足是有风险的动作（窄处可能刮到墙）。
+# 原理：规划失败时只清空动态障碍层再重试一次。
+# 禁止 move_base 自带的长时间原地旋转：四足在窄处有碰撞风险，而且旧配置下
+# action 取消后 rotate_recovery 仍会继续输出角速度，违反安全停止要求。
 recovery_behavior_enabled: true
-clearing_rotation_allowed: true
+clearing_rotation_allowed: false
+recovery_behaviors:
+  - name: "clear_obstacles"
+    type: "clear_costmap_recovery/ClearCostmapRecovery"
+
+clear_obstacles:
+  reset_distance: 3.0
+  layer_names:
+    - obstacle_layer
 
 # 停止时把 costmap 清干净，避免残留的假障碍卡住下一次规划
 clearing_radius: 0.5
 conservative_reset_dist: 3.0
-
-# 恢复旋转的速度必须自己限住，否则实测会发出 wz=1.0，超过 A1 的 RL 训练上限 0.9。
-# 坑：RotateRecovery 的速度参数不是从 ~/rotate_recovery 读的，而是从
-# ~/TrajectoryPlannerROS 读的（源码里硬编码了这个命名空间，用于向后兼容）。
-# 所以即使我们用 DWA 做局部规划，也必须写一份 TrajectoryPlannerROS 的速度参数，
-# 否则 max_vel_theta 会取默认值 1.0。写在 ~/rotate_recovery 下面是无效的。
-rotate_recovery:
-  frequency: 10.0
-  sim_granularity: 0.017
-
-TrajectoryPlannerROS:
-  max_vel_theta: 0.70
-  min_in_place_vel_theta: 0.30
-  acc_lim_theta: 3.0
-  yaw_goal_tolerance: 0.30
 
 shutdown_costmaps: false
 

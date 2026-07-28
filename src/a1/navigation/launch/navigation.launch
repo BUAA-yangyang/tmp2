@@ -27,6 +27,10 @@
        dev 期是仿真的 /Odometry_gazebo（真值派生），后期换 a1_localization 的输出 -->
   <arg name="odom_topic" default="/Odometry_gazebo"/>
 
+  <!-- DWA 用它根据当前角速度计算下一周期的可达窗口。正式链路使用保守值 3.0；
+       Gazebo 真值 twist 含四足摆腿造成的高频机体角速度，dev launch 会单独覆盖。 -->
+  <arg name="dwa_acc_lim_theta" default="3.0"/>
+
   <node pkg="move_base" type="move_base" name="move_base"
         respawn="false" output="screen" clear_params="true">
 
@@ -41,6 +45,7 @@
     <rosparam file="$(find a1_navigation)/config/dwa_local_planner_params.yaml" command="load"/>
     <!-- 用 launch 参数覆盖 yaml 里的 odom_topic，方便切换定位来源 -->
     <param name="DWAPlannerROS/odom_topic" value="$(arg odom_topic)"/>
+    <param name="DWAPlannerROS/acc_lim_theta" value="$(arg dwa_acc_lim_theta)"/>
 
     <!-- 障碍点云类型，两个 costmap 都要覆盖 -->
     <param name="global_costmap/obstacle_layer/obstacle_cloud/data_type" value="$(arg obstacle_cloud_type)"/>
