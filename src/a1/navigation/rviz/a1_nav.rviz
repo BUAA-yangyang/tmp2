@@ -15,7 +15,7 @@ Visualization Manager:
     Default Light: true
     # 固定坐标系用 odom：里程碑1 没有 map 帧的静态地图，costmap 也跑在 odom 下
     Fixed Frame: odom
-    Frame Rate: 30
+    Frame Rate: 10
   Displays:
     - Class: rviz/Grid
       Name: Grid
@@ -49,11 +49,11 @@ Visualization Manager:
       Color: 255; 80; 80
       Color Transformer: FlatColor
       Decay Time: 0
-    # Livox Mid-360 原始点云。注意它的类型是 sensor_msgs/PointCloud（不是 PointCloud2），
-    # 所以必须用 rviz/PointCloud 这个显示插件，用错了看不到任何东西。
+    # Livox 原始 /scan 一帧约 2.4 万点；远程桌面默认关闭，避免和过滤点云重复渲染。
+    # 排查预处理器时可手动打开。
     - Class: rviz/PointCloud
       Name: LivoxScan
-      Enabled: true
+      Enabled: false
       Topic: /scan
       Unreliable: false
       Queue Size: 2
@@ -62,10 +62,10 @@ Visualization Manager:
       Color: 0; 255; 200
       Color Transformer: FlatColor
       Decay Time: 0
-    # 全局代价地图（滚动窗口，含膨胀层）
+    # 全局代价地图是 20m 滚动窗口，远程演示默认关闭；需要检查全局代价时手动打开。
     - Class: rviz/Map
       Name: GlobalCostmap
-      Enabled: true
+      Enabled: false
       Topic: /move_base/global_costmap/costmap
       Color Scheme: costmap
       Draw Behind: true
