@@ -79,7 +79,14 @@ void callback_BASE(const gazebo_msgs::LinkStates::ConstPtr &msg) {
         msg->twist[index].angular.y,
         msg->twist[index].angular.z);
     tf::Vector3 transformed_angular_vel = transform_map2odom.getBasis() * angular_vel;
-    
+
+    // nav_msgs/Odometry defines pose in header.frame_id, but twist in
+    // child_frame_id. Gazebo link_states reports twist in the world frame, so
+    // first map it into odom (above), then rotate it into the robot base frame.
+    tf::Matrix3x3 base_to_odom(q_odom);
+    tf::Vector3 base_linear_vel = base_to_odom.transpose() * transformed_linear_vel;
+    tf::Vector3 base_angular_vel = base_to_odom.transpose() * transformed_angular_vel;
+
     //发布base到odom的tf变换
     tf::Transform transform_odom2base;
     transform_odom2base.setRotation(q_odom);
@@ -106,14 +113,14 @@ void callback_BASE(const gazebo_msgs::LinkStates::ConstPtr &msg) {
 
 
     // set the velocity
-    Odom.twist.twist.linear.x = transformed_linear_vel.x();
-    Odom.twist.twist.linear.y = transformed_linear_vel.y();
-    Odom.twist.twist.linear.z = transformed_linear_vel.z();
+    Odom.twist.twist.linear.x = base_linear_vel.x();
+    Odom.twist.twist.linear.y = base_linear_vel.y();
+    Odom.twist.twist.linear.z = base_linear_vel.z();
 
 
-    Odom.twist.twist.angular.x = transformed_angular_vel.x();
-    Odom.twist.twist.angular.y = transformed_angular_vel.y();
-    Odom.twist.twist.angular.z = transformed_angular_vel.z();
+    Odom.twist.twist.angular.x = base_angular_vel.x();
+    Odom.twist.twist.angular.y = base_angular_vel.y();
+    Odom.twist.twist.angular.z = base_angular_vel.z();
 
 
     robotVelocity_BASE_frame_pub.publish(Odom);

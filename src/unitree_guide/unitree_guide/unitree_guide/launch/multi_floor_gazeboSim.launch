@@ -16,6 +16,7 @@
     <arg name="enable_realsense" default="$(arg enable_sensor_data)"/>
     <arg name="enable_front_camera" default="false"/>
     <arg name="enable_referee_odom" default="true"/>
+    <arg name="publish_referee_tf" default="false"/>
     <arg name="enable_ground_truth" default="true"/>
     <arg name="enable_foot_contact_sensor" default="false"/>
     <arg name="enable_foot_force_visual" default="false"/>
@@ -62,8 +63,10 @@
     <node if="$(arg enable_referee_odom)" pkg="unitree_guide" type="state_from_gazebo" name="state_from_gazebo" args="0 0 0 0 0 0" output="screen">
         <param name="robot_name" value="$(arg rname)" />
         <!-- Referee odometry is validation-only. The localization stack owns
-             the formal odom -> base TF and must remain its sole publisher. -->
-        <param name="publish_tf" value="false" />
+             the formal odom -> base TF and must remain its sole publisher.
+             Only navigation dev launch scripts may explicitly enable this
+             truth-derived TF as a temporary localization substitute. -->
+        <param name="publish_tf" value="$(arg publish_referee_tf)" />
     </node>
 
     <rosparam file="$(arg dollar)$(arg robot_path)/config/robot_control.yaml" command="load"/>

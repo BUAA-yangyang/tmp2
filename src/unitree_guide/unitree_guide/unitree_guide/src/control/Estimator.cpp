@@ -117,7 +117,12 @@ void Estimator::_initSystem(){
 
     /* ROS odometry publisher */
     #ifdef COMPILE_WITH_MOVE_BASE
-        _pub = _nh.advertise<nav_msgs::Odometry>("odom", 1);
+        ros::NodeHandle private_nh("~");
+        private_nh.param<bool>("publish_odom_tf", _publishOdomTf, false);
+        if(_publishOdomTf){
+            _pub = _nh.advertise<nav_msgs::Odometry>("odom", 1);
+            _odomBroadcaster.reset(new tf::TransformBroadcaster());
+        }
     #endif  // COMPILE_WITH_MOVE_BASE
 }
 
@@ -169,7 +174,7 @@ void Estimator::run(){
     _vzFilter->addValue(_xhat(5));
 
     #ifdef COMPILE_WITH_MOVE_BASE
-        if(_count % ((int)( 1.0/(_dt*_pubFreq))) == 0){
+        if(_publishOdomTf && _count % ((int)( 1.0/(_dt*_pubFreq))) == 0){
             _currentTime = ros::Time::now();
             /* tf */
             _odomTF.header.stamp = _currentTime;
@@ -184,7 +189,7 @@ void Estimator::run(){
             _odomTF.transform.rotation.y = _lowState->imu.quaternion[2];
             _odomTF.transform.rotation.z = _lowState->imu.quaternion[3];
 
-            _odomBroadcaster.sendTransform(_odomTF);
+            _odomBroadcaster->sendTransform(_odomTF);
 
             /* odometry */
             _odomMsg.header.stamp = _currentTime;
@@ -253,4 +258,3 @@ Vec34 Estimator::getPosFeet2BGlobal(){
     }
     return feet2BPos;
 }
-

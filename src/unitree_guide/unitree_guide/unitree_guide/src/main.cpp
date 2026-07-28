@@ -150,9 +150,22 @@ int main(int argc, char **argv)
 
     signal(SIGINT, ShutDown);
 
+#if defined(COMPILE_WITH_SIMULATION) && defined(RUN_ROS)
+    // FSM::run() preserves the upstream wall-clock cycle guard.  When Gazebo
+    // runs below real time (for example with the Livox ray sensor enabled),
+    // wall-clock-only scheduling executes multiple controller updates against
+    // the same simulated state.  ros::Rate follows /clock when use_sim_time is
+    // enabled, so this second guard keeps the controller at ctrlComp->dt in
+    // simulation time without changing the real-robot scheduling path.
+    ros::Rate simulationControlRate(1.0 / ctrlComp->dt);
+#endif
+
     while (running)
     {
         ctrlFrame.run();
+#if defined(COMPILE_WITH_SIMULATION) && defined(RUN_ROS)
+        simulationControlRate.sleep();
+#endif
     }
 
     delete ctrlComp;
