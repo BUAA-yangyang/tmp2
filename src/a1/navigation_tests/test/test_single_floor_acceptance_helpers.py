@@ -97,18 +97,18 @@ class AcceptanceHelperTest(unittest.TestCase):
             ).read_text()
         )
         self.assertNotEqual(
-            floor_config["topics"]["marking_cloud"],
             floor_config["topics"]["obstacle_cloud"],
+            floor_config["topics"]["clearing_cloud"],
         )
         self.assertEqual(
             obstacle_config["mapping_marking"]["topic"],
-            "/a1_nav/marking_cloud",
+            "/a1_nav/obstacle_cloud",
         )
         self.assertTrue(obstacle_config["mapping_marking"]["marking"])
         self.assertFalse(obstacle_config["mapping_marking"]["clearing"])
         self.assertEqual(
             obstacle_config["mapping_clearing"]["topic"],
-            "/a1_nav/obstacle_cloud",
+            "/a1_nav/clearing_cloud",
         )
         self.assertFalse(obstacle_config["mapping_clearing"]["marking"])
         self.assertTrue(obstacle_config["mapping_clearing"]["clearing"])

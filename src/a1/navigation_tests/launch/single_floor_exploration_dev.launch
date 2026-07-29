@@ -30,8 +30,8 @@
   <include file="$(find a1_navigation)/launch/navigation_floor_mapping.launch">
     <arg name="obstacle_cloud_topic"
          value="/a1/floor_mapping/obstacle_cloud"/>
-    <arg name="marking_cloud_topic"
-         value="/a1/floor_mapping/marking_cloud"/>
+    <arg name="clearing_cloud_topic"
+         value="/a1/floor_mapping/clearing_cloud"/>
     <arg name="cmd_vel_topic" value="/cmd_vel_nav"/>
     <arg name="odom_topic" value="/Odometry_gazebo"/>
     <arg name="dwa_acc_lim_theta" value="10.0"/>

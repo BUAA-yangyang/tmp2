@@ -69,6 +69,9 @@ bool callEmptyService(const std::string &service_name, double timeout_seconds)
 FSM::FSM(CtrlComponents *ctrlComp)
     :_ctrlComp(ctrlComp){
 
+    _statePublisher = _statusNode.advertise<std_msgs::String>(
+        "/a1/controller/state", 1, true);
+
     _stateList.invalid = nullptr;
     _stateList.passive = new State_Passive(_ctrlComp);
     _stateList.fixedStand = new State_FixedStand(_ctrlComp);
@@ -93,6 +96,13 @@ void FSM::initialize(){
     _currentState -> enter();
     _nextState = _currentState;
     _mode = FSMMode::NORMAL;
+    publishState();
+}
+
+void FSM::publishState() const{
+    std_msgs::String message;
+    message.data = _currentState ? _currentState->_stateNameString : "invalid";
+    _statePublisher.publish(message);
 }
 
 void FSM::run(){
@@ -148,6 +158,7 @@ void FSM::run(){
         _currentState->exit();
         _currentState = _nextState;
         _currentState->enter();
+        publishState();
         _mode = FSMMode::NORMAL;
         _currentState->run();
     }

@@ -20,6 +20,10 @@ add_message_files(
   MissionStatus.msg
   SearchRegion.msg
   SearchRegionArray.msg
+  WallSegment.msg
+  WallSegmentArray.msg
+  Doorway.msg
+  DoorwayArray.msg
 )
 
 add_service_files(

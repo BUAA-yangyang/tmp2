@@ -13,29 +13,23 @@ class ContractTest(unittest.TestCase):
         cfg = yaml.safe_load((ROOT / "config/floor_mapping.yaml").read_text())
         self.assertEqual(cfg["frames"]["odom"], "odom")
         self.assertEqual(cfg["frames"]["sensor"], "laser_livox")
-        for topic in (
-            "marking_cloud",
-            "obstacle_cloud",
-            "occupancy_grid",
-            "status",
-            "diagnostics",
-        ):
+        for topic in ("obstacle_cloud", "clearing_cloud", "occupancy_grid", "walls", "doorways", "status", "structure_status", "diagnostics"):
             self.assertTrue(cfg["topics"][topic].startswith("/a1/floor_mapping/"))
-        self.assertNotEqual(
-            cfg["topics"]["marking_cloud"], cfg["topics"]["obstacle_cloud"]
-        )
         self.assertGreaterEqual(cfg["ground"]["floor_change_frames"], 2)
         self.assertGreaterEqual(cfg["ground"]["invalid_frame_tolerance"], 0)
         self.assertGreaterEqual(cfg["recovery"]["valid_frames"], 1)
         self.assertGreaterEqual(cfg["queues"]["pointcloud"], 1)
         self.assertGreater(cfg["timeouts"]["tf_queue_ros"], 0)
         self.assertGreater(cfg["timeouts"]["tf_queue_wall"], 0)
+        self.assertTrue(cfg["door_wall"]["enabled"])
+        self.assertGreaterEqual(cfg["door_wall"]["wall_stable_frames"], 2)
+        self.assertGreaterEqual(cfg["door_wall"]["opening_min_width"], 2 * cfg["door_wall"]["robot_radius"])
         source = (ROOT / "src/floor_mapping_node.cpp").read_text()
-        for field in ("pointcloud_age_sec", "pointcloud_input_age_sec", "tf_pending_clouds", "odom_age_sec", "last_success_tf_age_sec", "occupied_cells", "processing_time_ms", "minimum_boundary_margin_m", "floor_session_id", "marking_cloud_valid"):
+        for field in ("pointcloud_age_sec", "pointcloud_input_age_sec", "tf_pending_clouds", "odom_age_sec", "last_success_tf_age_sec", "occupied_cells", "processing_time_ms", "minimum_boundary_margin_m", "floor_session_id", "structure_results_valid", "DoorWallRecognizer", "clearing_cloud"):
             self.assertIn(field, source)
 
     def test_phase_three_delivery_assets(self):
-        for name in ("scripts/floor_mapping_route_runner.py", "scripts/floor_mapping_health_gate.py", "config/validation_route.yaml", "config/validation_route_extended.yaml", "config/costmap_mapping_sources.yaml"):
+        for name in ("scripts/floor_mapping_route_runner.py", "scripts/floor_mapping_health_gate.py", "config/validation_route.yaml", "config/validation_route_extended.yaml", "config/costmap_mapping_sources.yaml", "test/floor_mapping_door_wall.test", "test/floor_mapping_door_wall_test.py"):
             self.assertTrue((ROOT / name).is_file(), name)
         route = yaml.safe_load((ROOT / "config/validation_route.yaml").read_text())
         self.assertTrue(route["segments"])

@@ -1,6 +1,6 @@
 # floor_mapping publishes two clouds with the same real Livox sensor origin:
-# an obstacle-only cloud classified relative to the tracked floor for marking,
-# and the backward-compatible ground+obstacle cloud for clearing rays.
+# obstacle_cloud contains only floor-relative obstacle returns for marking;
+# clearing_cloud contains ground and obstacle returns for clearing rays.
 obstacle_range: 4.0
 raytrace_range: 5.0
 track_unknown_space: false
@@ -9,7 +9,7 @@ observation_sources: mapping_marking mapping_clearing
 
 mapping_marking:
   data_type: PointCloud2
-  topic: /a1_nav/marking_cloud
+  topic: /a1_nav/obstacle_cloud
   sensor_frame: laser_livox
   marking: true
   clearing: false
@@ -24,7 +24,7 @@ mapping_marking:
 
 mapping_clearing:
   data_type: PointCloud2
-  topic: /a1_nav/obstacle_cloud
+  topic: /a1_nav/clearing_cloud
   sensor_frame: laser_livox
   marking: false
   clearing: true

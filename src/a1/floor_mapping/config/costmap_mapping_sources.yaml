@@ -1,4 +1,5 @@
-# Load under an ObstacleLayer. Both sources intentionally consume the same cloud.
+# Load under an ObstacleLayer. Marking consumes pure obstacle returns; clearing
+# uses the companion ray cloud which also contains ground returns.
 observation_sources: mapping_marking mapping_clearing
 mapping_marking:
   topic: /a1/floor_mapping/obstacle_cloud
@@ -10,7 +11,7 @@ mapping_marking:
   max_obstacle_height: 1.50
   obstacle_range: 8.0
 mapping_clearing:
-  topic: /a1/floor_mapping/obstacle_cloud
+  topic: /a1/floor_mapping/clearing_cloud
   data_type: PointCloud2
   sensor_frame: laser_livox
   marking: false

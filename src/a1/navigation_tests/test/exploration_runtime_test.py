@@ -188,7 +188,6 @@ class RuntimeTest(unittest.TestCase):
             ),
             KeyValue("map_valid", "true"),
             KeyValue("obstacle_cloud_valid", "true"),
-            KeyValue("marking_cloud_valid", "true"),
             KeyValue("localization_generation", "7"),
             KeyValue("floor_session_id", "2"),
             KeyValue("floor_id", "1"),

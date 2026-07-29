@@ -80,8 +80,8 @@
           /a1/localization/supervisor_status
           /a1/floor_mapping/map
           /a1/floor_mapping/status
-          /a1/floor_mapping/marking_cloud
           /a1/floor_mapping/obstacle_cloud
+          /a1/floor_mapping/clearing_cloud
           /a1/exploration/status
           /a1/exploration/frontiers
           /a1/exploration/selected_target

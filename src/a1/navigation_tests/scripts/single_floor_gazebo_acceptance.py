@@ -986,7 +986,6 @@ class GazeboAcceptance:
             and values.get("state", "MAPPING") == "MAPPING"
             and values.get("map_valid") == "true"
             and values.get("obstacle_cloud_valid") == "true"
-            and values.get("marking_cloud_valid", "true") == "true"
         )
 
     def wait_for(self, predicate, description, sim_timeout=None,

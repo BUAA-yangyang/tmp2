@@ -156,9 +156,9 @@ roslaunch a1_navigation navigation_floor_mapping.launch
 
 - global costmap 使用 `/a1/floor_mapping/map` 的 static layer，不再滚动；
 - GlobalPlanner 禁止路径穿越未知区，frontier 目标必须位于已知自由区；
-- marking 使用 `/a1/floor_mapping/marking_cloud` 中已按相对楼面高度
-  分类的障碍点；clearing 使用兼容的地面+障碍
-  `/a1/floor_mapping/obstacle_cloud`，两者保留同一真实 Livox
+- marking 使用 `/a1/floor_mapping/obstacle_cloud` 中已按相对楼面高度
+  分类的纯障碍点；clearing 使用地面+障碍
+  `/a1/floor_mapping/clearing_cloud`，两者保留同一真实 Livox
   传感器原点和时间戳；
 - costmap 不再用绝对 `odom.z` 二次判定 marking 高度，因此入口地面高度
   尚在收敛或未来楼层高度变化时，不会把支撑面本身整片标成障碍；

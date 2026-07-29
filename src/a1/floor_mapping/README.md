@@ -1,6 +1,6 @@
 # A1 Floor Mapping
 
-`a1_floor_mapping` 是面向 A1 单楼层 navigation/exploration 的实时建图模块。它消费 localization 输出的 Livox 点云、里程计、健康状态和定位 generation，在 `odom` 坐标系中估计当前地面、过滤障碍并累计二维 OccupancyGrid，同时发布保留真实 Livox 传感器原点语义的实时观测云。
+`a1_floor_mapping` 是面向 A1 单楼层 navigation/exploration 的实时建图模块。它消费 localization 输出的 Livox 点云、里程计、健康状态和定位 generation，在 `odom` 坐标系中估计当前地面、过滤障碍并累计二维 OccupancyGrid，同时识别稳定墙段、由自由射线证实的墙体开口及其保守通行状态。
 
 当前版本定位为单楼层 V0：可以用于受健康门控保护的下游集成，但不是跨楼层全局 SLAM。
 
@@ -9,8 +9,9 @@
 - 在机器人附近初始化并持续跟踪楼层地面高度。
 - 将地面回波作为 free-space ray，将有效高度范围内的非地面回波作为 occupied endpoint。
 - 发布固定大小的 `odom` OccupancyGrid。
-- 发布传感器坐标系中的仅障碍点云和地面/障碍联合点云；costmap
-  分别用前者 marking、后者 clearing。
+- 发布纯障碍点云供 marking/门墙识别，并单独发布含地面射线的 clearing 点云。
+- 对近似直线、高度连续且跨帧稳定的障碍返回提取墙段；仅在共线墙段间的缺口有穿透自由射线时建立门洞跟踪。
+- 发布 session-safe 的 `WallSegmentArray`、`DoorwayArray` 和结构健康状态；关闭、半开、阻塞或未知时不把门洞标记为可通行。
 - 使用 localization generation 和本地 floor session 隔离地图生命周期，避免跨定位重启拼图。
 - 对 localization 失效、输入超时、非法消息、时间回退、TF 缺失和不支持的换层行为安全失效。
 - 对点云与 TF 的正常异步到达进行有界等待，始终使用点云采集时刻的精确 TF。
@@ -34,16 +35,17 @@
 - 回环、全局重定位和 `map -> odom`；
 - 地图加载或可跨 generation 使用的持久化地图产品；
 - 动态扩图。
+- 仅凭 LiDAR 把开口分类为具体业务门、或从几何结果推导 `main_entrance`/`elevator_floor_N` 控制 ID。
 
 ## 数据流
 
 ```text
 /a1_localization/livox_pointcloud ─┐
 /a1/localization/odom              ├─> floor_mapping_node
-/a1/localization/status            │      ├─> marking_cloud (laser_livox)
-/a1/localization/supervisor_status ┘      ├─> OccupancyGrid (odom)
-TF odom -> base/laser_livox                ├─> obstacle_cloud (laser_livox)
-                                            └─> status + diagnostics
+/a1/localization/status            │      ├─> obstacle_cloud (laser_livox)
+/a1/localization/supervisor_status ┘      ├─> clearing_cloud (laser_livox)
+                                         ├─> OccupancyGrid / walls / doorways (odom)
+TF odom -> base/laser_livox               └─> status + structure_status + diagnostics
 ```
 
 点云与 localization TF 经过不同处理链路，同一 stamp 的点云可能先于 TF 到达。节点先将点云放入有界队列，只在该 stamp 的 `odom -> laser_livox` 和 `odom -> base` 都可用后按时间顺序处理。节点不会使用 `Time(0)` 或最新 TF 代替消息时刻 TF。
@@ -68,10 +70,13 @@ TF odom -> base/laser_livox                ├─> obstacle_cloud (laser_livox)
 
 | 名称 | 类型 | frame | 语义 |
 | --- | --- | --- | --- |
-| `/a1/floor_mapping/marking_cloud` | `sensor_msgs/PointCloud2` | `laser_livox` | 仅包含按 `point.z-floor_z` 分类的障碍回波；与输入同 stamp，只在 `MAPPING` 时发布，供 costmap marking |
-| `/a1/floor_mapping/obstacle_cloud` | `sensor_msgs/PointCloud2` | `laser_livox` | 当前有效地面与障碍回波；保留真实传感器原点供 clearing 使用 |
+| `/a1/floor_mapping/obstacle_cloud` | `sensor_msgs/PointCloud2` | `laser_livox` | 仅当前有效障碍回波；可直接用于 marking 和门墙识别 |
+| `/a1/floor_mapping/clearing_cloud` | `sensor_msgs/PointCloud2` | `laser_livox` | 地面与障碍联合回波；仅用于保持真实传感器原点的 clearing rays |
 | `/a1/floor_mapping/map` | `nav_msgs/OccupancyGrid` | `odom` | 累计单楼层二维栅格，latched |
+| `/a1/floor_mapping/walls` | `a1_navigation_interfaces/WallSegmentArray` | `odom` | 当前 session 内稳定墙段；仅在结构结果有效时消费 |
+| `/a1/floor_mapping/doorways` | `a1_navigation_interfaces/DoorwayArray` | `odom` | 稳定墙体开口、几何和 `OPEN/CLOSED/PARTIALLY_OPEN/BLOCKED/UNKNOWN` 状态 |
 | `/a1/floor_mapping/status` | `diagnostic_msgs/DiagnosticStatus` | — | 当前状态、有效性、generation/session 和统计量 |
+| `/a1/floor_mapping/structure_status` | `diagnostic_msgs/DiagnosticStatus` | — | `results_valid`、generation/session、墙/开口计数和结构输入年龄 |
 | `/a1/floor_mapping/diagnostics` | `diagnostic_msgs/DiagnosticArray` | — | 与 status 相同的标准诊断包装 |
 
 OccupancyGrid 的值为：
@@ -122,8 +127,8 @@ reset 会递增 `floor_session_id`，清除地面估计、栅格、恢复计数�
 ```text
 state == MAPPING
 map_valid == true                  # 消费累计地图时
-obstacle_cloud_valid == true       # 消费任一实时点云时
-marking_cloud_valid == true        # 消费仅障碍 marking 点云时
+obstacle_cloud_valid == true       # 消费实时点云时
+structure_results_valid == true    # 消费 walls/doorways 时
 localization_generation == expected_generation
 floor_session_id == expected_session
 ```
@@ -142,6 +147,8 @@ floor_session_id == expected_session
 | `floor_z/floor_dispersion` | 当前地面高度和离散度 |
 | `occupied/free/unknown_cells` | 当前栅格统计 |
 | `processing_time_ms` | 最近一帧处理耗时 |
+| `structure_results_valid` | 当前墙/门数组是否与有效 mapping session 绑定 |
+| `wall_count/doorway_*_count` | 最新稳定墙段和各门洞状态计数 |
 | `minimum_boundary_margin_m` | 机器人轨迹距固定地图边界的最小余量 |
 | `map_update_sequence` | 成功积分帧计数 |
 
@@ -161,10 +168,11 @@ floor_session_id == expected_session
 3. 初始化后锚定可信 `floor_z` 高度带，以绝对支持点数持续跟踪地面。
 4. 地面高度带内的回波只积分 free ray。
 5. 有效障碍高度内的回波积分 free ray 和 occupied endpoint。
-6. 仅相对当前 `floor_z` 通过障碍高度判据的点进入 `marking_cloud`；
-   `obstacle_cloud` 保持地面+障碍联合输出，兼容既有清障和可视化消费者。
-7. 每帧先处理地面 free ray，再处理障碍 endpoint，减少射线对墙体的过度清除。
-8. 持续的新地面高度候选会触发 `FLOOR_CHANGE_UNSUPPORTED`，不会自动切层。
+6. 每帧先处理地面 free ray，再处理障碍 endpoint，减少射线对墙体的过度清除。
+7. 持续的新地面高度候选会触发 `FLOOR_CHANGE_UNSUPPORTED`，不会自动切层。
+8. 地面以上障碍点先按 XY 降采样，再以鲁棒直线拟合和投影间隙拆分提取候选墙段；仅高度、长度、残差都合格的墙段进入跨帧跟踪。
+9. 两条稳定共线墙段之间仅在宽度合格且高于门洞高度的返回射线真正穿过缺口时才生成 `WALL_OPENING`。没有返回不是开放证据。
+10. 已建立的开口使用开口截面的占用/穿透射线多帧去抖估计状态。感知模块不调用 `/set_door_state`，也不会从场景文件或真值推导控制 ID。
 
 默认地图为 `40 m x 40 m`、`0.05 m/cell`，以 `odom` 原点为中心，发布频率 1 Hz。地图不会动态扩展，运行时应监控 `minimum_boundary_margin_m`。
 
@@ -215,17 +223,20 @@ rostopic echo -n 1 /a1/floor_mapping/status
 | `filter/maximum_range` | 8.0 m | 点云积分最大距离 |
 | `grid/resolution` | 0.05 m | 栅格分辨率 |
 | `grid/width,height` | 40 m | 固定地图范围 |
+| `door_wall/wall_stable_frames` | 3 | 墙段进入稳定输出所需连续观测帧 |
+| `door_wall/opening_min_width,max_width` | 1.0, 2.2 m | 可跟踪墙体开口的几何宽度范围 |
+| `door_wall/state_stable_frames` | 3 | 开口状态切换所需连续证据帧 |
 
 调整地面参数必须基于失败点云和空间证据，并补充回归测试；不要只为让某条路线通过而降低支持门槛。
 
 ## navigation/costmap 集成
 
-同一个 `/a1/floor_mapping/obstacle_cloud` 应配置为两个 `costmap_2d::ObstacleLayer` observation source：
+将两个 topic 配置为两个 `costmap_2d::ObstacleLayer` observation source：
 
-- marking source：过滤地面，`marking=true, clearing=false`；
-- clearing source：允许地面回波，`marking=false, clearing=true`。
+- marking source：`/a1/floor_mapping/obstacle_cloud`，`marking=true, clearing=false`；
+- clearing source：`/a1/floor_mapping/clearing_cloud`，`marking=false, clearing=true`。
 
-可直接参考 `config/costmap_mapping_sources.yaml`。单个 source 会让 marking 和 clearing 共用同一高度过滤，无法同时正确标记障碍和利用地面回波清除动态障碍。
+可直接参考 `config/costmap_mapping_sources.yaml`。语义分离后，墙/门识别永远不会误把地面返回当障碍，同时 costmap 仍可利用地面回波清除动态障碍。
 
 导航必须使用 `/a1/localization/odom` 和同一 TF 树。若消费累计 OccupancyGrid，需要 static layer 或等价消费者，并以 mapping status 作为强制健康门控。
 
@@ -248,6 +259,7 @@ catkin_test_results build/test_results/a1_floor_mapping
 - 非法输入与时间回退；
 - costmap marking/clearing 和传感器原点；
 - health gate 的状态、generation/session 和超时关闭。
+- 纯障碍/clearing 点云契约；合成开口的自由射线门槛、稳定 ID、开→关状态转移以及 generation/session 切换。
 
 ## 验收工具
 
@@ -275,6 +287,8 @@ rosrun a1_floor_mapping floor_mapping_route_runner.py \
 - 固定时间开环路线不能证明实际完成指定空间路径；
 - localization 的长期高度漂移会反映到 `odom` 中的 `floor_z`；
 - 门口等遮挡场景的地面支持可能接近默认绝对门槛；
+- 关闭状态只能在开口先被观察并建立 session 内轨迹后识别；从未观察到开放几何的完全关闭门会保持未知，而不是臆测为门；
+- 当前 `door_kind=unclassified`、`control_id_matched=false` 是有意的保守策略，后续行为模块必须以独立可靠关联补全控制 ID；
 - 固定 40 m 地图可能在长距离任务中触边；
 - 完整交付仍需重复 seed、地图几何、动态障碍和长时间连续运动验收。
 

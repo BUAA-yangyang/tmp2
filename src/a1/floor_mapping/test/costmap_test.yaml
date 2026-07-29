@@ -27,7 +27,7 @@ obstacles:
     observation_persistence: 0.0
     expected_update_rate: 0.0
   mapping_clearing:
-    topic: /test/costmap/mapping_cloud
+    topic: /test/costmap/clearing_cloud
     data_type: PointCloud2
     marking: false
     clearing: true
