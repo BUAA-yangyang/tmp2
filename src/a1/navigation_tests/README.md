@@ -297,6 +297,36 @@ Artifacts are intentionally outside git:
   ground_south_no_livox_forced_rtf025_phasefix_analysis.json
 ```
 
+## DEV-ONLY indoor-start milestone
+
+`single_floor_indoor_start_acceptance.launch` isolates the capability after the
+main entrance. Its test adapter starts with `RECORD_START` on indoor flat
+ground and suppresses only door request, entry transit, and post-entry map
+gates. Production frontier selection, MoveBaseAction navigation, return,
+final-zero, cmd mux/guard, and guarded all-foot safe-stop remain active.
+
+This is not an official-start competition acceptance. The test-only spawn
+pose, fixed scene seed, and expected 12 m by 12 m ROI are owned by
+`a1_navigation_tests`; production launch defaults remain unchanged. Run it
+only in a dedicated container and supply a new absolute result directory:
+
+```bash
+rosrun a1_navigation_tests run_indoor_start_once.sh \
+  /workspace/SimEnv/results/indoor_start_YYYYMMDD_HHMMSS
+```
+
+The runner refuses to overwrite an existing path. Its bag recorder must be
+subscribed to `/clock`, the ExploreFloor goal, and the MoveBase goal before
+physics is unpaused. Passing requires three spatially distinct indoor frontier
+targets, two successful frontier goals with real motion, strict exhausted-ROI
+completion, return within 0.40 m and 0.65 rad, fresh continuous zero on both
+`/cmd_vel_nav` and `/cmd_vel`, and `safe_stand_ready` before fixed stand.
+Before launching that recorder/acceptance pair, the runner also requires the
+simulation startup sentinel, a live controller process, and three consecutive
+`pause: True` observations after explicit pause calls. Its final verdict parses
+the top-level JSON boolean; a nested safe-stop success cannot mask a failed
+acceptance.
+
 ## Fast repeatable tests
 
 The business selector has ROS-independent tests, and the runtime rostest

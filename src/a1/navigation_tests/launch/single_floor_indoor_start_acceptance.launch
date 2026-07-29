@@ -1,0 +1,140 @@
+<launch>
+  <!-- DEV-ONLY post-entry capability test.
+       The robot is spawned separately on indoor flat ground. This launch must
+       not be presented as official-start competition acceptance. -->
+  <arg name="run_id" default="indoor_start_once"/>
+  <arg name="output"/>
+  <arg name="bag_path"/>
+  <arg name="exploration_config"
+       default="$(find a1_exploration)/config/exploration.yaml"/>
+  <arg name="roi_depth" default="12.0"/>
+  <arg name="roi_half_width" default="6.0"/>
+  <arg name="minimum_frontier_successes" default="2"/>
+  <arg name="minimum_distinct_frontiers" default="3"/>
+  <arg name="distinct_frontier_separation" default="0.75"/>
+  <arg name="minimum_trajectory_distance" default="1.0"/>
+  <arg name="action_timeout_sim" default="900.0"/>
+  <arg name="action_wall_timeout" default="10800.0"/>
+  <arg name="manage_physics_unpause" default="true"/>
+  <arg name="expected_start_x" default="0.0"/>
+  <arg name="expected_start_y" default="2.5"/>
+  <arg name="expected_start_yaw" default="1.5708"/>
+  <arg name="minimum_roi_global_y" default="1.0"/>
+
+  <include file="$(find a1_navigation_tests)/launch/single_floor_exploration_dev.launch">
+    <arg name="use_cmd_mux" value="true"/>
+    <arg name="use_rviz" value="false"/>
+    <arg name="start_building_behavior" value="false"/>
+    <arg name="start_exploration" value="false"/>
+  </include>
+
+  <node pkg="a1_navigation_tests"
+        type="indoor_start_frontier_explorer.py"
+        name="frontier_explorer" output="screen" required="true">
+    <param name="dev_indoor_start_ack" value="true"/>
+    <rosparam command="load" file="$(arg exploration_config)"/>
+  </node>
+
+  <!-- Recorder starts as part of the launch; the acceptance node proves its
+       graph subscriptions before it enters mode 5 or sends ExploreFloor. -->
+  <node pkg="rosbag" type="record" name="single_floor_acceptance_bag"
+        output="screen"
+        args="--lz4 -O $(arg bag_path)
+          /clock
+          /tf
+          /tf_static
+          /scan
+          /trunk_imu
+          /Odometry_gazebo
+          /visual/FR_foot_contact/the_force
+          /visual/FL_foot_contact/the_force
+          /visual/RR_foot_contact/the_force
+          /visual/RL_foot_contact/the_force
+          /a1_gazebo/joint_states
+          /a1_gazebo/FR_hip_controller/command
+          /a1_gazebo/FR_thigh_controller/command
+          /a1_gazebo/FR_calf_controller/command
+          /a1_gazebo/FL_hip_controller/command
+          /a1_gazebo/FL_thigh_controller/command
+          /a1_gazebo/FL_calf_controller/command
+          /a1_gazebo/RR_hip_controller/command
+          /a1_gazebo/RR_thigh_controller/command
+          /a1_gazebo/RR_calf_controller/command
+          /a1_gazebo/RL_hip_controller/command
+          /a1_gazebo/RL_thigh_controller/command
+          /a1_gazebo/RL_calf_controller/command
+          /a1_gazebo/FR_hip_controller/state
+          /a1_gazebo/FR_thigh_controller/state
+          /a1_gazebo/FR_calf_controller/state
+          /a1_gazebo/FL_hip_controller/state
+          /a1_gazebo/FL_thigh_controller/state
+          /a1_gazebo/FL_calf_controller/state
+          /a1_gazebo/RR_hip_controller/state
+          /a1_gazebo/RR_thigh_controller/state
+          /a1_gazebo/RR_calf_controller/state
+          /a1_gazebo/RL_hip_controller/state
+          /a1_gazebo/RL_thigh_controller/state
+          /a1_gazebo/RL_calf_controller/state
+          /a1/localization/odom
+          /a1/localization/status
+          /a1/localization/supervisor_status
+          /a1/floor_mapping/map
+          /a1/floor_mapping/status
+          /a1/floor_mapping/marking_cloud
+          /a1/floor_mapping/obstacle_cloud
+          /a1/exploration/status
+          /a1/exploration/frontiers
+          /a1/exploration/selected_target
+          /a1/exploration/failed_targets
+          /a1/exploration/trajectory
+          /a1/exploration/scope
+          /a1/exploration/roi
+          /a1/exploration/explore_floor/goal
+          /a1/exploration/explore_floor/feedback
+          /a1/exploration/explore_floor/result
+          /move_base/status
+          /move_base/goal
+          /move_base/result
+          /move_base/GlobalPlanner/plan
+          /move_base/DWAPlannerROS/local_plan
+          /cmd_vel_nav
+          /cmd_vel_muxed
+          /cmd_vel
+          /a1/controller_ready
+          /a1/safe_stand_ready
+          /a1_cmd_mux/safety_lock
+          /a1/cmd_mux/status
+          /a1/navigation_tests/indoor_start_mode
+          /a1/navigation_tests/indoor_roi_preview
+          /joy
+          /rosout_agg"/>
+
+  <node pkg="a1_navigation_tests"
+        type="single_floor_gazebo_acceptance.py"
+        name="single_floor_gazebo_acceptance"
+        output="screen" required="true">
+    <param name="run_id" value="$(arg run_id)"/>
+    <param name="output" value="$(arg output)"/>
+    <param name="roi_depth" value="$(arg roi_depth)"/>
+    <param name="roi_half_width" value="$(arg roi_half_width)"/>
+    <param name="minimum_frontier_successes"
+           value="$(arg minimum_frontier_successes)"/>
+    <param name="minimum_distinct_frontiers"
+           value="$(arg minimum_distinct_frontiers)"/>
+    <param name="distinct_frontier_separation"
+           value="$(arg distinct_frontier_separation)"/>
+    <param name="minimum_trajectory_distance"
+           value="$(arg minimum_trajectory_distance)"/>
+    <param name="action_timeout_sim" value="$(arg action_timeout_sim)"/>
+    <param name="action_wall_timeout" value="$(arg action_wall_timeout)"/>
+    <param name="manage_physics_unpause"
+           value="$(arg manage_physics_unpause)"/>
+    <param name="bag_recorder_node" value="/single_floor_acceptance_bag"/>
+    <param name="indoor_start" value="true"/>
+    <param name="expected_start_x" value="$(arg expected_start_x)"/>
+    <param name="expected_start_y" value="$(arg expected_start_y)"/>
+    <param name="expected_start_yaw" value="$(arg expected_start_yaw)"/>
+    <param name="minimum_roi_global_y"
+           value="$(arg minimum_roi_global_y)"/>
+  </node>
+</launch>

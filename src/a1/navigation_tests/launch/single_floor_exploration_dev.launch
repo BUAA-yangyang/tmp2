@@ -8,6 +8,8 @@
        default="$(find a1_exploration)/config/exploration.yaml"/>
   <arg name="team_scene_info"
        default="/workspace/SimEnv/generated_building/team_scene_info.json"/>
+  <arg name="start_building_behavior" default="true"/>
+  <arg name="start_exploration" default="true"/>
 
   <!-- Convert the real simulated Livox /scan to the PointCloud2 contract used
        by floor_mapping. No ground-truth transform is applied here. -->
@@ -48,11 +50,13 @@
   <include if="$(arg use_cmd_mux)"
            file="$(find a1_cmd_mux)/launch/cmd_mux.launch"/>
 
-  <include file="$(find a1_building_behavior)/launch/building_behavior.launch">
+  <include if="$(arg start_building_behavior)"
+           file="$(find a1_building_behavior)/launch/building_behavior.launch">
     <arg name="team_scene_info" value="$(arg team_scene_info)"/>
   </include>
 
-  <include file="$(find a1_exploration)/launch/exploration.launch">
+  <include if="$(arg start_exploration)"
+           file="$(find a1_exploration)/launch/exploration.launch">
     <arg name="config" value="$(arg exploration_config)"/>
   </include>
 
