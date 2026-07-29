@@ -6,6 +6,8 @@
   <arg name="use_rviz" default="true"/>
   <arg name="exploration_config"
        default="$(find a1_exploration)/config/exploration.yaml"/>
+  <arg name="team_scene_info"
+       default="/workspace/SimEnv/generated_building/team_scene_info.json"/>
 
   <!-- Convert the real simulated Livox /scan to the PointCloud2 contract used
        by floor_mapping. No ground-truth transform is applied here. -->
@@ -26,6 +28,8 @@
   <include file="$(find a1_navigation)/launch/navigation_floor_mapping.launch">
     <arg name="obstacle_cloud_topic"
          value="/a1/floor_mapping/obstacle_cloud"/>
+    <arg name="marking_cloud_topic"
+         value="/a1/floor_mapping/marking_cloud"/>
     <arg name="cmd_vel_topic" value="/cmd_vel_nav"/>
     <arg name="odom_topic" value="/Odometry_gazebo"/>
     <arg name="dwa_acc_lim_theta" value="10.0"/>
@@ -43,6 +47,10 @@
 
   <include if="$(arg use_cmd_mux)"
            file="$(find a1_cmd_mux)/launch/cmd_mux.launch"/>
+
+  <include file="$(find a1_building_behavior)/launch/building_behavior.launch">
+    <arg name="team_scene_info" value="$(arg team_scene_info)"/>
+  </include>
 
   <include file="$(find a1_exploration)/launch/exploration.launch">
     <arg name="config" value="$(arg exploration_config)"/>

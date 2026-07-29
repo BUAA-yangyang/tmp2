@@ -1,4 +1,13 @@
 <launch>
+  <node pkg="a1_building_behavior" type="building_behavior_node.py"
+        name="building_behavior_runtime_test" output="screen" required="true">
+    <param name="action" value="/test/building_behavior"/>
+    <param name="team_scene_info"
+           value="$(find a1_navigation_tests)/test/team_scene_info.json"/>
+    <param name="set_door_service" value="/test/set_door_state"/>
+    <param name="service_timeout_wall" value="2.0"/>
+  </node>
+
   <node pkg="a1_exploration" type="frontier_explorer_node.py"
         name="frontier_explorer_runtime_test" output="screen" required="true">
     <rosparam command="load"
@@ -8,26 +17,42 @@
            value="/test/exploration/mapping_status"/>
     <param name="topics/final_cmd_vel" value="/test/exploration/cmd_vel"/>
     <param name="topics/safety_lock" value="/test/exploration/safety_lock"/>
+    <param name="topics/controller_ready"
+           value="/test/exploration/controller_ready"/>
     <param name="topics/status" value="/test/exploration/status"/>
     <param name="topics/frontiers" value="/test/exploration/frontiers"/>
     <param name="topics/selected_target" value="/test/exploration/target"/>
     <param name="topics/failed_targets" value="/test/exploration/failed"/>
     <param name="topics/trajectory" value="/test/exploration/trajectory"/>
     <param name="topics/scope" value="/test/exploration/scope"/>
+    <param name="topics/roi" value="/test/exploration/roi"/>
     <param name="actions/explore_floor" value="/test/explore_floor"/>
     <param name="actions/move_base" value="/test/move_base"/>
+    <param name="actions/building_behavior" value="/test/building_behavior"/>
     <param name="services/make_plan" value="/test/move_base/make_plan"/>
+    <param name="services/dwa_reconfigure"
+           value="/test/move_base/DWAPlannerROS/set_parameters"/>
     <param name="frontier/minimum_free_cells" value="20"/>
     <param name="frontier/empty_confirmations" value="2"/>
+    <param name="frontier/stable_no_frontier_duration" value="0.4"/>
     <param name="frontier/min_goal_distance" value="0.10"/>
+    <param name="navigation/xy_goal_tolerance" value="0.20"/>
     <param name="frontier/max_goal_distance" value="20.0"/>
-    <param name="scope/enabled" value="true"/>
-    <param name="scope/forward_distance" value="20.0"/>
-    <param name="scope/rear_distance" value="20.0"/>
-    <param name="scope/lateral_half_width" value="20.0"/>
-    <param name="scope/boundary_margin" value="0.0"/>
+    <param name="roi/enabled" value="true"/>
+    <param name="entry/require_explicit_pose" value="true"/>
+    <param name="entry/inside_probe_distance" value="0.75"/>
+    <param name="entry/minimum_new_known_cells" value="2"/>
+    <rosparam param="roi/default_local_polygon">
+      [0.0, -3.0, 4.5, -3.0, 4.5, 3.0, 0.0, 3.0]
+    </rosparam>
+    <param name="roi/boundary_margin" value="0.0"/>
+    <param name="controller/ready_freshness" value="0.25"/>
     <param name="timeouts/prerequisites" value="8.0"/>
     <param name="timeouts/navigation_goal" value="3.0"/>
+    <param name="timeouts/entry_door_wall" value="2.0"/>
+    <param name="timeouts/entry_transit" value="3.0"/>
+    <param name="timeouts/entry_map" value="2.0"/>
+    <param name="timeouts/entry_plan" value="0.6"/>
     <param name="timeouts/return_goal" value="3.0"/>
     <param name="timeouts/map_update_wait" value="0.7"/>
     <param name="timeouts/mapping_health_grace" value="0.5"/>
@@ -36,7 +61,7 @@
     <param name="planning/make_plan_retry_delay_wall" value="0.02"/>
     <param name="planning/make_plan_unavailable_timeout_wall" value="1.0"/>
     <param name="return/maximum_attempts" value="1"/>
-    <param name="return/zero_settle_time" value="0.30"/>
+    <param name="return/zero_settle_time" value="0.50"/>
   </node>
   <test pkg="a1_navigation_tests" type="exploration_runtime_test.py"
         test-name="single_floor_exploration_runtime" time-limit="50"/>

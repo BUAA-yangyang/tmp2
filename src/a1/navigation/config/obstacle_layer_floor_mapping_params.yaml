@@ -1,6 +1,6 @@
-# floor_mapping publishes ground and obstacle returns in the real Livox sensor
-# frame.  Separate sources allow obstacle marking to reject ground while
-# clearing still uses ground rays and the correct sensor origin.
+# floor_mapping publishes two clouds with the same real Livox sensor origin:
+# an obstacle-only cloud classified relative to the tracked floor for marking,
+# and the backward-compatible ground+obstacle cloud for clearing rays.
 obstacle_range: 4.0
 raytrace_range: 5.0
 track_unknown_space: false
@@ -9,15 +9,17 @@ observation_sources: mapping_marking mapping_clearing
 
 mapping_marking:
   data_type: PointCloud2
-  topic: /a1_nav/obstacle_cloud
+  topic: /a1_nav/marking_cloud
   sensor_frame: laser_livox
   marking: true
   clearing: false
   inf_is_valid: false
   expected_update_rate: 0.0
   observation_persistence: 0.0
-  min_obstacle_height: 0.08
-  max_obstacle_height: 1.50
+  # floor_mapping already applied floor-relative height limits.  Wide z bounds
+  # here avoid reclassifying a raised floor with an absolute odom-z threshold.
+  min_obstacle_height: -10.0
+  max_obstacle_height: 10.0
   obstacle_range: 4.0
 
 mapping_clearing:

@@ -70,6 +70,7 @@ rosbag record -O /tmp/a1_single_floor_exploration.bag \
   /a1/localization/supervisor_status \
   /a1/floor_mapping/map \
   /a1/floor_mapping/status \
+  /a1/floor_mapping/marking_cloud \
   /a1/floor_mapping/obstacle_cloud \
   /a1/exploration/status \
   /a1/exploration/frontiers \
@@ -104,6 +105,73 @@ rosrun a1_navigation_tests single_floor_exploration_client.py \
 - `/cmd_vel` remained fresh and zero for the configured settling interval.
 
 The result JSON and rosbag are runtime artifacts and must not be committed.
+
+## Automated Gazebo single-floor acceptance, DEV-ONLY
+
+`single_floor_gazebo_acceptance.launch` runs the production door, mapping,
+move_base, exploration, return, final-zero, and guarded fixed-stand chain
+without RViz or remote-desktop input. It never reads the generated world,
+layout metadata, model/link states, or referee truth for door/entry decisions;
+the closed/open passage evidence comes from the Livox-derived OccupancyGrid.
+The existing `/Odometry_gazebo` bridge remains an explicitly DEV-ONLY
+localization substitute and is not a competition-localization claim.
+
+Start a fresh deterministic simulation with real Livox, foot contacts, and
+the controller in the background:
+
+```bash
+GUI=false SEED=20260729 \
+FLOOR_COUNT=1 ROOMS_PER_FLOOR=4 \
+AUTO_UNPAUSE=0 ACCEPTANCE_MANAGED_PHYSICS=1 \
+START_CONTROLLER=1 CONTROLLER_FOREGROUND=0 START_VIRTUAL_JOY=0 \
+ENABLE_SENSOR_DATA=0 ENABLE_LIVOX=1 ENABLE_LIVOX_IMU=0 \
+ENABLE_REALSENSE=0 ENABLE_POINTCLOUD_CONVERTER=0 \
+ENABLE_REFEREE_ODOM=1 PUBLISH_REFEREE_TF=1 \
+ENABLE_GROUND_TRUTH=1 ENABLE_FOOT_CONTACT_SENSOR=1 \
+ENABLE_FOOT_FORCE_VISUAL=0 WRITE_GENERATED_TRUTH_COPY=false \
+./auto.sh
+```
+
+With `ACCEPTANCE_MANAGED_PHYSICS=1`, Gazebo remains paused through robot
+spawn. The acceptance node first proves that the named rosbag recorder is
+subscribed to `/clock`, the ExploreFloor goal topic, and the MoveBase goal
+topic; only then does it unpause physics and immediately command fixed stand.
+Use a new output directory for every run.
+
+The bounded gate uses a floor-entry-local 12 m by 12 m ROI. It must open the
+public main entrance, show the occupied entry corridor becoming a known-free
+OccupancyGrid path, reach the entry, gain at least 20 new indoor cells,
+successfully execute at least two real frontier goals, naturally finish with
+no reachable frontier in that ROI, return to RECORD_START, settle `/cmd_vel`,
+and complete the guarded all-foot fixed-stand transition:
+
+```bash
+roslaunch a1_navigation_tests single_floor_gazebo_acceptance.launch \
+  run_id:=bounded roi_depth:=12.0 roi_half_width:=6.0 \
+  minimum_frontier_successes:=2 action_timeout_sim:=600 \
+  output:=/workspace/SimEnv/results/single_floor/bounded.json \
+  bag_path:=/workspace/SimEnv/results/single_floor/bounded.bag
+```
+
+Only after that gate passes, restart the simulation from a clean process graph
+and run the one permitted complete floor acceptance:
+
+```bash
+roslaunch a1_navigation_tests single_floor_gazebo_acceptance.launch \
+  run_id:=full roi_depth:=40.0 roi_half_width:=8.65 \
+  minimum_frontier_successes:=2 action_timeout_sim:=1200 \
+  action_wall_timeout:=14400 \
+  output:=/workspace/SimEnv/results/single_floor/full.json \
+  bag_path:=/workspace/SimEnv/results/single_floor/full.bag
+```
+
+The JSON records simulation duration, public door result, map corridor counts,
+entry map gain, frontier targets/outcomes, completion reason, trajectory,
+coverage denominator, return error, maximum attitude, final zero, foot forces,
+gyro, `safe_stand_ready`, and the inferred fixed-stand transition. Any failed
+gate cancels the action, commands zero, requests guarded all-foot support,
+latches the safety lock if that transition cannot be verified, writes JSON,
+and exits nonzero so rosbag closes before external process cleanup.
 
 ## Constant-velocity fall diagnostic, DEV-ONLY
 

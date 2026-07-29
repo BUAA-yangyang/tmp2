@@ -6,19 +6,26 @@ topics:
   mapping_status: /a1/floor_mapping/status
   final_cmd_vel: /cmd_vel
   safety_lock: /a1_cmd_mux/safety_lock
+  controller_ready: /a1/controller_ready
   status: /a1/exploration/status
   frontiers: /a1/exploration/frontiers
   selected_target: /a1/exploration/selected_target
   failed_targets: /a1/exploration/failed_targets
   trajectory: /a1/exploration/trajectory
   scope: /a1/exploration/scope
+  roi: /a1/exploration/roi
 
 actions:
   explore_floor: /a1/exploration/explore_floor
   move_base: /move_base
+  building_behavior: /a1/building_behavior/special
 
 services:
   make_plan: /move_base/make_plan
+  # Standard DWAPlannerROS dynamic_reconfigure service. The entry state queries
+  # the live config, applies a lower profile, verifies it, and restores the
+  # exact snapshot before any indoor frontier is selected.
+  dwa_reconfigure: /move_base/DWAPlannerROS/set_parameters
 
 planning:
   # A single empty TCPROS response can occur while move_base cancels a timed
@@ -28,16 +35,57 @@ planning:
   make_plan_retry_delay_wall: 0.15
   make_plan_unavailable_timeout_wall: 10.0
 
-# The scope is anchored to the pose and yaw recorded in RECORD_START. The
-# floor entry pose must face into the intended indoor work region. This
-# constrains frontier cells before clustering, goals, optional seeds, and
-# coverage without using Gazebo/building truth or fixed world coordinates.
-scope:
+# RECORD_START is the outdoor return pose. floor_entry_pose is a distinct pose
+# just inside the public main entrance, with +X pointing into the floor.
+entry:
+  require_explicit_pose: true
+  position_tolerance: 0.40
+  yaw_tolerance: 0.65
+  # OccupancyGrid must show a known-free path this far beyond floor_entry_pose.
+  inside_probe_distance: 0.75
+  # Livox cannot observe the cell under the robot body. Anchor connectivity at
+  # the nearest known-free cell within this finite self-clear neighborhood;
+  # unknown cells remain non-traversable.
+  anchor_search_radius: 0.60
+  # Moving from the threshold into the floor must reveal genuinely new cells in
+  # the indoor ROI; a service success alone is not entry evidence.
+  minimum_new_known_cells: 20
+  # Both the public OccupancyGrid connectivity proof and the pre-motion
+  # /move_base/make_plan result must stay inside this entry-local corridor.
+  corridor_half_width: 0.75
+  plan_endpoint_tolerance: 0.60
+  plan_maximum_length_ratio: 1.50
+  plan_maximum_length_slack: 0.75
+  # Livox evidence from bounded_v5/v7 shows a floor-height transition across
+  # the full entrance width. Keep the custom controller in its validated
+  # low-speed gait envelope while MoveBaseAction crosses that transition.
+  # These are temporary DWA maxima, not direct velocity commands; cmd_mux
+  # remains the sole /cmd_vel publisher.
+  speed_limit:
+    enabled: true
+    service_wait_wall: 3.0
+    max_vel_x: 0.05
+    max_vel_y: 0.0
+    max_vel_trans: 0.05
+    max_vel_theta: 0.15
+    # DWA rejects every non-zero trajectory when its live minimum speeds remain
+    # above the temporary maxima. Lower the paired minima in the same verified
+    # transaction and restore them from the same live snapshot.
+    min_vel_trans: 0.02
+    min_vel_theta: 0.05
+
+# The ROI is floor-entry-local and covers only the indoor body. The entrance
+# channel is a transit region, so it is excluded from frontier extraction,
+# coverage denominator, and the no-frontier completion decision.
+roi:
   enabled: true
-  forward_distance: 40.0
-  rear_distance: 1.0
-  lateral_half_width: 9.0
+  default_entry_forward_offset: 3.5
+  default_local_polygon: [0.0, -8.65, 40.0, -8.65,
+                          40.0, 8.65, 0.0, 8.65]
   boundary_margin: 0.35
+
+controller:
+  ready_freshness: 0.35
 
 frontier:
   min_length: 0.35
@@ -55,11 +103,23 @@ frontier:
   failure_cooldown: 4.0
   maximum_failures: 2
   empty_confirmations: 3
+  # An unchanged persistent map is also valid evidence. This is a dwell on a
+  # content fingerprint, not a fixed exploration runtime.
+  stable_no_frontier_duration: 2.0
   minimum_free_cells: 100
+
+navigation:
+  # Keep frontier targets outside the combined standoff + move_base acceptance
+  # radius. This prevents near-goal turn-in-place oscillation at the entrance.
+  xy_goal_tolerance: 0.35
 
 timeouts:
   prerequisites: 30.0
   navigation_goal: 75.0
+  entry_door_wall: 10.0
+  entry_transit: 90.0
+  entry_map: 15.0
+  entry_plan: 15.0
   # At the conservative 0.20 m/s unattended-dev speed, the 40 x 40 m grid
   # diagonal alone needs about 283 s before turns and obstacle detours. This
   # is a fault bound, not an exploration-completion rule.

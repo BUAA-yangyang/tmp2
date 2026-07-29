@@ -5,6 +5,7 @@ find_package(catkin REQUIRED COMPONENTS
   a1_navigation_interfaces
   actionlib
   diagnostic_msgs
+  dynamic_reconfigure
   geometry_msgs
   move_base_msgs
   nav_msgs
@@ -21,6 +22,7 @@ catkin_package(
     a1_navigation_interfaces
     actionlib
     diagnostic_msgs
+    dynamic_reconfigure
     geometry_msgs
     move_base_msgs
     nav_msgs
@@ -41,4 +43,6 @@ install(DIRECTORY config launch
 
 if(CATKIN_ENABLE_TESTING)
   catkin_add_nosetests(test/test_frontier_core.py)
+  catkin_add_nosetests(test/test_final_zero.py)
+  catkin_add_nosetests(test/test_entry_speed_limit.py)
 endif()

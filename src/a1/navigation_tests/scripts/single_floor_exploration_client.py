@@ -2,12 +2,16 @@
 """Headless ExploreFloor client that writes a machine-readable result."""
 
 import json
+import math
 import os
 import time
 
 import actionlib
 from a1_navigation_interfaces.msg import ExploreFloorAction, ExploreFloorGoal
+from geometry_msgs.msg import Point32
+from nav_msgs.msg import OccupancyGrid
 import rospy
+import tf2_ros
 
 
 class Client:
@@ -66,6 +70,62 @@ def main():
         rospy.get_param("~target_coverage_ratio", 0.0)
     )
     goal.timeout_s = float(rospy.get_param("~timeout_s", 0.0))
+    goal.entry_door_id = rospy.get_param("~entry_door_id", "")
+
+    map_topic = rospy.get_param(
+        "~map_topic", "/a1/floor_mapping/map"
+    )
+    base_frame = rospy.get_param("~base_frame", "base")
+    entry_forward = float(
+        rospy.get_param("~entry_forward_offset", 3.5)
+    )
+    entry_lateral = float(
+        rospy.get_param("~entry_lateral_offset", 0.0)
+    )
+    map_message = rospy.wait_for_message(
+        map_topic, OccupancyGrid, timeout=server_timeout
+    )
+    tf_buffer = tf2_ros.Buffer(cache_time=rospy.Duration(10.0))
+    tf_listener = tf2_ros.TransformListener(tf_buffer)
+    transform = tf_buffer.lookup_transform(
+        map_message.header.frame_id,
+        base_frame,
+        rospy.Time(0),
+        rospy.Duration(server_timeout),
+    )
+    del tf_listener
+    rotation = transform.transform.rotation
+    yaw = math.atan2(
+        2.0 * (rotation.w * rotation.z + rotation.x * rotation.y),
+        1.0 - 2.0 * (rotation.y ** 2 + rotation.z ** 2),
+    )
+    goal.floor_entry_pose.header.frame_id = map_message.header.frame_id
+    goal.floor_entry_pose.header.stamp = rospy.Time.now()
+    goal.floor_entry_pose.pose.position.x = (
+        transform.transform.translation.x
+        + math.cos(yaw) * entry_forward
+        - math.sin(yaw) * entry_lateral
+    )
+    goal.floor_entry_pose.pose.position.y = (
+        transform.transform.translation.y
+        + math.sin(yaw) * entry_forward
+        + math.cos(yaw) * entry_lateral
+    )
+    goal.floor_entry_pose.pose.orientation.x = 0.0
+    goal.floor_entry_pose.pose.orientation.y = 0.0
+    goal.floor_entry_pose.pose.orientation.z = math.sin(0.5 * yaw)
+    goal.floor_entry_pose.pose.orientation.w = math.cos(0.5 * yaw)
+
+    raw_roi = rospy.get_param(
+        "~roi_local",
+        [0.0, -8.65, 40.0, -8.65, 40.0, 8.65, 0.0, 8.65],
+    )
+    if len(raw_roi) < 6 or len(raw_roi) % 2:
+        raise ValueError("~roi_local requires at least three x,y pairs")
+    goal.roi_local.points = [
+        Point32(x=float(raw_roi[index]), y=float(raw_roi[index + 1]))
+        for index in range(0, len(raw_roi), 2)
+    ]
     client.send_goal(goal, feedback_cb=harness.feedback_callback)
     deadline = time.monotonic() + wall_timeout
     completed = False

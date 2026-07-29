@@ -19,9 +19,13 @@ from a1_navigation_interfaces.msg import (
     ExploreFloorFeedback,
     ExploreFloorResult,
     ExplorationStatus,
+    SpecialBehaviorAction,
+    SpecialBehaviorGoal,
 )
 from diagnostic_msgs.msg import DiagnosticStatus
-from geometry_msgs.msg import Point, PoseStamped, Twist
+from dynamic_reconfigure.msg import DoubleParameter
+from dynamic_reconfigure.srv import Reconfigure, ReconfigureRequest
+from geometry_msgs.msg import Point, Point32, PolygonStamped, PoseStamped, Twist
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 from nav_msgs.msg import OccupancyGrid, Path
 from nav_msgs.srv import GetPlan
@@ -32,13 +36,27 @@ from visualization_msgs.msg import Marker, MarkerArray
 
 from a1_exploration.frontier import (
     GridSpec,
+    NoFrontierEvidence,
     coverage_ratio,
     extract_frontiers,
     failed_goal_state,
-    point_in_start_aligned_scope,
+    has_pending_retry,
+    known_cell_count,
+    known_free_path_exists,
+    local_plan_is_acceptable,
+    nearest_known_free_anchor,
+    occupancy_content_fingerprint,
+    point_in_polygon,
     point_near,
+    polygon_mask,
     record_failure,
-    start_aligned_scope_mask,
+    segment_corridor_mask,
+    transform_local_polygon,
+)
+from a1_exploration.final_zero import FinalZeroMonitor
+from a1_exploration.entry_speed_limit import (
+    EntrySpeedLimitError,
+    EntrySpeedLimiter,
 )
 
 
@@ -71,6 +89,56 @@ def yaw_from_quaternion(quaternion):
     )
 
 
+ENTRY_QUATERNION_NORM_TOLERANCE = 1e-3
+ENTRY_PLANAR_COMPONENT_TOLERANCE = 1e-6
+
+
+class InvalidEntryPose(ValueError):
+    pass
+
+
+def validate_floor_entry_pose(pose, expected_frame=None):
+    """Validate the public 2-D entry contract without projecting its input."""
+    if not pose.header.frame_id:
+        raise InvalidEntryPose("frame_id is empty")
+    if expected_frame is not None and pose.header.frame_id != expected_frame:
+        raise InvalidEntryPose(
+            "frame_id %r does not match current map frame %r"
+            % (pose.header.frame_id, expected_frame)
+        )
+    position = pose.pose.position
+    position_values = (position.x, position.y, position.z)
+    if not all(math.isfinite(value) for value in position_values):
+        raise InvalidEntryPose("position contains a non-finite value")
+    quaternion = pose.pose.orientation
+    quaternion_values = (
+        quaternion.x,
+        quaternion.y,
+        quaternion.z,
+        quaternion.w,
+    )
+    if not all(math.isfinite(value) for value in quaternion_values):
+        raise InvalidEntryPose("orientation contains a non-finite value")
+    norm = math.sqrt(sum(value * value for value in quaternion_values))
+    if abs(norm - 1.0) > ENTRY_QUATERNION_NORM_TOLERANCE:
+        raise InvalidEntryPose(
+            "orientation is not a unit quaternion: norm=%.9f tolerance=%.1e"
+            % (norm, ENTRY_QUATERNION_NORM_TOLERANCE)
+        )
+    if (
+            abs(quaternion.x) > ENTRY_PLANAR_COMPONENT_TOLERANCE
+            or abs(quaternion.y) > ENTRY_PLANAR_COMPONENT_TOLERANCE):
+        raise InvalidEntryPose(
+            "orientation is not planar: |x|=%.9g |y|=%.9g tolerance=%.1e"
+            % (
+                abs(quaternion.x),
+                abs(quaternion.y),
+                ENTRY_PLANAR_COMPONENT_TOLERANCE,
+            )
+        )
+    return yaw_from_quaternion(quaternion)
+
+
 def angle_difference(first, second):
     return math.atan2(math.sin(first - second), math.cos(first - second))
 
@@ -90,6 +158,9 @@ class FrontierExplorer:
     INTERNAL_STATES = (
         "IDLE",
         "RECORD_START",
+        "REQUEST_ENTRY_DOOR_OPEN",
+        "TRANSIT_TO_ENTRY",
+        "ENTERED_FLOOR",
         "SELECT_FRONTIER",
         "NAVIGATING",
         "UPDATE_COVERAGE",
@@ -103,6 +174,10 @@ class FrontierExplorer:
     STATUS_CODES = {
         "IDLE": ExplorationStatus.IDLE,
         "RECORD_START": ExplorationStatus.RECORD_START,
+        "REQUEST_ENTRY_DOOR_OPEN":
+            ExplorationStatus.REQUEST_ENTRY_DOOR_OPEN,
+        "TRANSIT_TO_ENTRY": ExplorationStatus.TRANSIT_TO_ENTRY,
+        "ENTERED_FLOOR": ExplorationStatus.ENTERED_FLOOR,
         "SELECT_FRONTIER": ExplorationStatus.SELECTING_TARGET,
         "NAVIGATING": ExplorationStatus.NAVIGATING,
         "UPDATE_COVERAGE": ExplorationStatus.UPDATE_COVERAGE,
@@ -116,6 +191,10 @@ class FrontierExplorer:
     FEEDBACK_CODES = {
         "IDLE": ExploreFloorFeedback.IDLE,
         "RECORD_START": ExploreFloorFeedback.RECORD_START,
+        "REQUEST_ENTRY_DOOR_OPEN":
+            ExploreFloorFeedback.REQUEST_ENTRY_DOOR_OPEN,
+        "TRANSIT_TO_ENTRY": ExploreFloorFeedback.TRANSIT_TO_ENTRY,
+        "ENTERED_FLOOR": ExploreFloorFeedback.ENTERED_FLOOR,
         "SELECT_FRONTIER": ExploreFloorFeedback.SELECTING_TARGET,
         "NAVIGATING": ExploreFloorFeedback.NAVIGATING,
         "UPDATE_COVERAGE": ExploreFloorFeedback.UPDATE_COVERAGE,
@@ -132,8 +211,9 @@ class FrontierExplorer:
         self.mapping_status = None
         self.last_mapping_healthy_wall = 0.0
         self.final_command = None
-        self.final_command_wall = 0.0
         self.safety_locked = False
+        self.controller_ready = False
+        self.controller_ready_stamp = None
 
         self.state = "IDLE"
         self.state_message = "waiting for ExploreFloor goal"
@@ -145,10 +225,13 @@ class FrontierExplorer:
         self.action_ros_deadline = None
         self.action_wall_deadline = None
         self.start_pose = None
+        self.floor_entry_pose = None
+        self.roi_local = ()
+        self.roi_polygon_map = ()
         self.trajectory = Path()
         self.visited_goals = []
         self.failed_goals = []
-        self.no_goal_versions = []
+        self.no_goal_evidence = None
         self.make_plan_failure_since_wall = None
 
         self.base_frame = self.param("frames/base", "base")
@@ -163,6 +246,9 @@ class FrontierExplorer:
         )
         self.safety_lock_topic = self.param(
             "topics/safety_lock", "/a1_cmd_mux/safety_lock"
+        )
+        self.controller_ready_topic = self.param(
+            "topics/controller_ready", "/a1/controller_ready"
         )
         self.status_topic = self.param(
             "topics/status", "/a1/exploration/status"
@@ -182,14 +268,24 @@ class FrontierExplorer:
         self.scope_topic = self.param(
             "topics/scope", "/a1/exploration/scope"
         )
+        self.roi_topic = self.param(
+            "topics/roi", "/a1/exploration/roi"
+        )
         self.explore_action_name = self.param(
             "actions/explore_floor", "/a1/exploration/explore_floor"
         )
         self.move_action_name = self.param(
             "actions/move_base", "/move_base"
         )
+        self.building_behavior_action_name = self.param(
+            "actions/building_behavior", "/a1/building_behavior/special"
+        )
         self.make_plan_name = self.param(
             "services/make_plan", "/move_base/make_plan"
+        )
+        self.dwa_reconfigure_name = self.param(
+            "services/dwa_reconfigure",
+            "/move_base/DWAPlannerROS/set_parameters",
         )
 
         self.min_frontier_length = float(
@@ -206,6 +302,13 @@ class FrontierExplorer:
         )
         self.min_goal_distance = float(
             self.param("frontier/min_goal_distance", 0.45)
+        )
+        self.navigation_xy_goal_tolerance = float(
+            self.param("navigation/xy_goal_tolerance", 0.35)
+        )
+        self.effective_min_goal_distance = max(
+            self.min_goal_distance,
+            self.goal_standoff + self.navigation_xy_goal_tolerance,
         )
         self.max_goal_distance = float(
             self.param("frontier/max_goal_distance", 9.0)
@@ -237,6 +340,9 @@ class FrontierExplorer:
         self.empty_confirmations = int(
             self.param("frontier/empty_confirmations", 3)
         )
+        self.stable_no_frontier_duration = float(
+            self.param("frontier/stable_no_frontier_duration", 2.0)
+        )
         self.minimum_free_cells = int(
             self.param("frontier/minimum_free_cells", 100)
         )
@@ -250,18 +356,84 @@ class FrontierExplorer:
             self.param("planning/make_plan_unavailable_timeout_wall", 10.0)
         )
 
-        self.scope_enabled = bool(self.param("scope/enabled", True))
-        self.scope_forward_distance = float(
-            self.param("scope/forward_distance", 40.0)
+        self.roi_enabled = bool(self.param("roi/enabled", True))
+        self.require_explicit_entry_pose = bool(
+            self.param("entry/require_explicit_pose", True)
         )
-        self.scope_rear_distance = float(
-            self.param("scope/rear_distance", 1.0)
+        self.entry_position_tolerance = float(
+            self.param("entry/position_tolerance", 0.40)
         )
-        self.scope_lateral_half_width = float(
-            self.param("scope/lateral_half_width", 9.0)
+        self.entry_yaw_tolerance = float(
+            self.param("entry/yaw_tolerance", 0.65)
         )
-        self.scope_boundary_margin = float(
-            self.param("scope/boundary_margin", 0.35)
+        self.entry_inside_probe_distance = float(
+            self.param("entry/inside_probe_distance", 0.75)
+        )
+        self.entry_anchor_search_radius = float(
+            self.param("entry/anchor_search_radius", 0.60)
+        )
+        self.entry_minimum_new_known_cells = int(
+            self.param("entry/minimum_new_known_cells", 20)
+        )
+        self.entry_corridor_half_width = float(
+            self.param("entry/corridor_half_width", 0.75)
+        )
+        self.entry_plan_endpoint_tolerance = float(
+            self.param("entry/plan_endpoint_tolerance", 0.60)
+        )
+        self.entry_plan_maximum_length_ratio = float(
+            self.param("entry/plan_maximum_length_ratio", 1.50)
+        )
+        self.entry_plan_maximum_length_slack = float(
+            self.param("entry/plan_maximum_length_slack", 0.75)
+        )
+        self.entry_speed_limit_enabled = bool(
+            self.param("entry/speed_limit/enabled", True)
+        )
+        self.entry_speed_service_wait = float(
+            self.param("entry/speed_limit/service_wait_wall", 3.0)
+        )
+        self.entry_speed_limits = {
+            "max_vel_x": float(
+                self.param("entry/speed_limit/max_vel_x", 0.05)
+            ),
+            "max_vel_y": float(
+                self.param("entry/speed_limit/max_vel_y", 0.0)
+            ),
+            "max_vel_trans": float(
+                self.param("entry/speed_limit/max_vel_trans", 0.05)
+            ),
+            "max_vel_theta": float(
+                self.param("entry/speed_limit/max_vel_theta", 0.15)
+            ),
+            "min_vel_trans": float(
+                self.param("entry/speed_limit/min_vel_trans", 0.02)
+            ),
+            "min_vel_theta": float(
+                self.param("entry/speed_limit/min_vel_theta", 0.05)
+            ),
+        }
+        self.roi_entry_forward_offset = float(
+            self.param("roi/default_entry_forward_offset", 3.5)
+        )
+        raw_roi_polygon = self.param(
+            "roi/default_local_polygon",
+            [
+                0.0, -8.65, 40.0, -8.65,
+                40.0, 8.65, 0.0, 8.65,
+            ],
+        )
+        if len(raw_roi_polygon) % 2 != 0:
+            raise ValueError("roi/default_local_polygon requires x,y pairs")
+        self.default_roi_local = tuple(
+            (float(raw_roi_polygon[index]), float(raw_roi_polygon[index + 1]))
+            for index in range(0, len(raw_roi_polygon), 2)
+        )
+        self.roi_boundary_margin = float(
+            self.param("roi/boundary_margin", 0.35)
+        )
+        self.controller_ready_freshness = float(
+            self.param("controller/ready_freshness", 0.35)
         )
 
         self.prerequisite_timeout = float(
@@ -269,6 +441,18 @@ class FrontierExplorer:
         )
         self.navigation_timeout = float(
             self.param("timeouts/navigation_goal", 45.0)
+        )
+        self.entry_door_timeout = float(
+            self.param("timeouts/entry_door_wall", 10.0)
+        )
+        self.entry_transit_timeout = float(
+            self.param("timeouts/entry_transit", 90.0)
+        )
+        self.entry_map_timeout = float(
+            self.param("timeouts/entry_map", 15.0)
+        )
+        self.entry_plan_timeout = float(
+            self.param("timeouts/entry_plan", 15.0)
         )
         self.return_timeout = float(
             self.param("timeouts/return_goal", 60.0)
@@ -304,6 +488,9 @@ class FrontierExplorer:
         self.command_freshness = float(
             self.param("return/command_freshness", 0.25)
         )
+        self.final_zero_monitor = FinalZeroMonitor(
+            self.zero_epsilon, self.command_freshness, self.zero_settle
+        )
         self.trajectory_period = float(
             self.param("trajectory/sample_period", 0.20)
         )
@@ -320,7 +507,19 @@ class FrontierExplorer:
         self.move_client = actionlib.SimpleActionClient(
             self.move_action_name, MoveBaseAction
         )
+        self.building_behavior_client = actionlib.SimpleActionClient(
+            self.building_behavior_action_name, SpecialBehaviorAction
+        )
         self.make_plan = rospy.ServiceProxy(self.make_plan_name, GetPlan)
+        self.dwa_reconfigure = rospy.ServiceProxy(
+            self.dwa_reconfigure_name, Reconfigure
+        )
+        self.entry_speed_limiter = EntrySpeedLimiter(
+            self.dwa_reconfigure,
+            ReconfigureRequest,
+            DoubleParameter,
+            self.entry_speed_limits,
+        )
 
         self.status_pub = rospy.Publisher(
             self.status_topic, ExplorationStatus, queue_size=1, latch=True
@@ -340,6 +539,9 @@ class FrontierExplorer:
         self.scope_pub = rospy.Publisher(
             self.scope_topic, Marker, queue_size=1, latch=True
         )
+        self.roi_pub = rospy.Publisher(
+            self.roi_topic, PolygonStamped, queue_size=1, latch=True
+        )
 
         rospy.Subscriber(
             self.map_topic, OccupancyGrid, self.map_callback, queue_size=1
@@ -356,6 +558,12 @@ class FrontierExplorer:
         )
         rospy.Subscriber(
             self.safety_lock_topic, Bool, self.safety_callback, queue_size=1
+        )
+        rospy.Subscriber(
+            self.controller_ready_topic,
+            Bool,
+            self.controller_ready_callback,
+            queue_size=5,
         )
 
         self.server = actionlib.SimpleActionServer(
@@ -389,17 +597,53 @@ class FrontierExplorer:
             "frontier/min_length": self.min_frontier_length,
             "frontier/obstacle_clearance": self.obstacle_clearance,
             "frontier/max_goal_distance": self.max_goal_distance,
+            "navigation/xy_goal_tolerance":
+                self.navigation_xy_goal_tolerance,
+            "frontier/stable_no_frontier_duration":
+                self.stable_no_frontier_duration,
+            "entry/position_tolerance": self.entry_position_tolerance,
+            "entry/yaw_tolerance": self.entry_yaw_tolerance,
+            "entry/inside_probe_distance":
+                self.entry_inside_probe_distance,
+            "entry/anchor_search_radius":
+                self.entry_anchor_search_radius,
+            "entry/corridor_half_width": self.entry_corridor_half_width,
+            "entry/plan_endpoint_tolerance":
+                self.entry_plan_endpoint_tolerance,
+            "entry/plan_maximum_length_ratio":
+                self.entry_plan_maximum_length_ratio,
             "timeouts/prerequisites": self.prerequisite_timeout,
             "timeouts/navigation_goal": self.navigation_timeout,
+            "timeouts/entry_door_wall": self.entry_door_timeout,
+            "timeouts/entry_transit": self.entry_transit_timeout,
+            "timeouts/entry_map": self.entry_map_timeout,
+            "timeouts/entry_plan": self.entry_plan_timeout,
             "timeouts/return_goal": self.return_timeout,
             "return/position_tolerance": self.return_position_tolerance,
             "return/yaw_tolerance": self.return_yaw_tolerance,
             "return/zero_settle_time": self.zero_settle,
+            "return/command_freshness": self.command_freshness,
+            "controller/ready_freshness": self.controller_ready_freshness,
             "planning/make_plan_retry_delay_wall":
                 self.make_plan_retry_delay,
             "planning/make_plan_unavailable_timeout_wall":
                 self.make_plan_unavailable_timeout,
         }
+        if self.entry_speed_limit_enabled:
+            positive.update({
+                "entry/speed_limit/service_wait_wall":
+                    self.entry_speed_service_wait,
+                "entry/speed_limit/max_vel_x":
+                    self.entry_speed_limits["max_vel_x"],
+                "entry/speed_limit/max_vel_trans":
+                    self.entry_speed_limits["max_vel_trans"],
+                "entry/speed_limit/max_vel_theta":
+                    self.entry_speed_limits["max_vel_theta"],
+                "entry/speed_limit/min_vel_trans":
+                    self.entry_speed_limits["min_vel_trans"],
+                "entry/speed_limit/min_vel_theta":
+                    self.entry_speed_limits["min_vel_theta"],
+            })
         for name, value in positive.items():
             if not math.isfinite(value) or value <= 0.0:
                 raise ValueError("%s must be positive" % name)
@@ -407,29 +651,36 @@ class FrontierExplorer:
             self.maximum_failures < 1
             or self.empty_confirmations < 1
             or self.minimum_free_cells < 1
+            or self.entry_minimum_new_known_cells < 1
             or self.make_plan_retry_attempts < 1
             or self.return_attempts < 1
         ):
             raise ValueError("integer exploration limits must be positive")
-        if self.scope_enabled:
-            scope_values = (
-                self.scope_forward_distance,
-                self.scope_rear_distance,
-                self.scope_lateral_half_width,
-                self.scope_boundary_margin,
+        if self.entry_plan_maximum_length_ratio < 1.0:
+            raise ValueError(
+                "entry/plan_maximum_length_ratio must be at least 1.0"
             )
-            if not all(math.isfinite(value) for value in scope_values):
-                raise ValueError("scope geometry must be finite")
+        if (
+                not math.isfinite(self.entry_plan_maximum_length_slack)
+                or self.entry_plan_maximum_length_slack < 0.0):
+            raise ValueError(
+                "entry/plan_maximum_length_slack must be finite and nonnegative"
+            )
+        if (
+                not math.isfinite(self.entry_speed_limits["max_vel_y"])
+                or self.entry_speed_limits["max_vel_y"] < 0.0):
+            raise ValueError(
+                "entry/speed_limit/max_vel_y must be finite and nonnegative"
+            )
+        if self.roi_enabled:
             if (
-                self.scope_forward_distance <= self.scope_boundary_margin
-                or self.scope_rear_distance < self.scope_boundary_margin
-                or self.scope_lateral_half_width
-                <= self.scope_boundary_margin
-                or self.scope_boundary_margin < 0.0
+                not math.isfinite(self.roi_entry_forward_offset)
+                or not math.isfinite(self.roi_boundary_margin)
+                or self.roi_boundary_margin < 0.0
             ):
-                raise ValueError(
-                    "scope extents must remain positive after boundary margin"
-                )
+                raise ValueError("ROI fallback and boundary margin are invalid")
+            # Validation and zero-area rejection are shared with runtime goals.
+            transform_local_polygon(self.default_roi_local, (0.0, 0.0), 0.0)
 
     def map_callback(self, message):
         try:
@@ -448,15 +699,15 @@ class FrontierExplorer:
             return
         coverage = coverage_ratio(message.data)
         with self.lock:
-            start_pose = copy.deepcopy(self.start_pose)
-        if self.scope_enabled and start_pose is not None:
+            roi_ready = bool(self.roi_polygon_map)
+        if self.roi_enabled and roi_ready:
             try:
-                allowed = self.build_scope_mask(message, start_pose)
+                allowed = self.build_roi_mask(message)
                 coverage = coverage_ratio(message.data, allowed)
             except ValueError as error:
                 coverage = 0.0
                 rospy.logerr_throttle(
-                    1.0, "invalid active exploration scope: %s", error
+                    1.0, "invalid active exploration ROI: %s", error
                 )
         with self.lock:
             self.map_message = message
@@ -469,9 +720,13 @@ class FrontierExplorer:
                 self.last_mapping_healthy_wall = time.monotonic()
 
     def final_command_callback(self, message):
+        stamp = rospy.Time.now().to_sec()
         with self.lock:
             self.final_command = message
-            self.final_command_wall = time.monotonic()
+            self.final_zero_monitor.observe(
+                stamp,
+                (message.linear.x, message.linear.y, message.angular.z),
+            )
 
     def safety_callback(self, message):
         with self.lock:
@@ -480,6 +735,26 @@ class FrontierExplorer:
         if message.data and active:
             self.move_client.cancel_goal()
             rospy.logerr("exploration cancelled by a1_cmd_mux safety lock")
+
+    def controller_ready_callback(self, message):
+        stamp = rospy.Time.now()
+        with self.lock:
+            was_ready = self.controller_ready
+            self.controller_ready = bool(message.data)
+            self.controller_ready_stamp = stamp
+            active = self.action_active
+        if not message.data and active and was_ready:
+            self.move_client.cancel_goal()
+            rospy.logerr("exploration stopped because controller_ready is false")
+
+    def controller_is_ready(self):
+        now = rospy.Time.now()
+        with self.lock:
+            ready = self.controller_ready
+            stamp = self.controller_ready_stamp
+        if not ready or stamp is None or now < stamp:
+            return False
+        return (now - stamp).to_sec() <= self.controller_ready_freshness
 
     @staticmethod
     def mapping_usable(message):
@@ -491,6 +766,7 @@ class FrontierExplorer:
             and values.get("state", "MAPPING") == "MAPPING"
             and values.get("map_valid") == "true"
             and values.get("obstacle_cloud_valid") == "true"
+            and values.get("marking_cloud_valid", "true") == "true"
         )
 
     @staticmethod
@@ -505,13 +781,10 @@ class FrontierExplorer:
             values.get("floor_id", "unassigned"),
         )
 
-    @staticmethod
-    def map_version(message):
-        return (
-            message.header.stamp.to_nsec(),
-            message.info.width,
-            message.info.height,
-            sum(1 for value in message.data if value >= 0),
+    @classmethod
+    def map_version(cls, message):
+        return occupancy_content_fingerprint(
+            message.data, cls.grid_spec(message)
         )
 
     @staticmethod
@@ -557,71 +830,88 @@ class FrontierExplorer:
             origin_y=message.info.origin.position.y,
         )
 
-    def build_scope_mask(self, map_message, start_pose):
-        if not self.scope_enabled:
+    def build_roi_mask(self, map_message):
+        if not self.roi_enabled:
             return None
-        if start_pose is None:
-            raise ValueError("scope requires the recorded start pose")
+        if not self.roi_polygon_map:
+            raise ValueError("ROI has not been established")
         if (
-            not map_message.header.frame_id
-            or start_pose.header.frame_id != map_message.header.frame_id
+            self.floor_entry_pose is None
+            or not map_message.header.frame_id
+            or self.floor_entry_pose.header.frame_id
+            != map_message.header.frame_id
         ):
             raise ValueError(
-                "scope anchor frame does not match the current map frame"
+                "ROI entry frame does not match the current floor map"
             )
-        position = start_pose.pose.position
-        orientation = start_pose.pose.orientation
-        values = (
-            position.x,
-            position.y,
-            orientation.x,
-            orientation.y,
-            orientation.z,
-            orientation.w,
-        )
-        if not all(math.isfinite(value) for value in values):
-            raise ValueError("scope anchor pose is not finite")
-        orientation_norm = math.sqrt(
-            orientation.x * orientation.x
-            + orientation.y * orientation.y
-            + orientation.z * orientation.z
-            + orientation.w * orientation.w
-        )
-        if orientation_norm < 1e-6:
-            raise ValueError("scope anchor orientation is invalid")
-        allowed = start_aligned_scope_mask(
+        allowed = polygon_mask(
             self.grid_spec(map_message),
-            (position.x, position.y),
-            yaw_from_quaternion(orientation),
-            self.scope_forward_distance,
-            self.scope_rear_distance,
-            self.scope_lateral_half_width,
-            self.scope_boundary_margin,
+            self.roi_polygon_map,
+            self.roi_boundary_margin,
         )
         if not allowed.any():
-            raise ValueError("scope does not overlap the current floor map")
+            raise ValueError("ROI does not overlap the current floor map")
         return allowed
 
-    def target_in_scope(self, target):
-        if not self.scope_enabled:
+    def target_in_roi(self, target):
+        if not self.roi_enabled:
             return True
-        if self.start_pose is None:
+        if self.floor_entry_pose is None or not self.roi_polygon_map:
             return False
-        if target.header.frame_id != self.start_pose.header.frame_id:
+        if target.header.frame_id != self.floor_entry_pose.header.frame_id:
             return False
-        return point_in_start_aligned_scope(
+        return point_in_polygon(
             target.pose.position.x,
             target.pose.position.y,
-            (
-                self.start_pose.pose.position.x,
-                self.start_pose.pose.position.y,
-            ),
-            yaw_from_quaternion(self.start_pose.pose.orientation),
-            self.scope_forward_distance,
-            self.scope_rear_distance,
-            self.scope_lateral_half_width,
-            self.scope_boundary_margin,
+            self.roi_polygon_map,
+            self.roi_boundary_margin,
         )
+
+    def establish_roi(self, goal, map_frame):
+        if not self.roi_enabled:
+            self.floor_entry_pose = None
+            self.roi_local = ()
+            self.roi_polygon_map = ()
+            return
+
+        if goal.floor_entry_pose.header.frame_id:
+            validate_floor_entry_pose(goal.floor_entry_pose, map_frame)
+            entry = copy.deepcopy(goal.floor_entry_pose)
+            entry.header.stamp = rospy.Time.now()
+        else:
+            if self.require_explicit_entry_pose:
+                raise InvalidEntryPose(
+                    "floor_entry_pose is required; RECORD_START is only the "
+                    "outdoor return pose"
+                )
+            entry = copy.deepcopy(self.start_pose)
+            yaw = yaw_from_quaternion(entry.pose.orientation)
+            entry.pose.position.x += (
+                math.cos(yaw) * self.roi_entry_forward_offset
+            )
+            entry.pose.position.y += (
+                math.sin(yaw) * self.roi_entry_forward_offset
+            )
+            entry.header.stamp = rospy.Time.now()
+            rospy.logwarn(
+                "ExploreFloor omitted floor_entry_pose; using the configured "
+                "RECORD_START-relative compatibility fallback"
+            )
+
+        local_points = tuple(
+            (point.x, point.y) for point in goal.roi_local.points
+        )
+        if not local_points:
+            local_points = self.default_roi_local
+        yaw = yaw_from_quaternion(entry.pose.orientation)
+        world_points = transform_local_polygon(
+            local_points,
+            (entry.pose.position.x, entry.pose.position.y),
+            yaw,
+        )
+        self.floor_entry_pose = entry
+        self.roi_local = local_points
+        self.roi_polygon_map = world_points
 
     def pose_in_frame(self, frame):
         transform = self.tf_buffer.lookup_transform(
@@ -636,11 +926,477 @@ class FrontierExplorer:
         pose.pose.orientation = transform.transform.rotation
         return pose
 
+    def entry_probe_xy(self):
+        yaw = yaw_from_quaternion(self.floor_entry_pose.pose.orientation)
+        return (
+            self.floor_entry_pose.pose.position.x
+            + math.cos(yaw) * self.entry_inside_probe_distance,
+            self.floor_entry_pose.pose.position.y
+            + math.sin(yaw) * self.entry_inside_probe_distance,
+        )
+
+    @staticmethod
+    def pose_errors(current, target):
+        position_error = math.hypot(
+            current.pose.position.x - target.pose.position.x,
+            current.pose.position.y - target.pose.position.y,
+        )
+        yaw_error = abs(
+            angle_difference(
+                yaw_from_quaternion(current.pose.orientation),
+                yaw_from_quaternion(target.pose.orientation),
+            )
+        )
+        return position_error, yaw_error
+
+    def request_entry_door_open(self, goal):
+        deadline = time.monotonic() + self.entry_door_timeout
+        while not rospy.is_shutdown() and time.monotonic() < deadline:
+            self.check_cancel_safety_and_deadline(check_controller=False)
+            if self.building_behavior_client.wait_for_server(
+                rospy.Duration(0.05)
+            ):
+                break
+        else:
+            raise ExplorationFailure(
+                ExploreFloorResult.ERROR_ENTRY_DOOR,
+                "entry door behavior action is unavailable",
+            )
+
+        behavior = SpecialBehaviorGoal()
+        behavior.behavior_type = SpecialBehaviorGoal.OPEN_DOOR
+        behavior.target_id = goal.entry_door_id
+        behavior.target_floor_id = goal.floor_id
+        behavior.timeout_s = self.entry_door_timeout
+        self.building_behavior_client.send_goal(behavior)
+        while not rospy.is_shutdown():
+            try:
+                self.check_cancel_safety_and_deadline(
+                    check_controller=False
+                )
+            except ExplorationFailure:
+                self.building_behavior_client.cancel_goal()
+                raise
+            state = self.building_behavior_client.get_state()
+            if state in (
+                GoalStatus.SUCCEEDED,
+                GoalStatus.ABORTED,
+                GoalStatus.REJECTED,
+                GoalStatus.PREEMPTED,
+                GoalStatus.RECALLED,
+                GoalStatus.LOST,
+            ):
+                result = self.building_behavior_client.get_result()
+                if (
+                    state == GoalStatus.SUCCEEDED
+                    and result is not None
+                    and result.success
+                ):
+                    rospy.loginfo("entry door response accepted: %s", result.message)
+                    return
+                detail = (
+                    result.message if result is not None
+                    else "no SpecialBehavior result"
+                )
+                raise ExplorationFailure(
+                    ExploreFloorResult.ERROR_ENTRY_DOOR,
+                    "entry door open failed: action_state=%d %s"
+                    % (state, detail),
+                )
+            if time.monotonic() >= deadline:
+                self.building_behavior_client.cancel_goal()
+                raise ExplorationFailure(
+                    ExploreFloorResult.ERROR_ENTRY_DOOR,
+                    "entry door behavior exceeded %.1f wall seconds"
+                    % self.entry_door_timeout,
+                )
+            time.sleep(0.05)
+
+    def wait_for_entry_passage(self, baseline_message, outside_pose):
+        baseline_version = self.map_version(baseline_message)
+        probe_xy = self.entry_probe_xy()
+        start_xy = (
+            outside_pose.pose.position.x,
+            outside_pose.pose.position.y,
+        )
+        baseline_spec = self.grid_spec(baseline_message)
+        baseline_corridor = segment_corridor_mask(
+            baseline_spec,
+            start_xy,
+            probe_xy,
+            self.entry_corridor_half_width,
+        )
+        baseline_anchor = nearest_known_free_anchor(
+            baseline_message.data,
+            baseline_spec,
+            start_xy,
+            self.entry_anchor_search_radius,
+            self.free_threshold,
+            baseline_corridor,
+        )
+        baseline_path = (
+            baseline_anchor is not None
+            and known_free_path_exists(
+                baseline_message.data,
+                baseline_spec,
+                baseline_anchor,
+                probe_xy,
+                self.free_threshold,
+                baseline_corridor,
+            )
+        )
+        started_ros = rospy.Time.now()
+        started_wall = time.monotonic()
+        while not rospy.is_shutdown():
+            self.check_cancel_safety_and_deadline(check_controller=False)
+            now_ros = rospy.Time.now()
+            if now_ros < started_ros:
+                raise ExplorationFailure(
+                    ExploreFloorResult.ERROR_ENTRY_MAP,
+                    "ROS/simulation clock moved backwards while verifying door",
+                )
+            if (
+                (now_ros - started_ros).to_sec() >= self.entry_map_timeout
+                or time.monotonic() - started_wall
+                >= self.entry_map_timeout * self.wall_factor
+            ):
+                break
+            with self.lock:
+                message = copy.deepcopy(self.map_message)
+            spec = self.grid_spec(message) if message is not None else None
+            corridor = (
+                segment_corridor_mask(
+                    spec,
+                    start_xy,
+                    probe_xy,
+                    self.entry_corridor_half_width,
+                )
+                if spec is not None else None
+            )
+            passage_anchor = (
+                nearest_known_free_anchor(
+                    message.data,
+                    spec,
+                    start_xy,
+                    self.entry_anchor_search_radius,
+                    self.free_threshold,
+                    corridor,
+                )
+                if spec is not None else None
+            )
+            if (
+                message is not None
+                and message.header.frame_id
+                == self.floor_entry_pose.header.frame_id
+                and self.map_version(message) != baseline_version
+                and passage_anchor is not None
+                and known_free_path_exists(
+                    message.data,
+                    spec,
+                    passage_anchor,
+                    probe_xy,
+                    self.free_threshold,
+                    corridor,
+                )
+            ):
+                rospy.loginfo(
+                    "Livox/OccupancyGrid confirmed entry passage: "
+                    "baseline_known_free=%s, post-open_known_free=true, "
+                    "outside_anchor_offset=%.3f m",
+                    baseline_path,
+                    math.hypot(
+                        passage_anchor[0] - start_xy[0],
+                        passage_anchor[1] - start_xy[1],
+                    ),
+                )
+                return message
+            time.sleep(0.05)
+        raise ExplorationFailure(
+            ExploreFloorResult.ERROR_ENTRY_MAP,
+            "door service succeeded but OccupancyGrid did not show a new "
+            "known-free passage from a %.2f m-bounded outside self-clear "
+            "anchor to %.2f m inside the entry"
+            % (
+                self.entry_anchor_search_radius,
+                self.entry_inside_probe_distance,
+            ),
+        )
+
+    def apply_entry_speed_limit(self):
+        """Apply the live, reversible DWA entry profile before any motion."""
+        if not self.entry_speed_limit_enabled:
+            return
+        self.check_cancel_safety_and_deadline()
+        try:
+            rospy.wait_for_service(
+                self.dwa_reconfigure_name,
+                timeout=self.entry_speed_service_wait,
+            )
+        except rospy.ROSException as error:
+            raise ExplorationFailure(
+                ExploreFloorResult.ERROR_NAVIGATION_UNAVAILABLE,
+                "entry speed limiter service %s is unavailable: %s"
+                % (self.dwa_reconfigure_name, error),
+            )
+        self.check_cancel_safety_and_deadline()
+        try:
+            self.entry_speed_limiter.apply()
+        except EntrySpeedLimitError as error:
+            raise ExplorationFailure(
+                ExploreFloorResult.ERROR_ENTRY_TRANSIT,
+                "entry speed limiter failed closed before MoveBaseAction: %s"
+                % error,
+            )
+        limits = self.entry_speed_limiter.limits
+        rospy.loginfo(
+            "entry DWA speed profile active: vx=%.3f vy=%.3f "
+            "trans=[%.3f, %.3f] theta=[%.3f, %.3f]",
+            limits["max_vel_x"],
+            limits["max_vel_y"],
+            limits["min_vel_trans"],
+            limits["max_vel_trans"],
+            limits["min_vel_theta"],
+            limits["max_vel_theta"],
+        )
+
+    def restore_entry_speed_limit(self):
+        """Restore the exact live DWA snapshot before frontier selection."""
+        if (
+                not self.entry_speed_limit_enabled
+                or not self.entry_speed_limiter.active):
+            return
+        try:
+            self.entry_speed_limiter.restore()
+        except EntrySpeedLimitError as error:
+            raise ExplorationFailure(
+                ExploreFloorResult.ERROR_ENTRY_TRANSIT,
+                "entry DWA speed profile restore failed closed: %s" % error,
+            )
+        rospy.loginfo(
+            "entry DWA speed profile restored before leaving TRANSIT_TO_ENTRY"
+        )
+
+    def wait_for_local_entry_plan(self):
+        """Require a finite near-direct entry plan before sending MoveBaseAction."""
+        started_ros = rospy.Time.now()
+        started_wall = time.monotonic()
+        last_reason = "no make_plan response"
+        while not rospy.is_shutdown():
+            self.check_cancel_safety_and_deadline()
+            now_ros = rospy.Time.now()
+            if now_ros < started_ros:
+                raise ExplorationFailure(
+                    ExploreFloorResult.ERROR_ENTRY_TRANSIT,
+                    "ROS/simulation clock moved backwards while validating "
+                    "entry plan",
+                )
+            if (
+                (now_ros - started_ros).to_sec() >= self.entry_plan_timeout
+                or time.monotonic() - started_wall
+                >= self.entry_plan_timeout * self.wall_factor
+            ):
+                break
+
+            start = self.pose_in_frame(
+                self.floor_entry_pose.header.frame_id
+            )
+            target = copy.deepcopy(self.floor_entry_pose)
+            target.header.stamp = now_ros
+            try:
+                response = self.make_plan(
+                    start=start, goal=target, tolerance=0.20
+                )
+                self.make_plan_failure_since_wall = None
+            except rospy.ServiceException as error:
+                if self.make_plan_failure_since_wall is None:
+                    self.make_plan_failure_since_wall = time.monotonic()
+                last_reason = "make_plan service error: %s" % error
+                if (
+                    time.monotonic() - self.make_plan_failure_since_wall
+                    >= self.make_plan_unavailable_timeout
+                ):
+                    raise ExplorationFailure(
+                        ExploreFloorResult.ERROR_NAVIGATION_UNAVAILABLE,
+                        last_reason,
+                    )
+                time.sleep(self.make_plan_retry_delay)
+                continue
+
+            plan = response.plan
+            expected_frame = self.floor_entry_pose.header.frame_id
+            if (
+                    plan.header.frame_id
+                    and plan.header.frame_id != expected_frame):
+                last_reason = (
+                    "plan frame %r does not match entry frame %r"
+                    % (plan.header.frame_id, expected_frame)
+                )
+            elif any(
+                    pose.header.frame_id != expected_frame
+                    for pose in plan.poses):
+                last_reason = (
+                    "plan header may be empty, but every pose must explicitly "
+                    "use entry frame %r" % expected_frame
+                )
+            else:
+                points = [
+                    (pose.pose.position.x, pose.pose.position.y)
+                    for pose in plan.poses
+                ]
+                start_xy = (
+                    start.pose.position.x,
+                    start.pose.position.y,
+                )
+                goal_xy = (
+                    target.pose.position.x,
+                    target.pose.position.y,
+                )
+                if local_plan_is_acceptable(
+                    points,
+                    start_xy,
+                    goal_xy,
+                    self.entry_corridor_half_width,
+                    self.entry_plan_endpoint_tolerance,
+                    self.entry_plan_maximum_length_ratio,
+                    self.entry_plan_maximum_length_slack,
+                ):
+                    path_length = sum(
+                        math.hypot(
+                            points[index][0] - points[index - 1][0],
+                            points[index][1] - points[index - 1][1],
+                        )
+                        for index in range(1, len(points))
+                    )
+                    rospy.loginfo(
+                        "entry make_plan accepted before motion: "
+                        "poses=%d length=%.3f m direct=%.3f m",
+                        len(points),
+                        path_length,
+                        math.hypot(
+                            goal_xy[0] - start_xy[0],
+                            goal_xy[1] - start_xy[1],
+                        ),
+                    )
+                    return
+                last_reason = (
+                    "plan leaves %.2f m entry corridor, has invalid endpoints, "
+                    "or exceeds ratio %.2f + %.2f m"
+                    % (
+                        self.entry_corridor_half_width,
+                        self.entry_plan_maximum_length_ratio,
+                        self.entry_plan_maximum_length_slack,
+                    )
+                )
+            rospy.logwarn_throttle(
+                2.0,
+                "entry plan rejected before motion: %s",
+                last_reason,
+            )
+            time.sleep(0.10)
+
+        raise ExplorationFailure(
+            ExploreFloorResult.ERROR_ENTRY_TRANSIT,
+            "no safe local entry plan within %.2f ROS s: %s"
+            % (self.entry_plan_timeout, last_reason),
+        )
+
+    def wait_for_entered_floor(self, baseline_message):
+        baseline_version = self.map_version(baseline_message)
+        allowed = self.build_roi_mask(baseline_message)
+        baseline_known = known_cell_count(baseline_message.data, allowed)
+        probe_xy = self.entry_probe_xy()
+        started_ros = rospy.Time.now()
+        started_wall = time.monotonic()
+        last_position_error = float("inf")
+        last_yaw_error = float("inf")
+        last_known_gain = 0
+        while not rospy.is_shutdown():
+            self.check_cancel_safety_and_deadline()
+            now_ros = rospy.Time.now()
+            if now_ros < started_ros:
+                raise ExplorationFailure(
+                    ExploreFloorResult.ERROR_ENTRY_MAP,
+                    "ROS/simulation clock moved backwards after entry transit",
+                )
+            if (
+                (now_ros - started_ros).to_sec() >= self.entry_map_timeout
+                or time.monotonic() - started_wall
+                >= self.entry_map_timeout * self.wall_factor
+            ):
+                break
+            current = self.pose_in_frame(
+                self.floor_entry_pose.header.frame_id
+            )
+            last_position_error, last_yaw_error = self.pose_errors(
+                current, self.floor_entry_pose
+            )
+            with self.lock:
+                message = copy.deepcopy(self.map_message)
+            if message is not None:
+                current_allowed = self.build_roi_mask(message)
+                current_known = known_cell_count(
+                    message.data, current_allowed
+                )
+                last_known_gain = current_known - baseline_known
+                current_xy = (
+                    current.pose.position.x,
+                    current.pose.position.y,
+                )
+                current_anchor = nearest_known_free_anchor(
+                    message.data,
+                    self.grid_spec(message),
+                    current_xy,
+                    self.entry_anchor_search_radius,
+                    self.free_threshold,
+                )
+                if (
+                    self.map_version(message) != baseline_version
+                    and last_known_gain
+                    >= self.entry_minimum_new_known_cells
+                    and last_position_error
+                    <= self.entry_position_tolerance
+                    and last_yaw_error <= self.entry_yaw_tolerance
+                    and current_anchor is not None
+                    and known_free_path_exists(
+                        message.data,
+                        self.grid_spec(message),
+                        current_anchor,
+                        probe_xy,
+                        self.free_threshold,
+                    )
+                ):
+                    with self.lock:
+                        self.coverage = coverage_ratio(
+                            message.data, current_allowed
+                        )
+                    rospy.loginfo(
+                        "entered floor confirmed without truth: "
+                        "pose_error=%.3f m/%.3f rad, ROI known gain=%d cells",
+                        last_position_error,
+                        last_yaw_error,
+                        last_known_gain,
+                    )
+                    return
+            time.sleep(0.05)
+        raise ExplorationFailure(
+            ExploreFloorResult.ERROR_ENTRY_MAP,
+            "entry transit ended but floor entry was not confirmed: "
+            "pose_error=%.3f m/%.3f rad, ROI known gain=%d/%d cells"
+            % (
+                last_position_error,
+                last_yaw_error,
+                last_known_gain,
+                self.entry_minimum_new_known_cells,
+            ),
+        )
+
     def wait_for_prerequisites(self):
         deadline = time.monotonic() + self.prerequisite_timeout
         service_ready = False
         while not rospy.is_shutdown() and time.monotonic() < deadline:
-            self.check_cancel_safety_and_deadline(check_mapping=False)
+            self.check_cancel_safety_and_deadline(
+                check_mapping=False, check_controller=False
+            )
             with self.lock:
                 map_message = self.map_message
                 status = self.mapping_status
@@ -664,7 +1420,8 @@ class FrontierExplorer:
                     service_ready = True
                 except rospy.ROSException:
                     pass
-            if healthy and move_ready and service_ready:
+            controller_ready = self.controller_is_ready()
+            if healthy and move_ready and service_ready and controller_ready:
                 try:
                     self.pose_in_frame(map_message.header.frame_id)
                     return
@@ -678,10 +1435,12 @@ class FrontierExplorer:
         raise ExplorationFailure(
             ExploreFloorResult.ERROR_PRECONDITION,
             "prerequisite timeout: require healthy floor map, TF, move_base, "
-            "and make_plan",
+            "make_plan, and a fresh controller_ready=true heartbeat",
         )
 
-    def check_cancel_safety_and_deadline(self, check_mapping=True):
+    def check_cancel_safety_and_deadline(
+        self, check_mapping=True, check_controller=True
+    ):
         if self.server.is_preempt_requested():
             raise ExplorationFailure(
                 ExploreFloorResult.ERROR_CANCELLED,
@@ -698,6 +1457,12 @@ class FrontierExplorer:
             raise ExplorationFailure(
                 ExploreFloorResult.ERROR_SAFETY_STOP,
                 "a1_cmd_mux safety lock active",
+            )
+        if check_controller and not self.controller_is_ready():
+            raise ExplorationFailure(
+                ExploreFloorResult.ERROR_PRECONDITION,
+                "controller_ready is false, stale, or clock-invalid; "
+                "MoveBaseAction goal is not permitted",
             )
         if (
             self.action_ros_deadline is not None
@@ -731,7 +1496,9 @@ class FrontierExplorer:
             self.state_message = message
             if target is not None:
                 self.current_target = copy.deepcopy(target)
-            elif state not in ("NAVIGATING", "RETURNING"):
+            elif state not in (
+                "NAVIGATING", "TRANSIT_TO_ENTRY", "RETURNING"
+            ):
                 self.current_target = PoseStamped()
         self.publish_status()
         if self.server.is_active():
@@ -800,14 +1567,13 @@ class FrontierExplorer:
     def frontier_snapshot(self):
         with self.lock:
             message = copy.deepcopy(self.map_message)
-            start_pose = copy.deepcopy(self.start_pose)
         pose = self.pose_in_frame(message.header.frame_id)
         try:
-            allowed = self.build_scope_mask(message, start_pose)
+            allowed = self.build_roi_mask(message)
         except ValueError as error:
             raise ExplorationFailure(
                 ExploreFloorResult.ERROR_PRECONDITION,
-                "invalid single-floor exploration scope: %s" % error,
+                "invalid single-floor exploration ROI: %s" % error,
             )
         scoped_coverage = coverage_ratio(message.data, allowed)
         with self.lock:
@@ -820,7 +1586,7 @@ class FrontierExplorer:
             obstacle_clearance_m=self.obstacle_clearance,
             goal_standoff_m=self.goal_standoff,
             goal_search_radius_m=self.goal_search_radius,
-            minimum_goal_distance_m=self.min_goal_distance,
+            minimum_goal_distance_m=self.effective_min_goal_distance,
             maximum_goal_distance_m=self.max_goal_distance,
             free_threshold=self.free_threshold,
             occupied_threshold=self.occupied_threshold,
@@ -828,7 +1594,7 @@ class FrontierExplorer:
             distance_weight=self.distance_weight,
             allowed_mask=allowed,
         )
-        self.publish_scope(message)
+        self.publish_roi(message)
         return message, pose, frontiers
 
     def pose_for_frontier(self, frame, frontier):
@@ -845,6 +1611,7 @@ class FrontierExplorer:
     def path_exists(self, start, target):
         last_error = None
         for attempt in range(1, self.make_plan_retry_attempts + 1):
+            self.check_cancel_safety_and_deadline()
             try:
                 response = self.make_plan(
                     start=start, goal=target, tolerance=0.20
@@ -882,7 +1649,9 @@ class FrontierExplorer:
 
     def choose_frontier(self, map_message, robot_pose, frontiers):
         now = time.monotonic()
-        cooling = False
+        cooling = has_pending_retry(
+            self.failed_goals, now, self.maximum_failures
+        )
         frame = map_message.header.frame_id
         for frontier in frontiers:
             if point_near(
@@ -926,6 +1695,8 @@ class FrontierExplorer:
                 failure.failures,
                 self.maximum_failures,
             )
+            if failure.failures < self.maximum_failures:
+                cooling = True
         return None, None, cooling, False
 
     def publish_frontiers(self, map_message, frontiers):
@@ -978,13 +1749,21 @@ class FrontierExplorer:
         ]
         self.failed_pub.publish(failed)
 
-    def publish_scope(self, map_message):
+    def publish_roi(self, map_message):
+        polygon = PolygonStamped()
+        polygon.header = copy.deepcopy(map_message.header)
+        polygon.header.stamp = rospy.Time.now()
+        polygon.polygon.points = [
+            Point32(x=x, y=y, z=0.0) for x, y in self.roi_polygon_map
+        ]
+        self.roi_pub.publish(polygon)
+
         marker = Marker()
         marker.header = copy.deepcopy(map_message.header)
         marker.header.stamp = rospy.Time.now()
-        marker.ns = "single_floor_scope"
+        marker.ns = "single_floor_roi"
         marker.id = 0
-        if not self.scope_enabled or self.start_pose is None:
+        if not self.roi_enabled or not self.roi_polygon_map:
             marker.action = Marker.DELETE
             self.scope_pub.publish(marker)
             return
@@ -998,32 +1777,9 @@ class FrontierExplorer:
         marker.color.b = 1.00
         marker.color.a = 0.95
 
-        start_x = self.start_pose.pose.position.x
-        start_y = self.start_pose.pose.position.y
-        yaw = yaw_from_quaternion(self.start_pose.pose.orientation)
-        cosine = math.cos(yaw)
-        sine = math.sin(yaw)
-        rear = -self.scope_rear_distance + self.scope_boundary_margin
-        forward = (
-            self.scope_forward_distance - self.scope_boundary_margin
-        )
-        lateral = (
-            self.scope_lateral_half_width - self.scope_boundary_margin
-        )
-        local_corners = (
-            (rear, -lateral),
-            (forward, -lateral),
-            (forward, lateral),
-            (rear, lateral),
-            (rear, -lateral),
-        )
         marker.points = [
-            Point(
-                x=start_x + cosine * longitudinal - sine * sideways,
-                y=start_y + sine * longitudinal + cosine * sideways,
-                z=0.04,
-            )
-            for longitudinal, sideways in local_corners
+            Point(x=x, y=y, z=0.04)
+            for x, y in self.roi_polygon_map + self.roi_polygon_map[:1]
         ]
         self.scope_pub.publish(marker)
 
@@ -1046,6 +1802,9 @@ class FrontierExplorer:
         self.target_pub.publish(marker)
 
     def navigate(self, target, timeout, returning=False):
+        # This check is intentionally adjacent to send_goal: frontier
+        # extraction and make_plan must never create a race that bypasses the
+        # controller-ready gate.
         self.check_cancel_safety_and_deadline()
         move_goal = MoveBaseGoal(target_pose=target)
         self.move_client.send_goal(move_goal)
@@ -1066,7 +1825,16 @@ class FrontierExplorer:
                 GoalStatus.RECALLED,
                 GoalStatus.LOST,
             ):
-                return state == GoalStatus.SUCCEEDED, state
+                recordable_failure = state in (
+                    GoalStatus.ABORTED,
+                    GoalStatus.REJECTED,
+                    GoalStatus.LOST,
+                )
+                return (
+                    state == GoalStatus.SUCCEEDED,
+                    state,
+                    recordable_failure,
+                )
             ros_elapsed = (rospy.Time.now() - started_ros).to_sec()
             wall_elapsed = time.monotonic() - started_wall
             if ros_elapsed >= timeout or wall_elapsed >= timeout * self.wall_factor:
@@ -1079,10 +1847,10 @@ class FrontierExplorer:
                     wall_elapsed,
                     cancelled_state,
                 )
-                return False, cancelled_state
+                return False, cancelled_state, True
             time.sleep(0.05)
         self.cancel_move_goal()
-        return False, GoalStatus.LOST
+        return False, GoalStatus.LOST, False
 
     def cancel_move_goal(self, wait_wall=2.0):
         """Cancel this client's goal and briefly wait for a terminal state."""
@@ -1119,12 +1887,12 @@ class FrontierExplorer:
             time.sleep(0.05)
 
     def register_no_goal_confirmation(self, version):
-        if version not in self.no_goal_versions:
-            self.no_goal_versions.append(version)
-        return len(self.no_goal_versions) >= self.empty_confirmations
+        return self.no_goal_evidence.observe(
+            version, rospy.Time.now().to_sec()
+        )
 
     def reset_no_goal_confirmations(self):
-        self.no_goal_versions = []
+        self.no_goal_evidence.reset()
 
     def verify_return_pose(self):
         current = self.pose_in_frame(self.start_pose.header.frame_id)
@@ -1142,48 +1910,44 @@ class FrontierExplorer:
 
     def wait_for_final_zero(self):
         deadline = time.monotonic() + self.final_zero_timeout
-        zero_since = None
-        longest_zero = 0.0
-        last_values = (float("nan"),) * 3
-        last_age = float("inf")
+        last_result = None
         while not rospy.is_shutdown() and time.monotonic() < deadline:
             self.check_cancel_safety_and_deadline()
-            now = time.monotonic()
+            now_ros = rospy.Time.now().to_sec()
             with self.lock:
-                command = copy.deepcopy(self.final_command)
-                command_age = now - self.final_command_wall
-            last_age = command_age
-            if command is not None:
-                last_values = (
-                    command.linear.x,
-                    command.linear.y,
-                    command.angular.z,
+                last_result = self.final_zero_monitor.evaluate(now_ros)
+            if last_result["ready"]:
+                rospy.loginfo(
+                    "final /cmd_vel is fresh (age %.3f ROS s) and has been "
+                    "zero for %.3f ROS s",
+                    last_result["message_age"],
+                    last_result["zero_duration"],
                 )
-            fresh = command is not None and command_age <= self.command_freshness
-            zero = fresh and all(
-                abs(value) <= self.zero_epsilon
-                for value in last_values
-            )
-            if zero:
-                zero_since = now if zero_since is None else zero_since
-                longest_zero = max(longest_zero, now - zero_since)
-                if longest_zero >= self.zero_settle:
-                    rospy.loginfo(
-                        "final /cmd_vel settled to zero for %.2f wall seconds",
-                        longest_zero,
-                    )
-                    return True
-            else:
-                zero_since = None
+                return True
+            if "clock" in last_result["reason"]:
+                rospy.logerr(
+                    "final /cmd_vel verification failed closed: %s",
+                    last_result["reason"],
+                )
+                return False
             time.sleep(0.02)
+        if last_result is None:
+            last_result = {
+                "reason": "no verification sample",
+                "message_age": float("inf"),
+                "zero_duration": 0.0,
+                "values": (float("nan"),) * 3,
+            }
         rospy.logwarn(
-            "final /cmd_vel did not settle: longest_zero=%.2f s, "
-            "last=(%.3f, %.3f, %.3f), age=%.3f s, required=%.2f s",
-            longest_zero,
-            last_values[0],
-            last_values[1],
-            last_values[2],
-            last_age,
+            "final /cmd_vel did not settle in ROS time: reason=%s, "
+            "zero_duration=%.3f, last=(%.3f, %.3f, %.3f), age=%.3f, "
+            "required=%.2f",
+            last_result["reason"],
+            last_result["zero_duration"],
+            last_result["values"][0],
+            last_result["values"][1],
+            last_result["values"][2],
+            last_result["message_age"],
             self.zero_settle,
         )
         return False
@@ -1197,7 +1961,7 @@ class FrontierExplorer:
         self.publish_target(self.start_pose, "return_target")
         last_errors = (float("inf"), float("inf"))
         for attempt in range(1, self.return_attempts + 1):
-            succeeded, action_state = self.navigate(
+            succeeded, action_state, _recordable = self.navigate(
                 self.start_pose, self.return_timeout, returning=True
             )
             if succeeded:
@@ -1229,9 +1993,15 @@ class FrontierExplorer:
             self.action_active = True
             self.action_identity = None
             self.start_pose = None
+            self.floor_entry_pose = None
+            self.roi_local = ()
+            self.roi_polygon_map = ()
             self.visited_goals = []
             self.failed_goals = []
-            self.no_goal_versions = []
+            self.no_goal_evidence = NoFrontierEvidence(
+                self.empty_confirmations,
+                self.stable_no_frontier_duration,
+            )
             self.make_plan_failure_since_wall = None
             self.current_target = PoseStamped()
             self.trajectory = Path()
@@ -1239,6 +2009,7 @@ class FrontierExplorer:
                 coverage_ratio(self.map_message.data)
                 if self.map_message is not None else 0.0
             )
+            self.final_zero_monitor.reset()
         if goal.timeout_s > 0.0:
             self.action_ros_deadline = (
                 rospy.Time.now() + rospy.Duration(goal.timeout_s)
@@ -1252,14 +2023,28 @@ class FrontierExplorer:
         self.trajectory_pub.publish(Path())
         empty_scope = Marker()
         empty_scope.action = Marker.DELETE
-        empty_scope.ns = "single_floor_scope"
+        empty_scope.ns = "single_floor_roi"
         empty_scope.id = 0
         self.scope_pub.publish(empty_scope)
+        self.roi_pub.publish(PolygonStamped())
 
     def execute(self, goal):
         self.reset_action_state(goal)
         result = ExploreFloorResult()
         try:
+            try:
+                if goal.floor_entry_pose.header.frame_id:
+                    validate_floor_entry_pose(goal.floor_entry_pose)
+                elif self.require_explicit_entry_pose:
+                    raise InvalidEntryPose(
+                        "floor_entry_pose is required; RECORD_START is "
+                        "only the outdoor return pose"
+                    )
+            except InvalidEntryPose as error:
+                raise ExplorationFailure(
+                    ExploreFloorResult.ERROR_INVALID_ENTRY_POSE,
+                    "invalid floor_entry_pose: %s" % error,
+                )
             self.transition(
                 "RECORD_START",
                 "waiting for healthy map and recording start pose",
@@ -1273,17 +2058,23 @@ class FrontierExplorer:
             self.start_pose = self.pose_in_frame(map_frame)
             self.start_pose.header.stamp = rospy.Time.now()
             try:
-                allowed = self.build_scope_mask(
-                    self.map_message, self.start_pose
+                self.establish_roi(goal, map_frame)
+                with self.lock:
+                    initial_map = copy.deepcopy(self.map_message)
+                allowed = self.build_roi_mask(initial_map)
+            except InvalidEntryPose as error:
+                raise ExplorationFailure(
+                    ExploreFloorResult.ERROR_INVALID_ENTRY_POSE,
+                    "invalid floor_entry_pose: %s" % error,
                 )
             except ValueError as error:
                 raise ExplorationFailure(
                     ExploreFloorResult.ERROR_PRECONDITION,
-                    "invalid single-floor exploration scope: %s" % error,
+                    "invalid single-floor exploration ROI: %s" % error,
                 )
             with self.lock:
                 self.coverage = coverage_ratio(
-                    self.map_message.data, allowed
+                    initial_map.data, allowed
                 )
             self.trajectory.header.frame_id = map_frame
             self.trajectory.header.stamp = rospy.Time.now()
@@ -1297,17 +2088,84 @@ class FrontierExplorer:
                 self.start_pose.pose.position.y,
                 self.action_identity,
             )
-            self.publish_scope(self.map_message)
-            if self.scope_enabled:
+            self.publish_roi(initial_map)
+            if self.roi_enabled:
                 rospy.loginfo(
-                    "single-floor scope anchored at start yaw: "
-                    "forward=%.2f m rear=%.2f m half_width=%.2f m "
-                    "boundary_margin=%.2f m",
-                    self.scope_forward_distance,
-                    self.scope_rear_distance,
-                    self.scope_lateral_half_width,
-                    self.scope_boundary_margin,
+                    "single-floor ROI: entry frame=%s x=%.2f y=%.2f, "
+                    "%d local vertices, boundary_margin=%.2f m; "
+                    "coverage denominator=%d OccupancyGrid cell centers",
+                    self.floor_entry_pose.header.frame_id,
+                    self.floor_entry_pose.pose.position.x,
+                    self.floor_entry_pose.pose.position.y,
+                    len(self.roi_local),
+                    self.roi_boundary_margin,
+                    int(allowed.sum()),
                 )
+
+            self.transition(
+                "REQUEST_ENTRY_DOOR_OPEN",
+                "requesting the public main entrance door and checking response",
+            )
+            self.request_entry_door_open(goal)
+            door_open_map = self.wait_for_entry_passage(
+                initial_map, self.start_pose
+            )
+
+            self.floor_entry_pose.header.stamp = rospy.Time.now()
+            self.publish_target(self.floor_entry_pose, "floor_entry_target")
+            self.transition(
+                "TRANSIT_TO_ENTRY",
+                "validating a local plan through the sensor-confirmed entry "
+                "passage",
+                self.floor_entry_pose,
+            )
+            self.wait_for_local_entry_plan()
+            self.transition(
+                "TRANSIT_TO_ENTRY",
+                "moving through the sensor-confirmed local entry plan",
+                self.floor_entry_pose,
+            )
+            self.apply_entry_speed_limit()
+            transit_failure = None
+            try:
+                succeeded, action_state, _recordable = self.navigate(
+                    self.floor_entry_pose, self.entry_transit_timeout
+                )
+            except Exception as error:
+                transit_failure = error
+                raise
+            finally:
+                try:
+                    self.restore_entry_speed_limit()
+                except ExplorationFailure as restore_failure:
+                    if transit_failure is None:
+                        raise
+                    rospy.logerr(
+                        "entry speed restore also failed while handling %s: %s",
+                        transit_failure,
+                        restore_failure,
+                    )
+            if not succeeded:
+                raise ExplorationFailure(
+                    ExploreFloorResult.ERROR_ENTRY_TRANSIT,
+                    "failed to reach floor_entry_pose: move_base state=%d; "
+                    "entry transit is not a frontier failure" % action_state,
+                )
+
+            self.transition(
+                "ENTERED_FLOOR",
+                "checking entry pose and new post-entry OccupancyGrid evidence",
+                self.floor_entry_pose,
+            )
+            self.wait_for_entered_floor(door_open_map)
+            with self.lock:
+                entered_map = copy.deepcopy(self.map_message)
+            allowed = self.build_roi_mask(entered_map)
+            with self.lock:
+                self.coverage = coverage_ratio(
+                    entered_map.data, allowed
+                )
+            self.publish_roi(entered_map)
 
             if goal.seed_target.header.frame_id:
                 if goal.seed_target.header.frame_id != map_frame:
@@ -1318,20 +2176,21 @@ class FrontierExplorer:
                     )
                 seed = copy.deepcopy(goal.seed_target)
                 seed.header.stamp = rospy.Time.now()
-                if not self.target_in_scope(seed):
+                if not self.target_in_roi(seed):
                     raise ExplorationFailure(
                         ExploreFloorResult.ERROR_PRECONDITION,
                         "seed_target lies outside the current single-floor "
-                        "exploration scope",
+                        "exploration ROI",
                     )
-                if self.path_exists(self.start_pose, seed):
+                current_pose = self.pose_in_frame(map_frame)
+                if self.path_exists(current_pose, seed):
                     self.publish_target(seed, "seed_target")
                     self.transition(
                         "NAVIGATING",
                         "executing optional caller-provided seed target",
                         seed,
                     )
-                    succeeded, _state = self.navigate(
+                    succeeded, _state, _recordable = self.navigate(
                         seed, self.navigation_timeout
                     )
                     if succeeded:
@@ -1345,17 +2204,14 @@ class FrontierExplorer:
                     )
 
             completion_reason = ""
+            if goal.target_coverage_ratio > 0.0:
+                rospy.logwarn(
+                    "target_coverage_ratio=%.3f is diagnostic only; "
+                    "completion still requires no reachable frontier in ROI",
+                    goal.target_coverage_ratio,
+                )
             while not rospy.is_shutdown():
                 self.check_cancel_safety_and_deadline()
-                if (
-                    goal.target_coverage_ratio > 0.0
-                    and self.coverage >= goal.target_coverage_ratio
-                ):
-                    completion_reason = (
-                        "explicit known-grid coverage target %.3f reached"
-                        % goal.target_coverage_ratio
-                    )
-                    break
                 self.transition(
                     "SELECT_FRONTIER",
                     "extracting and checking reachable frontiers",
@@ -1384,21 +2240,17 @@ class FrontierExplorer:
                         )
                         self.wait_for_map_update(version)
                         continue
-                    confirmed = self.register_no_goal_confirmation(version)
-                    if confirmed:
+                    evidence = self.register_no_goal_confirmation(version)
+                    if evidence["complete"]:
                         completion_reason = (
-                            "no eligible frontier on %d distinct map updates; "
-                            "remaining targets are visited or unreachable"
-                            % self.empty_confirmations
+                            "%s; remaining targets are visited or permanently "
+                            "unreachable after valid navigation attempts"
+                            % evidence["reason"]
                         )
                         break
                     self.transition(
                         "UPDATE_COVERAGE",
-                        "no eligible frontier on map update %d/%d"
-                        % (
-                            len(self.no_goal_versions),
-                            self.empty_confirmations,
-                        ),
+                        evidence["reason"],
                     )
                     self.wait_for_map_update(version)
                     continue
@@ -1411,7 +2263,7 @@ class FrontierExplorer:
                     % (frontier.length_m, frontier.score),
                     target,
                 )
-                succeeded, action_state = self.navigate(
+                succeeded, action_state, recordable_failure = self.navigate(
                     target, self.navigation_timeout
                 )
                 if succeeded:
@@ -1422,7 +2274,7 @@ class FrontierExplorer:
                         "UPDATE_COVERAGE",
                         "frontier reached; waiting for a newer floor map",
                     )
-                else:
+                elif recordable_failure:
                     failure = record_failure(
                         self.failed_goals,
                         target.pose.position.x,
@@ -1439,6 +2291,12 @@ class FrontierExplorer:
                             failure.failures,
                             self.maximum_failures,
                         ),
+                    )
+                else:
+                    self.transition(
+                        "UPDATE_COVERAGE",
+                        "move_base state=%d was cancelled/preempted; target "
+                        "was not added to unreachable history" % action_state,
                     )
                 self.wait_for_map_update(version)
 
@@ -1459,6 +2317,7 @@ class FrontierExplorer:
             self.server.set_succeeded(result)
         except ExplorationFailure as failure:
             self.move_client.cancel_goal()
+            self.building_behavior_client.cancel_goal()
             state = "CANCELLED" if failure.preempted else "FAILED"
             self.transition(state, str(failure))
             result.success = False
@@ -1471,6 +2330,7 @@ class FrontierExplorer:
                 self.server.set_aborted(result)
         except Exception as error:
             self.move_client.cancel_goal()
+            self.building_behavior_client.cancel_goal()
             rospy.logerr("unhandled exploration error: %s", error)
             self.transition("FAILED", "internal error: %s" % error)
             result.success = False
@@ -1479,6 +2339,15 @@ class FrontierExplorer:
             result.final_coverage_ratio = self.coverage
             self.server.set_aborted(result)
         finally:
+            if self.entry_speed_limiter.active:
+                try:
+                    self.restore_entry_speed_limit()
+                except ExplorationFailure as restore_failure:
+                    rospy.logfatal(
+                        "ExploreFloor exit left the conservative entry speed "
+                        "profile active because exact restore failed: %s",
+                        restore_failure,
+                    )
             with self.lock:
                 self.action_active = False
                 self.action_identity = None

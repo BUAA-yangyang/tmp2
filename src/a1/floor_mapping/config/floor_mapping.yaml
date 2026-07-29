@@ -4,6 +4,12 @@ topics:
   odom: /a1/localization/odom
   localization_status: /a1/localization/status
   supervisor_status: /a1/localization/supervisor_status
+  # Obstacle-only returns, classified by height relative to the tracked floor.
+  # Costmap marking must consume this topic so a raised support surface is not
+  # reinterpreted as an obstacle by an absolute world-z threshold.
+  marking_cloud: /a1/floor_mapping/marking_cloud
+  # Backward-compatible ground+obstacle cloud. Keep it for clearing rays and
+  # existing visualization/diagnostics consumers; do not use it for marking.
   obstacle_cloud: /a1/floor_mapping/obstacle_cloud
   occupancy_grid: /a1/floor_mapping/map
   status: /a1/floor_mapping/status

@@ -3,6 +3,8 @@
        /cmd_vel_nav output remain unchanged. -->
   <arg name="obstacle_cloud_topic"
        default="/a1/floor_mapping/obstacle_cloud"/>
+  <arg name="marking_cloud_topic"
+       default="/a1/floor_mapping/marking_cloud"/>
   <arg name="cmd_vel_topic" default="/cmd_vel_nav"/>
   <arg name="odom_topic" default="/Odometry_gazebo"/>
   <arg name="dwa_acc_lim_theta" default="3.0"/>
@@ -39,4 +41,12 @@
     <arg name="obstacle_layer_config"
          value="$(find a1_navigation)/config/obstacle_layer_floor_mapping_params.yaml"/>
   </include>
+
+  <!-- Additive floor-mapping contract: marking consumes only floor-relative
+       obstacle returns. The existing obstacle_cloud relay remains the
+       ground+obstacle clearing source and stays backward compatible. -->
+  <node if="$(eval arg('marking_cloud_topic') != '/a1_nav/marking_cloud')"
+        pkg="topic_tools" type="relay" name="marking_cloud_relay"
+        args="$(arg marking_cloud_topic) /a1_nav/marking_cloud"
+        output="screen"/>
 </launch>

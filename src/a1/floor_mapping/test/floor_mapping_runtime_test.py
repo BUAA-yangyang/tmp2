@@ -17,12 +17,13 @@ class RuntimeTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         rospy.init_node("floor_mapping_runtime_test")
-        cls.clouds=[]; cls.maps=[]; cls.statuses=[]
+        cls.clouds=[]; cls.marking_clouds=[]; cls.maps=[]; cls.statuses=[]
         cls.cloud_pub=rospy.Publisher("/test/mapping/cloud",PointCloud2,queue_size=2)
         cls.odom_pub=rospy.Publisher("/test/mapping/odom",Odometry,queue_size=2)
         cls.loc_pub=rospy.Publisher("/test/mapping/localization",DiagnosticStatus,queue_size=2,latch=True)
         cls.sup_pub=rospy.Publisher("/test/mapping/supervisor",DiagnosticStatus,queue_size=2,latch=True)
         rospy.Subscriber("/test/mapping/output_cloud",PointCloud2,cls.clouds.append)
+        rospy.Subscriber("/test/mapping/marking_cloud",PointCloud2,cls.marking_clouds.append)
         rospy.Subscriber("/test/mapping/map",OccupancyGrid,cls.maps.append)
         rospy.Subscriber("/test/mapping/status",DiagnosticStatus,cls.statuses.append)
         cls.tf=tf2_ros.TransformBroadcaster(); time.sleep(1)
@@ -60,6 +61,12 @@ class RuntimeTest(unittest.TestCase):
         status=self.wait_state("MAPPING");self.assertEqual(dict((v.key,v.value) for v in status.values)["map_valid"],"true")
         first_session=int(dict((v.key,v.value) for v in status.values)["floor_session_id"])
         self.assertTrue(self.clouds);self.assertEqual(self.clouds[-1].header.frame_id,"laser_livox")
+        self.assertTrue(self.marking_clouds);self.assertEqual(self.marking_clouds[-1].header.frame_id,"laser_livox")
+        combined=list(point_cloud2.read_points(self.clouds[-1],field_names=("x","y","z"),skip_nans=True))
+        marking=list(point_cloud2.read_points(self.marking_clouds[-1],field_names=("x","y","z"),skip_nans=True))
+        self.assertGreater(len(combined),len(marking))
+        self.assertGreater(len(marking),0)
+        self.assertTrue(all(point[2] > -0.25 for point in marking))
         end=time.time()+3
         while time.time()<end and (not self.maps or 100 not in self.maps[-1].data or 0 not in self.maps[-1].data):
             self.frame();time.sleep(.12)

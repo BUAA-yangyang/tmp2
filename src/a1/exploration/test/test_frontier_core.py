@@ -7,12 +7,23 @@ import numpy as np
 from a1_exploration.frontier import (
     FailedGoal,
     GridSpec,
+    NoFrontierEvidence,
     coverage_ratio,
     extract_frontiers,
     failed_goal_state,
+    has_pending_retry,
+    known_cell_count,
+    known_free_path_exists,
+    local_plan_is_acceptable,
+    nearest_known_free_anchor,
+    occupancy_content_fingerprint,
+    point_in_polygon,
     point_in_start_aligned_scope,
+    polygon_mask,
     record_failure,
+    segment_corridor_mask,
     start_aligned_scope_mask,
+    transform_local_polygon,
 )
 
 
@@ -175,6 +186,268 @@ class FrontierCoreTest(unittest.TestCase):
                 lateral_half_width_m=1.0,
                 boundary_margin_m=0.2,
             )
+
+    def test_entry_relative_concave_roi_rotates_and_keeps_narrow_entrance(self):
+        local = (
+            (-2.0, -0.5),
+            (0.0, -0.5),
+            (0.0, -2.0),
+            (4.0, -2.0),
+            (4.0, 2.0),
+            (0.0, 2.0),
+            (0.0, 0.5),
+            (-2.0, 0.5),
+        )
+        world = transform_local_polygon(
+            local, anchor_xy=(1.0, -1.0), anchor_yaw=math.pi / 2.0
+        )
+        self.assertTrue(point_in_polygon(1.0, -2.5, world))
+        self.assertFalse(point_in_polygon(2.0, -2.5, world))
+        self.assertTrue(point_in_polygon(0.0, 2.0, world))
+
+        mask = polygon_mask(self.spec, world)
+        self.assertTrue(mask[self.spec.world_to_cell(1.0, -2.5)])
+        self.assertFalse(mask[self.spec.world_to_cell(2.0, -2.5)])
+        self.assertTrue(mask[self.spec.world_to_cell(0.0, 2.0)])
+
+    def test_roi_boundary_margin_and_invalid_polygon_fail_closed(self):
+        polygon = ((-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0))
+        self.assertTrue(point_in_polygon(0.0, 0.0, polygon, 0.2))
+        self.assertFalse(point_in_polygon(0.9, 0.0, polygon, 0.2))
+        with self.assertRaises(ValueError):
+            polygon_mask(self.spec, ((0.0, 0.0), (1.0, 0.0)))
+        with self.assertRaises(ValueError):
+            polygon_mask(
+                self.spec,
+                ((0.0, 0.0), (1.0, 0.0), (2.0, 0.0)),
+            )
+
+    def test_near_frontier_goal_is_rejected_by_effective_nav_distance(self):
+        grid = np.full((30, 30), -1, dtype=np.int8)
+        grid[12:18, 12:18] = 0
+        loose = extract_frontiers(
+            grid.ravel(),
+            self.spec,
+            robot_xy=(0.0, 0.0),
+            min_frontier_length_m=0.2,
+            obstacle_clearance_m=0.1,
+            goal_standoff_m=0.35,
+            minimum_goal_distance_m=0.1,
+        )
+        self.assertTrue(loose)
+        strict = extract_frontiers(
+            grid.ravel(),
+            self.spec,
+            robot_xy=(0.0, 0.0),
+            min_frontier_length_m=0.2,
+            obstacle_clearance_m=0.1,
+            goal_standoff_m=0.35,
+            minimum_goal_distance_m=0.70,
+        )
+        self.assertTrue(
+            all(item.distance_m >= 0.70 for item in strict),
+            "goal distance must include standoff plus move_base xy tolerance",
+        )
+
+    def test_map_fingerprint_ignores_headers_and_tracks_content(self):
+        grid = np.full((30, 30), -1, dtype=np.int8)
+        first = occupancy_content_fingerprint(grid.ravel(), self.spec)
+        second = occupancy_content_fingerprint(grid.ravel(), self.spec)
+        self.assertEqual(first, second)
+        grid[10, 10] = 0
+        self.assertNotEqual(
+            first, occupancy_content_fingerprint(grid.ravel(), self.spec)
+        )
+
+    def test_no_frontier_evidence_does_not_count_repeated_content(self):
+        evidence = NoFrontierEvidence(distinct_required=3, stable_duration=2.0)
+        version = ("same-content",)
+        first = evidence.observe(version, 10.0)
+        second = evidence.observe(version, 10.5)
+        self.assertFalse(first["complete"])
+        self.assertFalse(second["complete"])
+        self.assertEqual(second["count"], 1)
+        stable = evidence.observe(version, 12.1)
+        self.assertTrue(stable["complete"])
+        self.assertIn("unchanged map content", stable["reason"])
+
+        rollback = evidence.observe(version, 11.0)
+        self.assertFalse(rollback["complete"])
+        self.assertEqual(rollback["count"], 0)
+
+    def test_retry_cooldown_remains_pending_without_current_frontier(self):
+        failures = [FailedGoal(1.0, 2.0, failures=1, retry_after=14.0)]
+        self.assertTrue(has_pending_retry(failures, 13.0, 2))
+        self.assertFalse(has_pending_retry(failures, 15.0, 2))
+        failures[0].failures = 2
+        self.assertFalse(has_pending_retry(failures, 13.0, 2))
+
+    def test_entry_passage_uses_only_known_free_grid_connectivity(self):
+        spec = GridSpec(12, 8, 0.5, -3.0, -2.0)
+        grid = np.full((8, 12), -1, dtype=np.int8)
+        grid[3:5, 1:10] = 0
+        grid[3:5, 6] = 100
+        self.assertFalse(
+            known_free_path_exists(
+                grid.ravel(), spec, (-2.0, 0.0), (1.5, 0.0)
+            )
+        )
+        before_known = known_cell_count(grid.ravel())
+        grid[3:5, 6] = 0
+        self.assertTrue(
+            known_free_path_exists(
+                grid.ravel(), spec, (-2.0, 0.0), (1.5, 0.0)
+            )
+        )
+        self.assertGreaterEqual(known_cell_count(grid.ravel()), before_known)
+
+    def test_entry_anchor_uses_nearest_local_known_free_cell(self):
+        spec = GridSpec(9, 9, 0.2, -0.9, -0.9)
+        grid = np.full((9, 9), -1, dtype=np.int8)
+        anchor = (0.0, 0.0)
+        center = spec.world_to_cell(*anchor)
+        grid[center] = -1
+        grid[center[0], center[1] + 1] = 0
+        self.assertEqual(
+            nearest_known_free_anchor(
+                grid.ravel(), spec, anchor, search_radius_m=0.30
+            ),
+            spec.cell_to_world((center[0], center[1] + 1)),
+        )
+
+    def test_entry_anchor_fails_closed_without_local_free_evidence(self):
+        spec = GridSpec(9, 9, 0.2, -0.9, -0.9)
+        grid = np.full((9, 9), -1, dtype=np.int8)
+        self.assertIsNone(
+            nearest_known_free_anchor(
+                grid.ravel(), spec, (0.0, 0.0), search_radius_m=0.30
+            )
+        )
+        grid[0, 0] = 0
+        self.assertIsNone(
+            nearest_known_free_anchor(
+                grid.ravel(), spec, (0.0, 0.0), search_radius_m=0.30
+            )
+        )
+
+    def test_entry_anchor_is_deterministic_and_respects_allowed_mask(self):
+        spec = GridSpec(7, 7, 1.0, -3.5, -3.5)
+        grid = np.full((7, 7), -1, dtype=np.int8)
+        grid[3, 2] = 0
+        grid[3, 4] = 0
+        anchor = (0.0, 0.0)
+        self.assertEqual(
+            nearest_known_free_anchor(
+                grid.ravel(), spec, anchor, search_radius_m=1.1
+            ),
+            spec.cell_to_world((3, 2)),
+        )
+        allowed = np.ones(grid.shape, dtype=bool)
+        allowed[3, 2] = False
+        self.assertEqual(
+            nearest_known_free_anchor(
+                grid.ravel(),
+                spec,
+                anchor,
+                search_radius_m=1.1,
+                allowed_mask=allowed,
+            ),
+            spec.cell_to_world((3, 4)),
+        )
+
+    def test_local_anchor_does_not_open_unknown_or_cross_an_obstacle(self):
+        spec = GridSpec(12, 8, 0.5, -3.0, -2.0)
+        grid = np.full((8, 12), -1, dtype=np.int8)
+        grid[3:5, 1:10] = 0
+        grid[3:5, 6] = 100
+        start = (-2.0, 0.0)
+        start_cell = spec.world_to_cell(*start)
+        grid[start_cell] = -1
+        seed = nearest_known_free_anchor(
+            grid.ravel(), spec, start, search_radius_m=0.8
+        )
+        self.assertIsNotNone(seed)
+        self.assertFalse(
+            known_free_path_exists(
+                grid.ravel(), spec, seed, (1.5, 0.0)
+            )
+        )
+
+    def test_entry_corridor_rejects_a_known_free_side_route(self):
+        spec = GridSpec(20, 14, 0.5, -5.0, -3.5)
+        grid = np.full((14, 20), -1, dtype=np.int8)
+        start = (-3.5, 0.0)
+        goal = (3.5, 0.0)
+        start_cell = spec.world_to_cell(*start)
+        goal_cell = spec.world_to_cell(*goal)
+        grid[6:8, 3:18] = 0
+        grid[6:8, 10] = 100
+        grid[3:7, 3] = 0
+        grid[3:7, 17] = 0
+        grid[3, 3:18] = 0
+        self.assertTrue(
+            known_free_path_exists(grid.ravel(), spec, start, goal)
+        )
+        corridor = segment_corridor_mask(spec, start, goal, 0.75)
+        self.assertTrue(corridor[start_cell])
+        self.assertTrue(corridor[goal_cell])
+        self.assertFalse(
+            known_free_path_exists(
+                grid.ravel(),
+                spec,
+                start,
+                goal,
+                allowed_mask=corridor,
+            )
+        )
+        grid[6:8, 10] = 0
+        self.assertTrue(
+            known_free_path_exists(
+                grid.ravel(),
+                spec,
+                start,
+                goal,
+                allowed_mask=corridor,
+            )
+        )
+
+    def test_entry_plan_requires_near_direct_finite_corridor_path(self):
+        start = (0.0, -3.2)
+        goal = (0.0, 0.3)
+        direct = [
+            (0.0, -3.2),
+            (0.05, -2.0),
+            (-0.05, -0.8),
+            (0.0, 0.3),
+        ]
+        limits = (0.75, 0.60, 1.50, 0.75)
+        self.assertTrue(
+            local_plan_is_acceptable(direct, start, goal, *limits)
+        )
+        self.assertFalse(
+            local_plan_is_acceptable(
+                [(0.0, -3.2), (-2.0, -2.0), (0.0, 0.3)],
+                start,
+                goal,
+                *limits
+            )
+        )
+        self.assertFalse(
+            local_plan_is_acceptable(
+                [(0.0, -3.2), (float("nan"), -1.0), (0.0, 0.3)],
+                start,
+                goal,
+                *limits
+            )
+        )
+        self.assertFalse(
+            local_plan_is_acceptable(
+                [(1.0, -3.2), (0.0, 0.3)],
+                start,
+                goal,
+                *limits
+            )
+        )
 
 
 if __name__ == "__main__":

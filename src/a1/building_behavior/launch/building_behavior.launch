@@ -1,0 +1,13 @@
+<launch>
+  <arg name="team_scene_info"
+       default="/workspace/SimEnv/generated_building/team_scene_info.json"/>
+  <arg name="action" default="/a1/building_behavior/special"/>
+  <arg name="set_door_service" default="/set_door_state"/>
+
+  <node pkg="a1_building_behavior" type="building_behavior_node.py"
+        name="building_behavior" output="screen" required="true">
+    <param name="team_scene_info" value="$(arg team_scene_info)"/>
+    <param name="action" value="$(arg action)"/>
+    <param name="set_door_service" value="$(arg set_door_service)"/>
+  </node>
+</launch>

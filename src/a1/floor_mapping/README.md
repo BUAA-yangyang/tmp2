@@ -9,7 +9,8 @@
 - 在机器人附近初始化并持续跟踪楼层地面高度。
 - 将地面回波作为 free-space ray，将有效高度范围内的非地面回波作为 occupied endpoint。
 - 发布固定大小的 `odom` OccupancyGrid。
-- 发布传感器坐标系中的地面与障碍联合点云，供 costmap 分别执行 marking 和 clearing。
+- 发布传感器坐标系中的仅障碍点云和地面/障碍联合点云；costmap
+  分别用前者 marking、后者 clearing。
 - 使用 localization generation 和本地 floor session 隔离地图生命周期，避免跨定位重启拼图。
 - 对 localization 失效、输入超时、非法消息、时间回退、TF 缺失和不支持的换层行为安全失效。
 - 对点云与 TF 的正常异步到达进行有界等待，始终使用点云采集时刻的精确 TF。
@@ -39,9 +40,10 @@
 ```text
 /a1_localization/livox_pointcloud ─┐
 /a1/localization/odom              ├─> floor_mapping_node
-/a1/localization/status            │      ├─> obstacle_cloud (laser_livox)
+/a1/localization/status            │      ├─> marking_cloud (laser_livox)
 /a1/localization/supervisor_status ┘      ├─> OccupancyGrid (odom)
-TF odom -> base/laser_livox               └─> status + diagnostics
+TF odom -> base/laser_livox                ├─> obstacle_cloud (laser_livox)
+                                            └─> status + diagnostics
 ```
 
 点云与 localization TF 经过不同处理链路，同一 stamp 的点云可能先于 TF 到达。节点先将点云放入有界队列，只在该 stamp 的 `odom -> laser_livox` 和 `odom -> base` 都可用后按时间顺序处理。节点不会使用 `Time(0)` 或最新 TF 代替消息时刻 TF。
@@ -66,6 +68,7 @@ TF odom -> base/laser_livox               └─> status + diagnostics
 
 | 名称 | 类型 | frame | 语义 |
 | --- | --- | --- | --- |
+| `/a1/floor_mapping/marking_cloud` | `sensor_msgs/PointCloud2` | `laser_livox` | 仅包含按 `point.z-floor_z` 分类的障碍回波；与输入同 stamp，只在 `MAPPING` 时发布，供 costmap marking |
 | `/a1/floor_mapping/obstacle_cloud` | `sensor_msgs/PointCloud2` | `laser_livox` | 当前有效地面与障碍回波；保留真实传感器原点供 clearing 使用 |
 | `/a1/floor_mapping/map` | `nav_msgs/OccupancyGrid` | `odom` | 累计单楼层二维栅格，latched |
 | `/a1/floor_mapping/status` | `diagnostic_msgs/DiagnosticStatus` | — | 当前状态、有效性、generation/session 和统计量 |
@@ -119,7 +122,8 @@ reset 会递增 `floor_session_id`，清除地面估计、栅格、恢复计数�
 ```text
 state == MAPPING
 map_valid == true                  # 消费累计地图时
-obstacle_cloud_valid == true       # 消费实时点云时
+obstacle_cloud_valid == true       # 消费任一实时点云时
+marking_cloud_valid == true        # 消费仅障碍 marking 点云时
 localization_generation == expected_generation
 floor_session_id == expected_session
 ```
@@ -157,8 +161,10 @@ floor_session_id == expected_session
 3. 初始化后锚定可信 `floor_z` 高度带，以绝对支持点数持续跟踪地面。
 4. 地面高度带内的回波只积分 free ray。
 5. 有效障碍高度内的回波积分 free ray 和 occupied endpoint。
-6. 每帧先处理地面 free ray，再处理障碍 endpoint，减少射线对墙体的过度清除。
-7. 持续的新地面高度候选会触发 `FLOOR_CHANGE_UNSUPPORTED`，不会自动切层。
+6. 仅相对当前 `floor_z` 通过障碍高度判据的点进入 `marking_cloud`；
+   `obstacle_cloud` 保持地面+障碍联合输出，兼容既有清障和可视化消费者。
+7. 每帧先处理地面 free ray，再处理障碍 endpoint，减少射线对墙体的过度清除。
+8. 持续的新地面高度候选会触发 `FLOOR_CHANGE_UNSUPPORTED`，不会自动切层。
 
 默认地图为 `40 m x 40 m`、`0.05 m/cell`，以 `odom` 原点为中心，发布频率 1 Hz。地图不会动态扩展，运行时应监控 `minimum_boundary_margin_m`。
 
