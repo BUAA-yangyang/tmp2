@@ -504,3 +504,25 @@ catkin_install_python(PROGRAMS
     DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 
 )
+
+
+if(CATKIN_ENABLE_TESTING)
+
+    catkin_add_gtest(
+
+        test_safe_stand_gyro_filter
+
+        test/test_safe_stand_gyro_filter.cpp
+
+    )
+
+    catkin_add_gtest(
+
+        test_navigation_gait_profile
+
+        test/test_navigation_gait_profile.cpp
+        src/Gait/WaveGenerator.cpp
+
+    )
+
+endif()

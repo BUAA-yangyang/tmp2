@@ -29,3 +29,10 @@ add_library( unitree_legged_control
 )
 add_dependencies(${PROJECT_NAME} unitree_legged_msgs_gencpp)
 target_link_libraries(unitree_legged_control ${catkin_LIBRARIES})
+
+if(CATKIN_ENABLE_TESTING)
+    catkin_add_gtest(test_joint_control_tool
+        test/test_joint_control_tool.cpp
+        src/unitree_joint_control_tool.cpp
+    )
+endif()

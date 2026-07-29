@@ -13,6 +13,8 @@
 #include "control/Estimator.h"
 #include "control/BalanceCtrl.h"
 #include "interface/IOFREEDOGSDK.h"
+#include <array>
+#include <cstddef>
 #include <string>
 #include <iostream>
 
@@ -30,6 +32,8 @@ public:
         phase = new Vec4;
         *contact = VecInt4(0, 0, 0, 0);
         *phase = Vec4(0.5, 0.5, 0.5, 0.5);
+        _plannedContact.setZero();
+        _contactOverride.fill(false);
     }
     ~CtrlComponents(){
         delete lowCmd;
@@ -69,6 +73,39 @@ public:
 
     void runWaveGen(){
         waveGen->calcContactPhase(*phase, *contact, _waveStatus);
+        _plannedContact = *contact;
+        for(std::size_t index = 0; index < _contactOverride.size(); ++index){
+            if(_plannedContact(index) == 1){
+                _contactOverride[index] = false;
+            }else if(_contactOverride[index]){
+                (*contact)(index) = 1;
+                (*phase)(index) = 0.0;
+            }
+        }
+    }
+
+    bool plannedContact(std::size_t index) const {
+        return index < _contactOverride.size()
+            && _plannedContact(index) == 1;
+    }
+
+    bool contactOverrideActive(std::size_t index) const {
+        return index < _contactOverride.size() && _contactOverride[index];
+    }
+
+    void setContactOverride(std::size_t index, bool enabled){
+        if(index >= _contactOverride.size()){
+            return;
+        }
+        _contactOverride[index] = enabled;
+        if(enabled){
+            (*contact)(index) = 1;
+            (*phase)(index) = 0.0;
+        }
+    }
+
+    void clearContactOverrides(){
+        _contactOverride.fill(false);
     }
 
     void setAllStance(){
@@ -96,6 +133,8 @@ public:
 
 private:
     WaveStatus _waveStatus = WaveStatus::SWING_ALL;
+    VecInt4 _plannedContact;
+    std::array<bool, 4> _contactOverride;
 };
 
 #endif  // CTRLCOMPONENTS_H

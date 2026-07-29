@@ -17,6 +17,7 @@ public:
     WaveGenerator(double period, double stancePhaseRatio, Vec4 bias, double controlPeriod);
     ~WaveGenerator();
     void calcContactPhase(Vec4 &phaseResult, VecInt4 &contactResult, WaveStatus status);
+    void setPeriod(double period);
     float getTstance();
     float getTswing();
     float getT();

@@ -2,16 +2,18 @@
  Copyright (c) 2020-2023, Unitree Robotics.Co.Ltd. All rights reserved.
 ***********************************************************************/
 #include "FSM/State_Trotting.h"
+#include "FSM/NavigationGaitProfile.h"
 #include <iomanip>
+#include <stdexcept>
 
 State_Trotting::State_Trotting(CtrlComponents *ctrlComp)
              :FSMState(ctrlComp, FSMStateName::TROTTING, "trotting"), 
               _est(ctrlComp->estimator), _phase(ctrlComp->phase), 
               _contact(ctrlComp->contact), _robModel(ctrlComp->robotModel), 
-              _balCtrl(ctrlComp->balCtrl){
+              _balCtrl(ctrlComp->balCtrl), _forceAllStance(false){
     _gait = new GaitGenerator(ctrlComp);
 
-    _gaitHeight = 0.08;
+    _gaitHeight = navigation_gait::kDefaultSwingHeightM;
 
 #ifdef ROBOT_TYPE_Go1
     _Kpp = Vec3(70, 70, 70).asDiagonal();
@@ -54,6 +56,7 @@ State_Trotting::~State_Trotting(){
 }
 
 void State_Trotting::enter(){
+    _forceAllStance = false;
     _pcd = _est->getPosition();
     _pcd(2) = -_robModel->getFeetPosIdeal()(2, 0);
     _vCmdBody.setZero();
@@ -78,6 +81,7 @@ void State_Trotting::enter(){
 void State_Trotting::exit(){
     _ctrlComp->ioInter->zeroCmdPanel();
     _ctrlComp->setAllSwing();
+    _forceAllStance = false;
     ampthreadRunning = State_Trotting::STOP;
     if(amp_obs_thread != nullptr){
         if(amp_obs_thread->joinable()){
@@ -130,6 +134,7 @@ void State_Trotting::run(){
 
     getUserCmd();
     calcCmd();
+    adjustContactPhase();
 
     _gait->setGait(_vCmdGlobal.segment(0,2), _wCmdGlobal(2), _gaitHeight);
     _gait->run(_posFeetGlobalGoal, _velFeetGlobalGoal);
@@ -137,7 +142,9 @@ void State_Trotting::run(){
     calcTau();
     calcQQd();
 
-    if(checkStepOrNot()){
+    if(_forceAllStance){
+        _ctrlComp->setAllStance();
+    }else if(checkStepOrNot()){
         _ctrlComp->setStartWave();
     }else{
         _ctrlComp->setAllStance();
@@ -176,6 +183,27 @@ void State_Trotting::setHighCmd(double vx, double vy, double wz){
     _vCmdBody(1) = vy;
     _vCmdBody(2) = 0; 
     _dYawCmd = wz;
+}
+
+void State_Trotting::setForceAllStance(bool enabled){
+    _forceAllStance = enabled;
+    if(enabled){
+        _ctrlComp->setAllStance();
+    }
+}
+
+bool State_Trotting::forceAllStanceEnabled() const{
+    return _forceAllStance;
+}
+
+void State_Trotting::setGaitHeight(double heightM){
+    if(!navigation_gait::isValidSwingHeight(heightM)){
+        throw std::invalid_argument("gait height must be finite and positive");
+    }
+    _gaitHeight = heightM;
+}
+
+void State_Trotting::adjustContactPhase(){
 }
 
 void State_Trotting::getUserCmd(){

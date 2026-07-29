@@ -117,6 +117,12 @@ namespace unitree_legged_control
     void UnitreeJointController::starting(const ros::Time& time)
     {
         double init_pos = joint.getPosition();
+        if(joint_urdf->type == urdf::Joint::REVOLUTE){
+            init_pos = canonicalizeRevolutePosition(
+                init_pos,
+                joint_urdf->limits->lower,
+                joint_urdf->limits->upper);
+        }
         lastCmd.mode = PMSM;
         lastCmd.q = init_pos;
         lastState.q = init_pos;
@@ -177,6 +183,12 @@ namespace unitree_legged_control
         // } 
 
         currentPos = joint.getPosition();
+        if(joint_urdf->type == urdf::Joint::REVOLUTE){
+            currentPos = canonicalizeRevolutePosition(
+                currentPos,
+                joint_urdf->limits->lower,
+                joint_urdf->limits->upper);
+        }
         currentVel = computeVel(currentPos, (double)lastState.q, (double)lastState.dq, period.toSec());
         calcTorque = computeTorque(currentPos, currentVel, servoCmd);      
         effortLimits(calcTorque);

@@ -4,6 +4,7 @@
 #include "Gait/WaveGenerator.h"
 #include <cmath>
 #include <iostream>
+#include <stdexcept>
 
 WaveGenerator::WaveGenerator(double period, double stancePhaseRatio, Vec4 bias, double controlPeriod)
     : _period(period), _stRatio(stancePhaseRatio), _bias(bias),
@@ -45,6 +46,18 @@ WaveGenerator::WaveGenerator(double period, double stancePhaseRatio, Vec4 bias, 
 
 WaveGenerator::~WaveGenerator()
 {
+}
+
+void WaveGenerator::setPeriod(double period)
+{
+    if ((period <= 0) || !std::isfinite(period))
+    {
+        throw std::invalid_argument(
+            "WaveGenerator period must be finite and greater than zero");
+    }
+    const double normalizedPassT = _passT / _period;
+    _period = period;
+    _passT = fmod(normalizedPassT * _period, _period);
 }
 
 void WaveGenerator::calcContactPhase(Vec4 &phaseResult, VecInt4 &contactResult, WaveStatus status)

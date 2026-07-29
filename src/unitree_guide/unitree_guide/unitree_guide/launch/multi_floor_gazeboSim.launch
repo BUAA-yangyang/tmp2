@@ -18,7 +18,7 @@
     <arg name="enable_referee_odom" default="true"/>
     <arg name="publish_referee_tf" default="false"/>
     <arg name="enable_ground_truth" default="true"/>
-    <arg name="enable_foot_contact_sensor" default="false"/>
+    <arg name="enable_foot_contact_sensor" default="true"/>
     <arg name="enable_foot_force_visual" default="false"/>
     <arg name="enable_joy_node" default="false"/>
     <arg name="enable_pointcloud_converter" default="true"/>
