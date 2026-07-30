@@ -27,6 +27,7 @@ typedef struct
 } ServoCmd;
 
 double clamp(double&, double, double);  // eg. clamp(1.5, -1, 1) = 1
+double canonicalizeRevolutePosition(double position, double lower, double upper);
 double computeVel(double current_position, double last_position, double last_velocity, double duration);  // get current velocity
 double computeTorque(double current_position, double current_velocity, ServoCmd&);  // get torque
 

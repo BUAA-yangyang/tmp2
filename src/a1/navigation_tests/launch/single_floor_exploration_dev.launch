@@ -1,0 +1,66 @@
+<launch>
+  <!-- DEV-ONLY single-floor exploration.  Requires auto.sh with:
+       ENABLE_LIVOX=1 ENABLE_REFEREE_ODOM=1 PUBLISH_REFEREE_TF=1
+       and controller mode 5.  This launch is not competition bringup. -->
+  <arg name="use_cmd_mux" default="true"/>
+  <arg name="use_rviz" default="true"/>
+  <arg name="exploration_config"
+       default="$(find a1_exploration)/config/exploration.yaml"/>
+  <arg name="team_scene_info"
+       default="/workspace/SimEnv/generated_building/team_scene_info.json"/>
+  <arg name="start_building_behavior" default="true"/>
+  <arg name="start_exploration" default="true"/>
+
+  <!-- Convert the real simulated Livox /scan to the PointCloud2 contract used
+       by floor_mapping. No ground-truth transform is applied here. -->
+  <node pkg="a1_localization" type="pointcloud_adapter"
+        name="pointcloud_adapter" ns="a1_localization"
+        output="screen" required="true">
+    <rosparam command="load"
+              file="$(find a1_localization)/config/bridge.yaml"/>
+  </node>
+
+  <!-- Explicitly dev-only: standardizes /Odometry_gazebo and health metadata.
+       It does not publish TF; state_from_gazebo remains the one TF owner. -->
+  <node pkg="a1_navigation_tests" type="dev_truth_localization_bridge.py"
+        name="dev_truth_localization_bridge" output="screen" required="true"/>
+
+  <include file="$(find a1_floor_mapping)/launch/floor_mapping.launch"/>
+
+  <include file="$(find a1_navigation)/launch/navigation_floor_mapping.launch">
+    <arg name="obstacle_cloud_topic"
+         value="/a1/floor_mapping/obstacle_cloud"/>
+    <arg name="clearing_cloud_topic"
+         value="/a1/floor_mapping/clearing_cloud"/>
+    <arg name="cmd_vel_topic" value="/cmd_vel_nav"/>
+    <arg name="odom_topic" value="/Odometry_gazebo"/>
+    <arg name="dwa_acc_lim_theta" value="10.0"/>
+    <!-- Continuous autonomous frontier goals produced a lateral+turn peak that
+         can topple the classic gait in this simulator.  Keep the validated
+         navigation defaults intact, but use a conservative dev acceptance
+         envelope for long-running unattended exploration. -->
+    <arg name="dwa_max_vel_x" value="0.20"/>
+    <arg name="dwa_min_vel_x" value="-0.08"/>
+    <arg name="dwa_max_vel_y" value="0.0"/>
+    <arg name="dwa_min_vel_y" value="0.0"/>
+    <arg name="dwa_max_vel_trans" value="0.20"/>
+    <arg name="dwa_max_vel_theta" value="0.30"/>
+  </include>
+
+  <include if="$(arg use_cmd_mux)"
+           file="$(find a1_cmd_mux)/launch/cmd_mux.launch"/>
+
+  <include if="$(arg start_building_behavior)"
+           file="$(find a1_building_behavior)/launch/building_behavior.launch">
+    <arg name="team_scene_info" value="$(arg team_scene_info)"/>
+  </include>
+
+  <include if="$(arg start_exploration)"
+           file="$(find a1_exploration)/launch/exploration.launch">
+    <arg name="config" value="$(arg exploration_config)"/>
+  </include>
+
+  <node if="$(arg use_rviz)" pkg="rviz" type="rviz"
+        name="rviz" args="-d $(find a1_navigation)/rviz/a1_nav.rviz"
+        output="screen"/>
+</launch>

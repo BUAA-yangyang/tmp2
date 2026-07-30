@@ -23,6 +23,14 @@ GUI="${GUI:-true}"
 PAUSED="${PAUSED:-false}"
 AUTO_UNPAUSE="$(as_ros_bool "${AUTO_UNPAUSE:-1}")"
 AUTO_UNPAUSE_DELAY="${AUTO_UNPAUSE_DELAY:-6}"
+ACCEPTANCE_MANAGED_PHYSICS="$(
+  as_ros_bool "${ACCEPTANCE_MANAGED_PHYSICS:-0}"
+)"
+if [ "$ACCEPTANCE_MANAGED_PHYSICS" = "true" ]; then
+  # The acceptance harness owns the single transition to running physics.
+  # gazeboSim.launch preserves this pause through robot spawn.
+  PAUSED="true"
+fi
 START_CONTROLLER="${START_CONTROLLER:-1}"
 START_VIRTUAL_JOY="${START_VIRTUAL_JOY:-0}"
 CONTROLLER_FOREGROUND="${CONTROLLER_FOREGROUND:-1}"
@@ -71,6 +79,28 @@ schedule_unpause_physics() {
       sleep 0.25
     done
   ) &
+}
+
+pause_physics_for_acceptance() {
+  if [ "$ACCEPTANCE_MANAGED_PHYSICS" != "true" ]; then
+    return
+  fi
+  if [ "$AUTO_UNPAUSE" = "true" ]; then
+    echo "ACCEPTANCE_MANAGED_PHYSICS requires AUTO_UNPAUSE=0." >&2
+    exit 1
+  fi
+
+  for _ in $(seq 1 80); do
+    if rosservice list 2>/dev/null | grep -q '^/gazebo/pause_physics$'; then
+      if rosservice call /gazebo/pause_physics >/dev/null 2>&1; then
+        echo "Gazebo physics paused for acceptance-managed startup."
+        return
+      fi
+    fi
+    sleep 0.1
+  done
+  echo "Failed to pause Gazebo physics for acceptance-managed startup." >&2
+  exit 1
 }
 
 wait_for_robot_spawn() {
@@ -194,6 +224,7 @@ echo "  Foot contact sensors: $ENABLE_FOOT_CONTACT_SENSOR"
 echo "  Foot force visual: $ENABLE_FOOT_FORCE_VISUAL"
 echo "  Gazebo starts paused: $PAUSED"
 echo "  Auto unpause: $AUTO_UNPAUSE after ${AUTO_UNPAUSE_DELAY}s"
+echo "  Acceptance-managed physics: $ACCEPTANCE_MANAGED_PHYSICS"
 echo "  Unitree wait warnings: $UNITREE_LOG_WAIT_WARNINGS"
 echo "  Robot spawn timeout: ${ROBOT_SPAWN_TIMEOUT}s"
 echo "  Controller spawner timeout: ${CONTROLLER_SPAWNER_TIMEOUT}s"
@@ -235,6 +266,7 @@ roslaunch unitree_guide multi_floor_gazeboSim.launch \
 LAUNCH_PID=$!
 echo "$LAUNCH_PID" > "$WORKSPACE_DIR/logs/competition_gazebo.pid"
 wait_for_robot_spawn
+pause_physics_for_acceptance
 
 if [ "$START_BUILDING_CONTROL" = "1" ]; then
   echo "Starting building door/elevator control service..."

@@ -17,7 +17,7 @@
     <arg name="enable_realsense" default="$(arg enable_sensor_data)"/>
     <arg name="enable_front_camera" default="false"/>
     <arg name="enable_ground_truth" default="true"/>
-    <arg name="enable_foot_contact_sensor" default="false"/>
+    <arg name="enable_foot_contact_sensor" default="true"/>
     <arg name="enable_foot_force_visual" default="false"/>
     <arg name="enable_pointcloud_converter" default="$(arg enable_livox)"/>
     <arg name="pointcloud_use_ground_truth_odom" default="true"/>
@@ -49,8 +49,15 @@
     <!-- Set trunk and joint positions at startup -->
     <!--<node pkg="gazebo_ros" type="spawn_model" name="urdf_spawner" respawn="false" output="screen"
           args="-urdf -z 0.6 -Y 0.523 -model $(arg rname)_gazebo -param robot_description -unpause"/>-->
-    <node pkg="gazebo_ros" type="spawn_model" name="urdf_spawner" respawn="false" output="screen"
-              args="-urdf -z 0.6 -y 7 -x -5 -model $(arg rname)_gazebo -param robot_description -unpause"/>
+    <!-- Preserve the caller's paused contract through model spawn. The prior
+         unconditional -unpause allowed passive robot dynamics before an
+         acceptance harness could put the controller in fixed stand. -->
+    <node unless="$(arg paused)" pkg="gazebo_ros" type="spawn_model"
+          name="urdf_spawner" respawn="false" output="screen"
+          args="-urdf -z 0.6 -y 7 -x -5 -model $(arg rname)_gazebo -param robot_description -unpause"/>
+    <node if="$(arg paused)" pkg="gazebo_ros" type="spawn_model"
+          name="urdf_spawner" respawn="false" output="screen"
+          args="-urdf -z 0.6 -y 7 -x -5 -model $(arg rname)_gazebo -param robot_description"/>
     
     <node pkg="unitree_guide" type="state_from_gazebo" name="state_from_gazebo" args="0 9 0 0 0 0" output="screen">
         <param name="robot_name" value="$(arg rname)" />

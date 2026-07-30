@@ -1,0 +1,7 @@
+<launch>
+  <arg name="config" default="$(find a1_exploration)/config/exploration.yaml"/>
+  <node pkg="a1_exploration" type="frontier_explorer_node.py"
+        name="frontier_explorer" output="screen" required="true">
+    <rosparam command="load" file="$(arg config)"/>
+  </node>
+</launch>

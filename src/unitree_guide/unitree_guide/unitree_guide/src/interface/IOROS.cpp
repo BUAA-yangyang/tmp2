@@ -29,6 +29,9 @@ UserCommand joyCommandFromButtons(const std::vector<int>& buttons){
     if(buttonAt(buttons, 1)) return UserCommand::L2_A;      // fixed stand
     if(buttonAt(buttons, 2)) return UserCommand::RL_KEYBOARD; // RL with keyboard axes
     if(buttonAt(buttons, 3)) return UserCommand::RL;          // RL with /cmd_vel
+#ifdef COMPILE_WITH_MOVE_BASE
+    if(buttonAt(buttons, 5)) return UserCommand::L2_Y;      // move_base
+#endif
     if(buttonAt(buttons, 6)) return UserCommand::L2_X;      // free stand
     if(buttonAt(buttons, 7)) return UserCommand::L1_X;      // balance test
     if(buttonAt(buttons, 8)) return UserCommand::L1_A;      // swing test
@@ -51,6 +54,11 @@ IOROS::IOROS():IOInterface(){
     }
     _imu_received.store(false);
 
+    // The subscriber spinner can invoke joyCallback immediately after
+    // initRecv().  Construct the command panel before exposing that callback;
+    // otherwise an early /joy message dereferences a null cmdPanel.
+    cmdPanel = new KeyBoard();
+
     // start subscriber
     initRecv();
     ros::AsyncSpinner subSpinner(1); // one threads
@@ -60,8 +68,6 @@ IOROS::IOROS():IOInterface(){
     initSend();   
 
     signal(SIGINT, RosShutDown);
-
-    cmdPanel = new KeyBoard();
 }
 
 IOROS::~IOROS(){

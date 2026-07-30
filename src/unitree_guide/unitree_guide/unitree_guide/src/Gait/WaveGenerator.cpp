@@ -2,13 +2,20 @@
  Copyright (c) 2020-2023, Unitree Robotics.Co.Ltd. All rights reserved.
 ***********************************************************************/
 #include "Gait/WaveGenerator.h"
+#include <cmath>
 #include <iostream>
-#include <sys/time.h>
-#include <math.h>
+#include <stdexcept>
 
-WaveGenerator::WaveGenerator(double period, double stancePhaseRatio, Vec4 bias)
-    : _period(period), _stRatio(stancePhaseRatio), _bias(bias)
+WaveGenerator::WaveGenerator(double period, double stancePhaseRatio, Vec4 bias, double controlPeriod)
+    : _period(period), _stRatio(stancePhaseRatio), _bias(bias),
+      _controlPeriod(controlPeriod), _passT(0.0)
 {
+
+    if ((_period <= 0) || !std::isfinite(_period))
+    {
+        std::cout << "[ERROR] The period of WaveGenerator should be finite and greater than 0" << std::endl;
+        exit(-1);
+    }
 
     if ((_stRatio >= 1) || (_stRatio <= 0))
     {
@@ -25,9 +32,15 @@ WaveGenerator::WaveGenerator(double period, double stancePhaseRatio, Vec4 bias)
         }
     }
 
-    _startT = getSystemTime();
+    if ((_controlPeriod <= 0) || !std::isfinite(_controlPeriod))
+    {
+        std::cout << "[ERROR] The controlPeriod of WaveGenerator should be finite and greater than 0" << std::endl;
+        exit(-1);
+    }
+
     _contactPast.setZero();
     _phasePast << 0.5, 0.5, 0.5, 0.5;
+    _switchStatus.setZero();
     _statusPast = WaveStatus::SWING_ALL;
 }
 
@@ -35,9 +48,25 @@ WaveGenerator::~WaveGenerator()
 {
 }
 
+void WaveGenerator::setPeriod(double period)
+{
+    if ((period <= 0) || !std::isfinite(period))
+    {
+        throw std::invalid_argument(
+            "WaveGenerator period must be finite and greater than zero");
+    }
+    const double normalizedPassT = _passT / _period;
+    _period = period;
+    _passT = fmod(normalizedPassT * _period, _period);
+}
+
 void WaveGenerator::calcContactPhase(Vec4 &phaseResult, VecInt4 &contactResult, WaveStatus status)
 {
-
+    // Keep gait phase on the same discrete controller clock used by the
+    // estimator and trajectory generators.  Wall-clock phase advancement
+    // makes the gait run 1 / RTF times too fast when Gazebo is slower than
+    // real time (for example under Livox load).
+    _passT = fmod(_passT + _controlPeriod, _period);
     calcWave(_phase, _contact, status);
 
     if (status != _statusPast)
@@ -101,7 +130,6 @@ void WaveGenerator::calcWave(Vec4 &phase, VecInt4 &contact, WaveStatus status)
 {
     if (status == WaveStatus::WAVE_ALL)
     {
-        _passT = (double)(getSystemTime() - _startT) * 1e-6;
         for (int i(0); i < 4; ++i)
         {
             _normalT(i) = fmod(_passT + _period - _period * _bias(i), _period) / _period;

@@ -1,0 +1,27 @@
+global_costmap:
+  global_frame: odom
+  robot_base_frame: base
+  static_map: true
+  rolling_window: false
+  update_frequency: 3.0
+  publish_frequency: 1.0
+  transform_tolerance: 0.5
+  always_send_full_costmap: true
+
+  plugins:
+    - {name: static_layer, type: "costmap_2d::StaticLayer"}
+    - {name: obstacle_layer, type: "costmap_2d::ObstacleLayer"}
+    - {name: inflation_layer, type: "costmap_2d::InflationLayer"}
+
+  static_layer:
+    map_topic: /a1/floor_mapping/map
+    first_map_only: false
+    subscribe_to_updates: false
+    track_unknown_space: true
+    unknown_cost_value: 255
+    lethal_cost_threshold: 65
+    use_maximum: false
+
+  inflation_layer:
+    inflation_radius: 0.25
+    cost_scaling_factor: 5.0

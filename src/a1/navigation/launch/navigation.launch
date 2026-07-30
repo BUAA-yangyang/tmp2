@@ -30,6 +30,26 @@
   <!-- DWA 用它根据当前角速度计算下一周期的可达窗口。正式链路使用保守值 3.0；
        Gazebo 真值 twist 含四足摆腿造成的高频机体角速度，dev launch 会单独覆盖。 -->
   <arg name="dwa_acc_lim_theta" default="3.0"/>
+  <arg name="dwa_max_vel_x" default="0.40"/>
+  <arg name="dwa_min_vel_x" default="-0.15"/>
+  <arg name="dwa_max_vel_y" default="0.25"/>
+  <arg name="dwa_min_vel_y" default="-0.25"/>
+  <arg name="dwa_max_vel_trans" default="0.40"/>
+  <arg name="dwa_max_vel_theta" default="0.60"/>
+  <arg name="inflation_radius" default="0.25"/>
+  <arg name="inflation_cost_scaling_factor" default="5.0"/>
+
+  <!-- Config indirection keeps the already validated rolling-window mode as
+       default while allowing floor_mapping integration without duplicating the
+       move_base launch or changing its public Action interface. -->
+  <arg name="move_base_config"
+       default="$(find a1_navigation)/config/move_base_params.yaml"/>
+  <arg name="global_costmap_config"
+       default="$(find a1_navigation)/config/global_costmap_params.yaml"/>
+  <arg name="local_costmap_config"
+       default="$(find a1_navigation)/config/local_costmap_params.yaml"/>
+  <arg name="obstacle_layer_config"
+       default="$(find a1_navigation)/config/obstacle_layer_params.yaml"/>
 
   <node pkg="move_base" type="move_base" name="move_base"
         respawn="false" output="screen" clear_params="true">
@@ -39,13 +59,19 @@
     <remap from="cmd_vel" to="$(arg cmd_vel_topic)"/>
 
     <!-- move_base 本体 + 全局规划器参数 -->
-    <rosparam file="$(find a1_navigation)/config/move_base_params.yaml" command="load"/>
+    <rosparam file="$(arg move_base_config)" command="load"/>
 
     <!-- 局部规划器参数（DWA，速度上限按 A1 的 RL 策略范围设定） -->
     <rosparam file="$(find a1_navigation)/config/dwa_local_planner_params.yaml" command="load"/>
     <!-- 用 launch 参数覆盖 yaml 里的 odom_topic，方便切换定位来源 -->
     <param name="DWAPlannerROS/odom_topic" value="$(arg odom_topic)"/>
     <param name="DWAPlannerROS/acc_lim_theta" value="$(arg dwa_acc_lim_theta)"/>
+    <param name="DWAPlannerROS/max_vel_x" value="$(arg dwa_max_vel_x)"/>
+    <param name="DWAPlannerROS/min_vel_x" value="$(arg dwa_min_vel_x)"/>
+    <param name="DWAPlannerROS/max_vel_y" value="$(arg dwa_max_vel_y)"/>
+    <param name="DWAPlannerROS/min_vel_y" value="$(arg dwa_min_vel_y)"/>
+    <param name="DWAPlannerROS/max_vel_trans" value="$(arg dwa_max_vel_trans)"/>
+    <param name="DWAPlannerROS/max_vel_theta" value="$(arg dwa_max_vel_theta)"/>
 
     <!-- 障碍点云类型，两个 costmap 都要覆盖 -->
     <param name="global_costmap/obstacle_layer/obstacle_cloud/data_type" value="$(arg obstacle_cloud_type)"/>
@@ -59,14 +85,22 @@
 
     <!-- obstacle_layer 参数：必须落在 <costmap>/obstacle_layer 命名空间，
          否则用了 plugins: 列表后会被静默忽略 -->
-    <rosparam file="$(find a1_navigation)/config/obstacle_layer_params.yaml"
+    <rosparam file="$(arg obstacle_layer_config)"
               command="load" ns="global_costmap/obstacle_layer"/>
-    <rosparam file="$(find a1_navigation)/config/obstacle_layer_params.yaml"
+    <rosparam file="$(arg obstacle_layer_config)"
               command="load" ns="local_costmap/obstacle_layer"/>
 
     <!-- 两个 costmap 各自的坐标系/尺寸/分层配置（文件内自带顶层 key） -->
-    <rosparam file="$(find a1_navigation)/config/global_costmap_params.yaml" command="load"/>
-    <rosparam file="$(find a1_navigation)/config/local_costmap_params.yaml" command="load"/>
+    <rosparam file="$(arg global_costmap_config)" command="load"/>
+    <rosparam file="$(arg local_costmap_config)" command="load"/>
+    <param name="global_costmap/inflation_layer/inflation_radius"
+           value="$(arg inflation_radius)"/>
+    <param name="global_costmap/inflation_layer/cost_scaling_factor"
+           value="$(arg inflation_cost_scaling_factor)"/>
+    <param name="local_costmap/inflation_layer/inflation_radius"
+           value="$(arg inflation_radius)"/>
+    <param name="local_costmap/inflation_layer/cost_scaling_factor"
+           value="$(arg inflation_cost_scaling_factor)"/>
   </node>
 
   <!-- 障碍源不是规范话题名时，转发进来。

@@ -26,6 +26,17 @@ public:
     void close_amp_save_file();
     torch::Tensor quat_rotate_inverse(const torch::Tensor& q, const torch::Tensor& v);
     std::ofstream outfile;
+protected:
+    // Safe-stop users must be able to hold STANCE_ALL even when residual
+    // position/velocity errors would normally restart the gait wave.
+    void setForceAllStance(bool enabled);
+    bool forceAllStanceEnabled() const;
+    // Derived motion states may select a terrain-appropriate swing profile
+    // without changing the default used by ordinary trotting.
+    void setGaitHeight(double heightM);
+    // Called after user input/callback processing and before gait generation.
+    // The default keeps the WaveGenerator result unchanged.
+    virtual void adjustContactPhase();
 private:
     void calcTau();
     void calcQQd();
@@ -70,6 +81,7 @@ private:
     Vec2 _vxLim, _vyLim, _wyawLim;
     Vec4 *_phase;
     VecInt4 *_contact;
+    bool _forceAllStance;
 
     // Calculate average value
     AvgCov *_avg_posError = new AvgCov(3, "_posError", true, 1000, 1000, 1);

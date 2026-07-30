@@ -5,9 +5,7 @@
 #define WAVEGENERATOR_H
 
 #include "common/mathTypes.h"
-#include "common/timeMarker.h"
 #include "common/enumClass.h"
-#include <unistd.h>
 
 #ifdef COMPILE_DEBUG
 #include "common/PyPlot.h"
@@ -16,9 +14,10 @@
 /*generate linear wave, [0, 1]*/
 class WaveGenerator{
 public:
-    WaveGenerator(double period, double stancePhaseRatio, Vec4 bias);
+    WaveGenerator(double period, double stancePhaseRatio, Vec4 bias, double controlPeriod);
     ~WaveGenerator();
     void calcContactPhase(Vec4 &phaseResult, VecInt4 &contactResult, WaveStatus status);
+    void setPeriod(double period);
     float getTstance();
     float getTswing();
     float getT();
@@ -28,6 +27,7 @@ private:
     double _period;
     double _stRatio;
     Vec4 _bias;
+    double _controlPeriod;
 
     Vec4 _normalT;                   // [0, 1)
     Vec4 _phase, _phasePast;
@@ -36,7 +36,6 @@ private:
     WaveStatus _statusPast;
 
     double _passT;                   // unit: second
-    long long _startT;    // unit: us
 #ifdef COMPILE_DEBUG
     PyPlot _testPlot;
 #endif  // COMPILE_DEBUG

@@ -6,21 +6,66 @@ int32 floor_id
 # Optional seed target. Leave frame_id empty if unused.
 geometry_msgs/PoseStamped seed_target
 
-# Stop once coverage_ratio reaches this value. 0 means module default.
+# Diagnostic threshold retained for source compatibility. It does not terminate
+# exploration; completion requires no reachable frontier in the effective ROI.
 float32 target_coverage_ratio
 
 # Seconds. 0 means no explicit timeout.
 float32 timeout_s
+
+# Optional floor-entry anchor in the active map frame. Its +X axis points into
+# the floor. A supplied orientation must be a finite unit planar quaternion
+# (x≈0, y≈0); the server rejects rather than projects invalid 3-D orientation.
+# Leave frame_id empty to use the configured RECORD_START-relative compatibility
+# fallback. This pose is independent of the recorded return pose.
+geometry_msgs/PoseStamped floor_entry_pose
+
+# Floor-entry-local ROI vertices in metres: x forward, y left. At least three
+# points are required when supplied. Empty uses the configured local polygon.
+geometry_msgs/Polygon roi_local
+
+# Public door identifier from team_scene_info.json. Empty asks
+# a1_building_behavior to resolve the unique main_entrance for floor_id.
+# The identifier is never read from referee-only layout metadata.
+string entry_door_id
 ---
+uint16 ERROR_NONE=0
+uint16 ERROR_PRECONDITION=1
+uint16 ERROR_MAP_LOST=2
+uint16 ERROR_NAVIGATION_UNAVAILABLE=3
+uint16 ERROR_TIMEOUT=4
+uint16 ERROR_RETURN_FAILED=5
+uint16 ERROR_SAFETY_STOP=6
+uint16 ERROR_CANCELLED=7
+uint16 ERROR_ENTRY_DOOR=8
+uint16 ERROR_ENTRY_TRANSIT=9
+uint16 ERROR_ENTRY_MAP=10
+uint16 ERROR_INVALID_ENTRY_POSE=11
+uint16 ERROR_INTERNAL=255
+
+# success=true means the requested floor was explored AND the robot returned to
+# its recorded start pose within configured pose tolerances with final /cmd_vel
+# settled to zero. Exploration completion without a successful return is false.
 bool success
 uint16 error_code
 string message
 float32 final_coverage_ratio
 ---
+# Existing numeric values 0..3 are kept for source-level compatibility.
 uint8 IDLE=0
 uint8 SELECTING_TARGET=1
 uint8 NAVIGATING=2
 uint8 RECOVERING=3
+uint8 RECORD_START=4
+uint8 UPDATE_COVERAGE=5
+uint8 EXPLORATION_DONE=6
+uint8 RETURNING=7
+uint8 RETURNED=8
+uint8 FAILED=9
+uint8 CANCELLED=10
+uint8 REQUEST_ENTRY_DOOR_OPEN=11
+uint8 TRANSIT_TO_ENTRY=12
+uint8 ENTERED_FLOOR=13
 
 uint8 state
 float32 coverage_ratio

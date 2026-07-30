@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>a1_exploration</name>
+  <version>0.1.0</version>
+  <description>Frontier-based single-floor exploration and autonomous return for A1.</description>
+
+  <maintainer email="xujc@buaa.edu.cn">A1 Team</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <depend>a1_navigation_interfaces</depend>
+  <depend>actionlib</depend>
+  <depend>diagnostic_msgs</depend>
+  <depend>dynamic_reconfigure</depend>
+  <depend>geometry_msgs</depend>
+  <depend>move_base_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>rospy</depend>
+  <depend>std_msgs</depend>
+  <depend>tf2_ros</depend>
+  <depend>visualization_msgs</depend>
+  <exec_depend>python3-numpy</exec_depend>
+
+  <test_depend>python3-nose</test_depend>
+
+  <export/>
+</package>

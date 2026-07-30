@@ -13,8 +13,15 @@
 
   <buildtool_depend>catkin</buildtool_depend>
 
-  <!-- 本包只有 launch/config，无编译产物，故只需 exec 依赖 -->
+  <!-- scan_to_obstacle_cloud.py 的直接依赖。 -->
+  <depend>rospy</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
+  <exec_depend>python3-numpy</exec_depend>
+
+  <!-- move_base 与 launch/config 的运行依赖。 -->
   <exec_depend>move_base</exec_depend>
+  <exec_depend>a1_floor_mapping</exec_depend>
   <exec_depend>costmap_2d</exec_depend>
   <exec_depend>global_planner</exec_depend>
   <exec_depend>navfn</exec_depend>
