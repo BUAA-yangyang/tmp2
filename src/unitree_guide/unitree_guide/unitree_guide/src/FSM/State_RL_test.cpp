@@ -3,9 +3,15 @@
 ***********************************************************************/
 #include <iostream>
 #include <cmath>
+#include <limits>
 #include "FSM/State_RL_test.h"
 
 namespace {
+constexpr double kFootForceThresholdN = 5.0;
+constexpr double kFootForceFreshnessS = 0.20;
+constexpr double kMaximumSafeStandTiltRad = 0.30;
+constexpr double kMaximumSafeStandGyroRadS = 0.20;
+constexpr double kStableDurationS = 0.60;
 float finiteAxis(float value)
 {
     if(!std::isfinite(value)){
@@ -30,11 +36,35 @@ State_RL::State_RL(CtrlComponents *ctrlComp)
     gravity(2,0) = -0.98;
     //在构造函数中初始化，订阅
     this->Sub_=nh.subscribe<geometry_msgs::Twist>("/cmd_vel",1000,boost::bind(&FSMState::cmdVelCallback,this,_1));
+    _controllerReadyPub =
+        nh.advertise<std_msgs::Bool>("/a1/controller_ready", 1);
+    _safeStandReadyPub =
+        nh.advertise<std_msgs::Bool>("/a1/safe_stand_ready", 1, true);
+    _footForceZ.fill(0.0);
+    _footForceStamp.fill(ros::Time());
+    const std::array<std::string, 4> topics = {{
+        "/visual/FR_foot_contact/the_force",
+        "/visual/FL_foot_contact/the_force",
+        "/visual/RR_foot_contact/the_force",
+        "/visual/RL_foot_contact/the_force",
+    }};
+    for(std::size_t index = 0; index < topics.size(); ++index){
+        _footForceSub[index] = nh.subscribe<geometry_msgs::WrenchStamped>(
+            topics[index], 5,
+            boost::bind(&State_RL::footForceCallback, this,
+                boost::placeholders::_1, index));
+    }
 
 }
 
 
 void State_RL::enter(){
+    _safeStandRequested = false;
+    _safeStandRequestStamp = ros::Time();
+    _stableSince = ros::Time();
+    _safeStandGyroFilter.reset();
+    _footForceZ.fill(0.0);
+    _footForceStamp.fill(ros::Time());
     const bool keyboardMode = (_lowState->userCmd == UserCommand::RL_KEYBOARD);
     _keyboardMode.store(keyboardMode);
     if(keyboardMode){
@@ -74,6 +104,11 @@ void State_RL::enter(){
             _ctrlComp->ioInterFreeDog->setCmd(i,joint);
         }
     // }
+    // The learned policy's nominal pose differs materially from FixedStand.
+    // Use the existing one-second transition budget in normal RL operation;
+    // an instantaneous first policy action raises the trunk and destabilizes
+    // the robot before velocity tracking has begun.
+    dofPosSwitBeginTime = getTime();
     for (int i = 0; i < HISTORY_LEN; i++)
     {
         refresh_rl_obs();
@@ -84,12 +119,21 @@ void State_RL::enter(){
         ampthreadRunning = State_RL::RUNNING;
         amp_obs_thread = new std::thread(&State_RL::save_amp_obs_thread,this);
     }
+    _lastReadyPublish = ros::Time();
+    publishSafeStandReady(false);
+    publishControllerReady(true);
 }
 
 void State_RL::run(){
+    const ros::Time now = ros::Time::now();
+    if(_lastReadyPublish.isZero() || now < _lastReadyPublish ||
+       (now - _lastReadyPublish).toSec() >= 0.1){
+        publishControllerReady(true);
+    }
 }
 
 void State_RL::exit(){
+    publishControllerReady(false);
     _percent = 0;
     ampthreadRunning = State_RL::STOP;
     infer_thread_runnning = State_RL::STOP;
@@ -120,7 +164,14 @@ FSMStateName State_RL::checkChange(){
         return FSMStateName::PASSIVE;
     }
     else if(_lowState->userCmd == UserCommand::L2_A){
-        return FSMStateName::FIXEDSTAND;
+        beginSafeStand();
+    }
+    if(_safeStandRequested){
+        if(safeStandReady()){
+            publishSafeStandReady(true);
+            return FSMStateName::FIXEDSTAND;
+        }
+        return FSMStateName::RL;
     }
     else if(_lowState->userCmd == UserCommand::RL_KEYBOARD){
         if(!_keyboardMode.exchange(true)){
@@ -168,6 +219,19 @@ FSMStateName State_RL::checkChange(){
     }
 }
 
+void State_RL::publishControllerReady(bool ready){
+    std_msgs::Bool message;
+    message.data = ready;
+    _controllerReadyPub.publish(message);
+    _lastReadyPublish = ros::Time::now();
+}
+
+void State_RL::publishSafeStandReady(bool ready){
+    std_msgs::Bool message;
+    message.data = ready;
+    _safeStandReadyPub.publish(message);
+}
+
 void State_RL::infer_thread_callback()
 {
     while(infer_thread_runnning == State_RL::RUNNING)
@@ -201,7 +265,16 @@ void State_RL::infer_thread_callback()
         for(int i=0; i<12; i++){
             if (real == false)
             {
-                _lowCmd->motorCmd[i].q = actions[reindex[i]]  + default_dof_pos_tensor[reindex[i]].item<float>();
+                const float policyTarget =
+                    actions[reindex[i]]
+                    + default_dof_pos_tensor[reindex[i]].item<float>();
+                const float transition = std::min(
+                    1.0f,
+                    static_cast<float>(getTime() - dofPosSwitBeginTime)
+                        / static_cast<float>(_duration));
+                _lowCmd->motorCmd[i].q =
+                    (1.0f - transition) * _startPos[i]
+                    + transition * policyTarget;
                 _lowCmd->motorCmd[i].Kp = 80;
                 _lowCmd->motorCmd[i].Kd = 1;
             }
@@ -263,6 +336,16 @@ void State_RL::save_amp_obs_thread()
 }
 
 void State_RL::updateCommandTensor(){
+    if(_safeStandRequested){
+        commands_tensor.zero_();
+        return;
+    }
+    if(getTime() - dofPosSwitBeginTime < _duration){
+        commands_tensor[0] = 0.0f;
+        commands_tensor[1] = 0.0f;
+        commands_tensor[2] = 0.0f;
+        return;
+    }
     if(_keyboardMode.load()){
         _userValue = _lowState->userValue;
         commands_tensor[0] = finiteAxis(_userValue.ly) * _keyboardVxScale;
@@ -274,6 +357,62 @@ void State_RL::updateCommandTensor(){
     commands_tensor[0] = this->current_cmd_vel_.linear_x;
     commands_tensor[1] = this->current_cmd_vel_.linear_y;
     commands_tensor[2] = this->current_cmd_vel_.angular_z;
+}
+
+void State_RL::footForceCallback(
+    const geometry_msgs::WrenchStamped::ConstPtr& msg, std::size_t index){
+    const double force = msg->wrench.force.z;
+    if(index >= _footForceZ.size() || !std::isfinite(force)) return;
+    _footForceZ[index] = std::abs(force);
+    _footForceStamp[index] = ros::Time::now();
+}
+
+void State_RL::beginSafeStand(){
+    if(_safeStandRequested) return;
+    _safeStandRequested = true;
+    _safeStandRequestStamp = ros::Time::now();
+    _stableSince = ros::Time();
+    _safeStandGyroFilter.reset();
+    publishControllerReady(false);
+    publishSafeStandReady(false);
+    ROS_INFO("RL safe stand requested: holding zero-velocity policy until four-foot IMU stability");
+}
+
+bool State_RL::safeStandReady(){
+    const ros::Time now = ros::Time::now();
+    if(now.isZero() || now < _safeStandRequestStamp){
+        _stableSince = ros::Time();
+        return false;
+    }
+    bool contact = true;
+    for(std::size_t i = 0; i < _footForceZ.size(); ++i){
+        contact = contact && !_footForceStamp[i].isZero()
+            && now >= _footForceStamp[i]
+            && (now - _footForceStamp[i]).toSec() <= kFootForceFreshnessS
+            && _footForceZ[i] >= kFootForceThresholdN;
+    }
+    const Vec3 rpy = rotMatToRPY(_lowState->getRotMat());
+    const Vec3 gyro = _lowState->getGyro();
+    const SafeStandGyroFilterResult filtered = _safeStandGyroFilter.update(
+        now.toSec(), {{gyro(0), gyro(1), gyro(2)}});
+    const bool stable = contact && filtered.valid
+        && std::isfinite(rpy(0)) && std::isfinite(rpy(1))
+        && std::abs(rpy(0)) <= kMaximumSafeStandTiltRad
+        && std::abs(rpy(1)) <= kMaximumSafeStandTiltRad
+        && filtered.norm <= kMaximumSafeStandGyroRadS;
+    if(!stable || filtered.discontinuity){
+        _stableSince = ros::Time();
+        ROS_WARN_THROTTLE(1.0,
+            "RL safe stand waiting: contact=%d roll=%.3f pitch=%.3f gyro=%.3f",
+            contact, rpy(0), rpy(1), filtered.norm);
+        return false;
+    }
+    if(_stableSince.isZero()){
+        _stableSince = now;
+        return false;
+    }
+    return now >= _stableSince
+        && (now - _stableSince).toSec() >= kStableDurationS;
 }
 
 

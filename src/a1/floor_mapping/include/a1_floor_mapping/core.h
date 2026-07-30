@@ -95,10 +95,13 @@ class GroundEstimator {
 class OccupancyIntegrator {
  public:
   OccupancyIntegrator(double resolution, double width_m, double height_m, double p_free, double p_occupied,
-                      unsigned minimum_observations)
+                      unsigned minimum_observations,
+                      double origin_x = std::numeric_limits<double>::quiet_NaN(),
+                      double origin_y = std::numeric_limits<double>::quiet_NaN())
       : resolution_(resolution), width_(static_cast<unsigned>(std::ceil(width_m / resolution))),
         height_(static_cast<unsigned>(std::ceil(height_m / resolution))),
-        origin_x_(-0.5 * width_ * resolution), origin_y_(-0.5 * height_ * resolution),
+        origin_x_(std::isfinite(origin_x) ? origin_x : -0.5 * width_ * resolution),
+        origin_y_(std::isfinite(origin_y) ? origin_y : -0.5 * height_ * resolution),
         free_delta_(static_cast<float>(logit(p_free))), occupied_delta_(static_cast<float>(logit(p_occupied))),
         minimum_observations_(minimum_observations) { reset(); }
 

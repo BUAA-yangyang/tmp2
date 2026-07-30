@@ -35,7 +35,11 @@ set(CATKIN_MAKE ON)
 set(SIMULATION ON)
 set(REAL_ROBOT OFF)
 set(DEBUG OFF)
-option(MOVE_BASE "Build the Unitree move_base velocity-control FSM state" ON)
+# Autonomous navigation uses State_RL exclusively.  Keep the legacy
+# State_Trotting-based MOVE_BASE implementation available only as an explicit
+# opt-in for old diagnostics; compiling it changes estimator and input paths
+# even when the FSM state is never selected.
+option(MOVE_BASE "Build legacy Unitree classic-gait MOVE_BASE FSM state" OFF)
 
 
 if(NOT DEFINED ROBOT_TYPE)

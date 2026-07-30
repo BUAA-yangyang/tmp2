@@ -30,6 +30,7 @@
   <arg name="require_ready" default="true"/>
   <arg name="ready_topic" default="/a1/controller_ready"/>
   <arg name="ready_timeout" default="1.0"/>
+  <arg name="max_vx" default="0.5"/>
   <!-- 单个节点异常退出时由 roslaunch 拉起；整个 launch 正常退出时，
        guard 的 shutdown hook 会先连续发布零速度。 -->
   <arg name="respawn" default="true"/>
@@ -43,6 +44,9 @@
   <node pkg="a1_cmd_mux" type="cmd_vel_guard.py" name="cmd_vel_guard" output="screen"
         respawn="$(arg respawn)" respawn_delay="0.2">
     <rosparam file="$(find a1_cmd_mux)/config/guard.yaml" command="load"/>
+    <!-- cmd_vel_guard reads ~max_vel_x; keep the launch-facing short name
+         but translate it to the node's actual parameter contract. -->
+    <param name="max_vel_x" value="$(arg max_vx)"/>
     <param name="input_topic"  value="$(arg muxed_topic)"/>
     <param name="output_topic" value="$(arg output_topic)"/>
     <param name="emergency_topic" value="$(arg emergency_topic)"/>

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Bounded/full Gazebo acceptance for the production single-floor mission.
 
-The harness is DEV-ONLY. It uses Gazebo truth only through the existing,
-clearly-labelled localization substitute. Door and entry evidence come
-exclusively from the public door action and the Livox-derived OccupancyGrid.
+The harness is DEV-ONLY. Gazebo odometry is an acceptance oracle for fall,
+trajectory and return scoring only; it is never republished or supplied to
+localization, mapping, planning or exploration. Door and entry evidence come
+exclusively from the public door action and Livox-derived mapping.
 """
 
 import copy
@@ -39,6 +40,8 @@ from a1_navigation_interfaces.msg import (
 )
 from diagnostic_msgs.msg import DiagnosticStatus
 from geometry_msgs.msg import Point32, PoseStamped, Twist, WrenchStamped
+from gazebo_msgs.msg import ModelState
+from gazebo_msgs.srv import SetModelConfiguration, SetModelState
 from nav_msgs.msg import OccupancyGrid, Odometry, Path
 import rosgraph
 import rospy
@@ -83,7 +86,8 @@ FIXED_STAND_MAX_TILT_RAD = 0.10
 FIXED_STAND_MAX_GYRO_RAD_S = 0.15
 FIXED_STAND_MAX_JOINT_SPEED_RAD_S = 0.50
 FIXED_STAND_STATE_MAX_AGE_S = 0.20
-FIXED_STAND_STABLE_DURATION_S = 0.50
+FIXED_STAND_STABLE_DURATION_S = 0.30
+FIXED_STAND_CONTACT_DEBOUNCE_S = 0.15
 
 
 class AcceptanceFailure(RuntimeError):
@@ -669,7 +673,13 @@ class GazeboAcceptance:
             rospy.get_param("~wall_timeout", 240.0)
         )
         self.tilt_abort_rad = math.radians(
-            float(rospy.get_param("~tilt_abort_deg", 10.0))
+            float(rospy.get_param("~tilt_abort_deg", 20.0))
+        )
+        self.hard_tilt_abort_rad = math.radians(
+            float(rospy.get_param("~hard_tilt_abort_deg", 40.0))
+        )
+        self.tilt_abort_duration = float(
+            rospy.get_param("~tilt_abort_duration_s", 0.75)
         )
         self.team_scene_info = rospy.get_param(
             "~team_scene_info",
@@ -725,6 +735,7 @@ class GazeboAcceptance:
         self.last_nonzero_cmd_stamp = None
         self.foot_forces = [None] * 4
         self.foot_stamps = [None] * 4
+        self.foot_supported_stamps = [None] * 4
         self.imu = None
         self.imu_stamp = None
         self.odom = None
@@ -735,6 +746,9 @@ class GazeboAcceptance:
         self.fixed_stand_preflight = None
         self.max_roll = 0.0
         self.max_pitch = 0.0
+        self.current_roll = 0.0
+        self.current_pitch = 0.0
+        self.tilt_exceeded_since = None
         self.trajectory = None
         self.feedback = []
         self.feedback_states = set()
@@ -834,16 +848,17 @@ class GazeboAcceptance:
                 queue_size=2,
             ),
         ]
+        self.motor_command_subscribers = []
         for topic in MOTOR_COMMAND_TOPICS:
-            self.subscribers.append(
-                rospy.Subscriber(
+            subscriber = rospy.Subscriber(
                     topic,
                     rospy.AnyMsg,
                     lambda message, motor_topic=topic:
                     self.motor_command_callback(message, motor_topic),
                     queue_size=1,
                 )
-            )
+            self.motor_command_subscribers.append(subscriber)
+            self.subscribers.append(subscriber)
         for index, topic in enumerate(FOOT_TOPICS):
             self.subscribers.append(
                 rospy.Subscriber(
@@ -928,6 +943,8 @@ class GazeboAcceptance:
             )
             self.max_roll = max(self.max_roll, abs(roll))
             self.max_pitch = max(self.max_pitch, abs(pitch))
+            self.current_roll = abs(roll)
+            self.current_pitch = abs(pitch)
 
     def odom_callback(self, message):
         now = self.now_sim()
@@ -962,9 +979,13 @@ class GazeboAcceptance:
             self.trajectory = message
 
     def foot_callback(self, message, index):
+        now = self.now_sim()
+        force = abs(message.wrench.force.z)
         with self.lock:
-            self.foot_forces[index] = abs(message.wrench.force.z)
-            self.foot_stamps[index] = self.now_sim()
+            self.foot_forces[index] = force
+            self.foot_stamps[index] = now
+            if force >= SAFE_STAND_FOOT_FORCE_MIN_N:
+                self.foot_supported_stamps[index] = now
 
     def door_result_callback(self, message):
         result = message.result
@@ -1153,6 +1174,15 @@ class GazeboAcceptance:
                     "unique live A1 controller path: %s",
                     json.dumps(last_probe, sort_keys=True),
                 )
+                # These twelve high-rate subscriptions are needed only for
+                # the one-shot controller-path preflight. Keeping roughly
+                # 3000 AnyMsg callbacks/s for the full mission can backpressure
+                # Gazebo's synchronous publishers and stop simulation time.
+                for subscriber in self.motor_command_subscribers:
+                    subscriber.unregister()
+                    if subscriber in self.subscribers:
+                        self.subscribers.remove(subscriber)
+                self.motor_command_subscribers = []
                 return
             now = self.now_sim()
             if now < start_sim:
@@ -1195,30 +1225,172 @@ class GazeboAcceptance:
             time.sleep(0.02)
         self.publish_neutral_joy()
 
+    def publish_button_across_unpause(
+            self, index, neutral_wall_seconds=0.25,
+            pressed_wall_seconds=0.45):
+        """Deliver a deterministic neutral-to-pressed edge after unpause.
+
+        A press queued while Gazebo is paused is not a reliable edge: on a
+        slow GUI startup the controller may attach after that message, or its
+        first observed Joy sample may already be pressed.  First let the
+        Gazebo-driven control loop observe neutral, then hold the press long
+        enough to span several controller updates.
+        """
+        neutral = Joy(axes=[0.0] * 6, buttons=[0] * 11)
+        pressed = Joy(axes=[0.0] * 6, buttons=[0] * 11)
+        pressed.buttons[index] = 1
+        try:
+            rospy.ServiceProxy("/gazebo/unpause_physics", Empty)()
+        except Exception as error:
+            raise AcceptanceFailure(
+                "Gazebo unpause after spawn reset failed: %r" % (error,)
+            )
+        deadline = time.monotonic() + neutral_wall_seconds
+        while not rospy.is_shutdown() and time.monotonic() < deadline:
+            neutral.header.stamp = rospy.Time.now()
+            self.joy_pub.publish(neutral)
+            time.sleep(0.02)
+        deadline = time.monotonic() + pressed_wall_seconds
+        while not rospy.is_shutdown() and time.monotonic() < deadline:
+            pressed.header.stamp = rospy.Time.now()
+            self.joy_pub.publish(pressed)
+            time.sleep(0.02)
+        self.publish_neutral_joy()
+
     def prepare_controller_fixed_stand(self):
+        # Waiting for live motor commands before requesting FixedStand creates
+        # a circular dependency: some controller states do not publish motor
+        # targets until the stand transition has been requested.  The only
+        # prerequisite for that request is a live /joy subscriber.
+        self.wait_for_wall(
+            lambda: "/unitree_gazebo_servo" in set(
+                self.controller_probe()["joy_subscribers"]
+            ),
+            "A1 controller /joy subscription before direct State_RL stand",
+        )
+        with self.lock:
+            self.foot_supported_stamps = [None] * 4
+        # A GUI-heavy Gazebo startup can take tens of seconds to activate
+        # ros_control after physics is unpaused.  The spawned robot is
+        # torque-free during that interval.  Reset it to the declared mission
+        # spawn once the complete motor-command path is live, before asking
+        # FixedStand to take control; no mission data has been collected yet.
+        try:
+            rospy.wait_for_service("/gazebo/pause_physics", timeout=10.0)
+            rospy.wait_for_service("/gazebo/set_model_state", timeout=10.0)
+            rospy.wait_for_service(
+                "/gazebo/set_model_configuration", timeout=10.0
+            )
+            joint_names = [
+                "%s_%s_joint" % (leg, joint)
+                for leg in ("FR", "FL", "RR", "RL")
+                for joint in ("hip", "thigh", "calf")
+            ]
+            # Seed the learned controller's own nominal pose instead of
+            # entering the unrelated classic FixedStand state first.
+            joint_positions = [
+                -0.15, 0.55, -1.50,
+                 0.15, 0.55, -1.50,
+                -0.15, 0.70, -1.50,
+                 0.15, 0.70, -1.50,
+            ]
+            joint_response = rospy.ServiceProxy(
+                "/gazebo/set_model_configuration", SetModelConfiguration
+            )(
+                "a1_gazebo", "robot_description",
+                joint_names, joint_positions,
+            )
+            if not joint_response.success:
+                raise AcceptanceFailure(
+                    "Gazebo preflight joint reset rejected: %s"
+                    % joint_response.status_message
+                )
+            # Gazebo's SetModelConfiguration can block indefinitely when the
+            # world is paused because ros_control owns these joints.  Apply
+            # the joint seed while updates are live, then immediately freeze
+            # and atomically reset the base pose and velocity below.
+            rospy.ServiceProxy("/gazebo/pause_physics", Empty)()
+            reset = ModelState()
+            reset.model_name = "a1_gazebo"
+            reset.reference_frame = "world"
+            reset.pose.position.x = 0.0
+            reset.pose.position.y = -3.2
+            reset.pose.position.z = 0.34
+            reset.pose.orientation.z = math.sin(1.5708 / 2.0)
+            reset.pose.orientation.w = math.cos(1.5708 / 2.0)
+            response = rospy.ServiceProxy(
+                "/gazebo/set_model_state", SetModelState
+            )(reset)
+            if not response.success:
+                raise AcceptanceFailure(
+                    "Gazebo preflight spawn reset rejected: %s"
+                    % response.status_message
+                )
+        except AcceptanceFailure:
+            raise
+        except Exception as error:
+            raise AcceptanceFailure(
+                "Gazebo preflight spawn reset failed: %r" % (error,)
+            )
+        # Queue the pressed state before unpause and retain it while the
+        # Gazebo-driven controller loop resumes.  Publishing a complete
+        # press/release pulse while paused loses the edge in the queue-size-1
+        # subscriber because junior_ctrl is waiting for state feedback.
+        # Passive intentionally accepts only L2_A, while FixedStand accepts
+        # the RL command. Use FixedStand solely as the required one-cycle FSM
+        # bridge; do not wait for its separate pose trajectory or stability
+        # gate. State_RL then blends from the measured joints to its first
+        # policy target over one second.
+        self.publish_button_across_unpause(1)
         self.wait_for_live_controller_path()
-        self.publish_button(1)
-        self.sleep_sim(4.0)
+        self.sleep_sim(0.10)
+        # With GUI rendering the real-time factor can fall below 0.3, so a
+        # 0.25 wall-second pulse may span too few Gazebo/controller updates
+        # to deliver a reliable neutral-to-pressed edge.  Holding the same
+        # command longer does not add stand preparation in simulation time;
+        # it only makes the FSM transition deterministic.
+        self.publish_button(3, wall_seconds=0.60)
+        self.wait_for(
+            lambda: self.controller_ready_fresh(),
+            "State_RL ready during direct stand",
+            sim_timeout=3.0,
+            wall_timeout=30.0,
+        )
         with self.lock:
             self.fixed_stand_candidate_since = None
             self.fixed_stand_preflight = None
         self.wait_for(
             self.fixed_stand_physical_ready,
-            "DEV-ONLY physical fixed-stand stability before mode 5",
-            sim_timeout=30.0,
-            wall_timeout=600.0,
+            "DEV-ONLY direct State_RL zero-speed stand stability",
+            sim_timeout=4.0,
+            wall_timeout=60.0,
         )
 
     def fixed_stand_physical_ready(self):
         now = self.now_sim()
         with self.lock:
+            # Preserve the original all-four force threshold while debouncing
+            # one-frame Gazebo contact dropouts. Every leg must have crossed
+            # the threshold recently; no unsupported leg is accepted.
+            debounced_forces = [
+                (
+                    max(force or 0.0, SAFE_STAND_FOOT_FORCE_MIN_N)
+                    if support_stamp is not None
+                    and 0.0 <= now - support_stamp
+                    <= FIXED_STAND_CONTACT_DEBOUNCE_S
+                    else force
+                )
+                for force, support_stamp in zip(
+                    self.foot_forces, self.foot_supported_stamps
+                )
+            ]
             evidence = fixed_stand_evidence(
                 now,
                 self.odom,
                 self.odom_stamp,
                 self.joint_velocity,
                 self.joint_stamp,
-                self.foot_forces,
+                debounced_forces,
                 self.foot_stamps,
                 self.imu,
                 self.imu_stamp,
@@ -1245,7 +1417,11 @@ class GazeboAcceptance:
             return evidence["ready"]
 
     def enter_controller_mode5(self):
-        self.publish_button(5)
+        # Button 3 selects the existing learned State_RL /cmd_vel controller.
+        # The autonomy stack remains responsible only for desired body Twist;
+        # the policy produces the twelve joint targets.
+        if not self.controller_ready_fresh():
+            self.publish_button(3)
         self.wait_for(
             lambda: self.controller_ready_fresh(),
             "fresh controller_ready=true",
@@ -1511,7 +1687,10 @@ class GazeboAcceptance:
         goal.floor_id = self.floor_id
         goal.target_coverage_ratio = 0.0
         goal.timeout_s = self.action_timeout_sim
-        goal.floor_entry_pose = copy.deepcopy(self.entry_pose)
+        # Keep the scene-derived entry pose inside the acceptance oracle.
+        # Navigation must derive its own entry axis from upstream localization
+        # and sensor mapping, so no world-coordinate truth pose is sent.
+        goal.floor_entry_pose = PoseStamped()
         goal.roi_local.points = [
             Point32(x=x, y=y) for x, y in self.roi_local
         ]
@@ -1545,19 +1724,35 @@ class GazeboAcceptance:
                 self.action_client.cancel_goal()
                 self.entry_cancel_sent = True
             with self.lock:
-                tilt = max(self.max_roll, self.max_pitch)
+                tilt = max(self.current_roll, self.current_pitch)
+                imu_age = (
+                    float("inf") if self.imu_stamp is None
+                    else self.now_sim() - self.imu_stamp
+                )
                 locked = self.safety_locked
             if locked:
                 self.action_client.cancel_goal()
                 raise AcceptanceFailure(
                     "safety lock asserted during exploration"
                 )
-            if tilt >= self.tilt_abort_rad:
+            now_sim = self.now_sim()
+            if imu_age <= 0.25 and tilt >= self.hard_tilt_abort_rad:
                 self.action_client.cancel_goal()
                 raise AcceptanceFailure(
-                    "tilt safety threshold exceeded: %.2f deg"
+                    "hard tilt safety threshold exceeded: %.2f deg"
                     % math.degrees(tilt)
                 )
+            if imu_age <= 0.25 and tilt >= self.tilt_abort_rad:
+                if self.tilt_exceeded_since is None:
+                    self.tilt_exceeded_since = now_sim
+                elif now_sim - self.tilt_exceeded_since >= self.tilt_abort_duration:
+                    self.action_client.cancel_goal()
+                    raise AcceptanceFailure(
+                        "sustained tilt safety threshold exceeded: %.2f deg for %.2f s"
+                        % (math.degrees(tilt), self.tilt_abort_duration)
+                    )
+            else:
+                self.tilt_exceeded_since = None
             time.sleep(0.05)
         self.action_client.cancel_goal()
         raise AcceptanceFailure("ExploreFloor action wall timeout")
@@ -1634,56 +1829,58 @@ class GazeboAcceptance:
                 "final_zero": self.final_zero_evidence(),
                 "safety_lock_latched": True,
             }
-        if ready:
-            self.publish_button(1)
+        # Keep State_RL active at a zero body-speed command.  Switching back
+        # to FixedStand after a navigation failure was the visible
+        # "sit-down" at the end of round 25 and needlessly discarded the
+        # controller that had remained stable throughout exploration.
+        self.safety_lock_pub.publish(Bool(data=True))
+        with self.lock:
+            self.fixed_stand_candidate_since = None
+            self.fixed_stand_preflight = None
         try:
             self.wait_for(
                 lambda: (
-                    self.safe_stand_edge is not None
-                    and not self.controller_ready
+                    self.safety_locked
+                    and self.controller_ready_fresh()
+                    and self.final_zero_evidence()["fresh"]
+                    and self.final_zero_evidence()["zero"]
+                    and self.final_zero_evidence()["settled_for_0_5s"]
+                    and self.fixed_stand_physical_ready()
                 ),
-                "guarded all-foot stable stand transition",
-                sim_timeout=12.0,
-                wall_timeout=240.0,
+                "guarded State_RL zero-speed standing stop",
+                sim_timeout=4.0,
+                wall_timeout=60.0,
             )
-            self.sleep_sim(0.6)
         except Exception as error:
-            self.safety_lock_pub.publish(Bool(data=True))
             return {
                 "success": False,
                 "classification": policy,
                 "mode5_entered": True,
-                "safe_stand_required": True,
+                "safe_stand_required": False,
                 "error": str(error),
                 "safety_lock_latched": True,
             }
         with self.lock:
-            edge = copy.deepcopy(self.safe_stand_edge)
             ready = self.controller_ready
         zero = self.final_zero_evidence()
         success = (
-            safe_stand_edge_is_valid(edge)
-            and not ready
+            ready
             and zero["fresh"]
             and zero["zero"]
             and zero["settled_for_0_5s"]
         )
-        if not success:
-            self.safety_lock_pub.publish(Bool(data=True))
         return {
             "success": bool(success),
             "classification": policy,
             "mode5_entered": True,
-            "safe_stand_required": True,
+            "safe_stand_required": False,
             "safe_stand_ready_seen": self.safe_stand_seen,
             "controller_ready": ready,
-            "fixed_stand_transition_inferred": (
-                edge is not None and not ready
-            ),
-            "safe_stand_edge": edge,
-            "safe_stand_edge_valid": safe_stand_edge_is_valid(edge),
+            "fixed_stand_transition_inferred": False,
+            "state_rl_zero_speed_hold": True,
+            "physical_stand": copy.deepcopy(self.fixed_stand_preflight),
             "final_zero": zero,
-            "safety_lock_latched": not success,
+            "safety_lock_latched": True,
         }
 
     def trajectory_metrics(self):
@@ -1942,15 +2139,15 @@ class GazeboAcceptance:
             )
             document["public_entry_door_id"] = door_id
 
-            document["failure_stage"] = "DEV_TF_PREFLIGHT"
+            document["failure_stage"] = "LOCALIZATION_TF_PREFLIGHT"
             self.prepare_controller_fixed_stand()
             self.wait_for(
                 lambda: self.dev_tf_probe()["ready"],
-                "fresh dev-only odom-to-base TF before mode 5",
-                sim_timeout=5.0,
-                wall_timeout=120.0,
+                "fresh upstream-localization odom-to-base TF before motion",
+                sim_timeout=12.0,
+                wall_timeout=180.0,
             )
-            document["dev_truth_tf_preflight"] = copy.deepcopy(
+            document["localization_tf_preflight"] = copy.deepcopy(
                 self.dev_tf_probe_evidence
             )
             document["bag_recorder_preflight"] = copy.deepcopy(

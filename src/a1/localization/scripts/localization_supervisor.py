@@ -53,8 +53,10 @@ class LocalizationSupervisor:
             "~max_automatic_restarts_per_reason", 1)
         self.require_controller_ready = rospy.get_param(
             "~require_controller_ready", True)
-        self.controller_ready_state = rospy.get_param(
-            "~controller_ready_state", "fixed stand")
+        configured_ready_states = rospy.get_param(
+            "~controller_ready_states",
+            [rospy.get_param("~controller_ready_state", "fixed stand")])
+        self.controller_ready_states = set(configured_ready_states)
         if not os.path.isfile(self.launch):
             raise RuntimeError("managed launch does not exist: %s" % self.launch)
         self.status_pub = rospy.Publisher(
@@ -257,7 +259,7 @@ class LocalizationSupervisor:
                 self.publish("WAITING_FOR_INPUTS", self.restart_reason)
                 return
             if (self.require_controller_ready and
-                    self.controller_state != self.controller_ready_state):
+                    self.controller_state not in self.controller_ready_states):
                 self.fresh_since = None
                 self.publish("WAITING_FOR_CONTROLLER_READY", self.restart_reason)
                 return

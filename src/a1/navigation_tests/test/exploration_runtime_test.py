@@ -52,7 +52,7 @@ class RuntimeTest(unittest.TestCase):
         cls.move_delay = 0.15
         cls.failed_markers = []
         cls.dwa_config = {
-            "max_vel_x": 0.20,
+            "max_vel_x": 0.30,
             "max_vel_y": 0.0,
             "max_vel_trans": 0.20,
             "max_vel_theta": 0.30,
@@ -500,7 +500,7 @@ class RuntimeTest(unittest.TestCase):
                 "min_vel_theta": 0.25,
             },
         )
-        self.assertEqual(self.dwa_config["max_vel_x"], 0.20)
+        self.assertEqual(self.dwa_config["max_vel_x"], 0.30)
         self.assertEqual(self.dwa_config["max_vel_trans"], 0.20)
         self.assertEqual(self.dwa_config["min_vel_trans"], 0.08)
         self.assertEqual(self.dwa_config["min_vel_theta"], 0.25)

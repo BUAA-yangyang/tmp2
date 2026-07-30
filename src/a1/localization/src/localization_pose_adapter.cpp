@@ -20,6 +20,7 @@
 #include <std_msgs/String.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Transform.h>
+#include <tf2/LinearMath/Matrix3x3.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2_ros/transform_broadcaster.h>
 
@@ -155,6 +156,14 @@ private:
         pnh_.param("health_enabled", health_enabled_, true);
         pnh_.param("monitor_clock", monitor_clock_, true);
         pnh_.param("unknown_twist_variance", unknown_twist_variance_, 1.0e6);
+        pnh_.param("twist_estimation_enabled", twist_estimation_enabled_, true);
+        pnh_.param("twist_filter_alpha", twist_filter_alpha_, 0.35);
+        pnh_.param("twist_min_dt", twist_min_dt_, 0.01);
+        pnh_.param("twist_max_dt", twist_max_dt_, 0.40);
+        pnh_.param("twist_max_linear_speed", twist_max_linear_speed_, 2.0);
+        pnh_.param("twist_max_angular_speed", twist_max_angular_speed_, 3.0);
+        pnh_.param("twist_linear_variance", twist_linear_variance_, 0.04);
+        pnh_.param("twist_angular_variance", twist_angular_variance_, 0.09);
         pnh_.param("sensor_warn_timeout", sensor_warn_timeout_, 0.5);
         pnh_.param("sensor_lost_timeout", sensor_lost_timeout_, 1.5);
         pnh_.param("odom_warn_timeout", odom_warn_timeout_, 0.5);
@@ -171,6 +180,7 @@ private:
         pnh_.param("stationary_error_requires_reinitialization",
                     stationary_error_requires_reinitialization_, true);
         pnh_.param("stationary_error_window", stationary_error_window_, 1.0);
+        pnh_.param("stationary_monitor_grace", stationary_monitor_grace_, 3.0);
         pnh_.param("stationary_translation_limit", stationary_translation_limit_, 0.12);
         pnh_.param("stationary_command_timeout", stationary_command_timeout_, 0.5);
         pnh_.param("stationary_command_threshold", stationary_command_threshold_, 0.02);
@@ -181,8 +191,13 @@ private:
             odom_lost_timeout_ > odom_warn_timeout_ && clock_warn_timeout_ > 0.0 &&
             clock_lost_timeout_ > clock_warn_timeout_ && initialization_samples_ > 0 &&
             max_translation_jump_ > 0.0 && max_rotation_jump_ > 0.0 &&
-            stationary_error_window_ > 0.0 && stationary_translation_limit_ > 0.0 &&
-            stationary_command_timeout_ > 0.0 && stationary_command_threshold_ > 0.0;
+            stationary_error_window_ > 0.0 && stationary_monitor_grace_ >= 0.0 &&
+            stationary_translation_limit_ > 0.0 &&
+            stationary_command_timeout_ > 0.0 && stationary_command_threshold_ > 0.0 &&
+            twist_filter_alpha_ > 0.0 && twist_filter_alpha_ <= 1.0 &&
+            twist_min_dt_ > 0.0 && twist_max_dt_ > twist_min_dt_ &&
+            twist_max_linear_speed_ > 0.0 && twist_max_angular_speed_ > 0.0 &&
+            twist_linear_variance_ > 0.0 && twist_angular_variance_ > 0.0;
         if (!valid_configuration_)
         {
             ROS_FATAL("invalid localization health threshold configuration");
@@ -260,9 +275,11 @@ private:
 
     void controllerStateCallback(const std_msgs::String::ConstPtr& input)
     {
+        const bool changed =
+            !controller_state_received_ || controller_state_ != input->data;
         controller_state_ = input->data;
         controller_state_received_ = true;
-        stationary_anchor_established_ = false;
+        if (changed) stationary_anchor_established_ = false;
     }
 
     void cmdVelCallback(const geometry_msgs::Twist::ConstPtr& input)
@@ -348,6 +365,8 @@ private:
     {
         consecutive_valid_ = 0;
         have_previous_pose_ = false;
+        have_twist_pose_ = false;
+        have_filtered_twist_ = false;
         stationary_anchor_established_ = false;
         if (reinitialization_required) world_anchor_established_ = false;
         // Preserve the first fatal cause until the estimator process is restarted.
@@ -366,6 +385,69 @@ private:
         const double translation = (pose.getOrigin() - previous_pose_.getOrigin()).length();
         const double rotation = previous_pose_.getRotation().angleShortestPath(pose.getRotation());
         return translation > max_translation_jump_ || rotation > max_rotation_jump_;
+    }
+
+    void updateTwistEstimate(const tf2::Transform& pose, const ros::Time& stamp)
+    {
+        geometry_msgs::Twist measurement;
+        bool valid = false;
+        if (twist_estimation_enabled_ && have_twist_pose_)
+        {
+            const double dt = (stamp - twist_pose_stamp_).toSec();
+            if (dt >= twist_min_dt_ && dt <= twist_max_dt_)
+            {
+                const tf2::Vector3 world_velocity =
+                    (pose.getOrigin() - twist_pose_.getOrigin()) / dt;
+                const tf2::Vector3 body_velocity =
+                    pose.getBasis().transpose() * world_velocity;
+                const tf2::Quaternion relative_rotation =
+                    twist_pose_.getRotation().inverse() * pose.getRotation();
+                double roll = 0.0, pitch = 0.0, yaw = 0.0;
+                tf2::Matrix3x3(relative_rotation).getRPY(roll, pitch, yaw);
+                measurement.linear.x = body_velocity.x();
+                measurement.linear.y = body_velocity.y();
+                measurement.linear.z = body_velocity.z();
+                measurement.angular.x = roll / dt;
+                measurement.angular.y = pitch / dt;
+                measurement.angular.z = yaw / dt;
+                const double planar_speed =
+                    std::hypot(measurement.linear.x, measurement.linear.y);
+                valid = std::isfinite(planar_speed) &&
+                        planar_speed <= twist_max_linear_speed_ &&
+                        std::isfinite(measurement.angular.z) &&
+                        std::abs(measurement.angular.z) <= twist_max_angular_speed_;
+            }
+        }
+        twist_pose_ = pose;
+        twist_pose_stamp_ = stamp;
+        have_twist_pose_ = true;
+
+        if (commandedStationary())
+        {
+            filtered_twist_ = geometry_msgs::Twist();
+            have_filtered_twist_ = true;
+            return;
+        }
+        if (!valid) return;
+        if (!have_filtered_twist_)
+        {
+            filtered_twist_ = measurement;
+            have_filtered_twist_ = true;
+            return;
+        }
+        const double a = twist_filter_alpha_;
+        filtered_twist_.linear.x =
+            a * measurement.linear.x + (1.0 - a) * filtered_twist_.linear.x;
+        filtered_twist_.linear.y =
+            a * measurement.linear.y + (1.0 - a) * filtered_twist_.linear.y;
+        filtered_twist_.linear.z =
+            a * measurement.linear.z + (1.0 - a) * filtered_twist_.linear.z;
+        filtered_twist_.angular.x =
+            a * measurement.angular.x + (1.0 - a) * filtered_twist_.angular.x;
+        filtered_twist_.angular.y =
+            a * measurement.angular.y + (1.0 - a) * filtered_twist_.angular.y;
+        filtered_twist_.angular.z =
+            a * measurement.angular.z + (1.0 - a) * filtered_twist_.angular.z;
     }
 
     void odomCallback(const nav_msgs::Odometry::ConstPtr& input)
@@ -402,7 +484,12 @@ private:
             have_previous_pose_ = true;
             return;
         }
-        if (stationary_error_check_enabled_ && commandedStationary())
+        const bool stationary_monitor_armed =
+            state_ == State::TRACKING && !tracking_start_stamp_.isZero() &&
+            (input->header.stamp - tracking_start_stamp_).toSec() >=
+                stationary_monitor_grace_;
+        if (stationary_error_check_enabled_ && stationary_monitor_armed &&
+            commandedStationary())
         {
             if (!stationary_anchor_established_)
             {
@@ -430,6 +517,7 @@ private:
         }
         previous_pose_ = odom_to_base;
         have_previous_pose_ = true;
+        updateTwistEstimate(odom_to_base, input->header.stamp);
 
         if (health_enabled_)
         {
@@ -467,8 +555,20 @@ private:
         output.pose.pose.position.z = odom_to_base.getOrigin().z();
         output.pose.pose.orientation = tf2::toMsg(odom_to_base.getRotation());
         output.twist.covariance.fill(0.0);
-        for (std::size_t index = 0; index < 6; ++index)
-            output.twist.covariance[index * 6 + index] = unknown_twist_variance_;
+        if (twist_estimation_enabled_ && have_filtered_twist_)
+        {
+            output.twist.twist = filtered_twist_;
+            for (std::size_t index = 0; index < 3; ++index)
+                output.twist.covariance[index * 6 + index] = twist_linear_variance_;
+            for (std::size_t index = 3; index < 6; ++index)
+                output.twist.covariance[index * 6 + index] = twist_angular_variance_;
+        }
+        else
+        {
+            output.twist.twist = geometry_msgs::Twist();
+            for (std::size_t index = 0; index < 6; ++index)
+                output.twist.covariance[index * 6 + index] = unknown_twist_variance_;
+        }
         // Publish the transform first. Consumers commonly receive odometry and
         // immediately query TF for the same stamp; reversing this order creates
         // a deterministic transient lookup race even within this process.
@@ -575,8 +675,19 @@ private:
     void setState(State state, const std::string& reason)
     {
         if (state_ == state && reason_ == reason) return;
+        const State previous = state_;
         state_ = state;
         reason_ = reason;
+        if (state_ == State::TRACKING && previous != State::TRACKING)
+        {
+            tracking_start_stamp_ = ros::Time::now();
+            stationary_anchor_established_ = false;
+        }
+        else if (state_ != State::TRACKING)
+        {
+            tracking_start_stamp_ = ros::Time();
+            stationary_anchor_established_ = false;
+        }
         ROS_INFO_STREAM("localization state=" << stateName() << " reason=" << reason_);
         publishStatus();
     }
@@ -605,6 +716,13 @@ private:
                                          world_alignment_enabled_ ? world_frame_ : odom_frame_));
         status.values.push_back(keyValue("consecutive_valid_odometry",
                                          std::to_string(consecutive_valid_)));
+        status.values.push_back(keyValue(
+            "stationary_monitor_armed",
+            state_ == State::TRACKING && !tracking_start_stamp_.isZero() &&
+                    (ros::Time::now() - tracking_start_stamp_).toSec() >=
+                        stationary_monitor_grace_
+                ? "true"
+                : "false"));
         status.values.push_back(keyValue("pointcloud_age_sec", std::to_string(age(pointcloud_watch_))));
         status.values.push_back(keyValue("imu_age_sec", std::to_string(age(imu_watch_))));
         status.values.push_back(keyValue("odom_age_sec", std::to_string(age(odom_watch_))));
@@ -631,6 +749,7 @@ private:
     ros::Timer health_timer_;
     tf2_ros::TransformBroadcaster tf_broadcaster_;
     tf2::Transform imu_to_base_, previous_pose_, initial_world_to_base_, world_to_odom_;
+    tf2::Transform twist_pose_;
     tf2::Transform stationary_anchor_;
     InputWatch pointcloud_watch_, imu_watch_, odom_watch_, clock_watch_;
 
@@ -644,6 +763,8 @@ private:
     bool rewrite_registered_cloud_frame_{true}, rewrite_map_frame_{true};
     bool health_enabled_{true}, monitor_clock_{true}, valid_configuration_{false};
     bool have_previous_pose_{false};
+    bool twist_estimation_enabled_{true}, have_twist_pose_{false};
+    bool have_filtered_twist_{false};
     bool world_alignment_enabled_{true}, world_anchor_established_{false};
     bool reinitialization_required_{false};
     bool stationary_error_check_enabled_{true};
@@ -652,12 +773,19 @@ private:
     bool command_is_zero_{false}, stationary_anchor_established_{false};
     ros::WallTime cmd_vel_wall_time_;
     ros::Time stationary_anchor_stamp_;
+    ros::Time tracking_start_stamp_;
+    ros::Time twist_pose_stamp_;
+    geometry_msgs::Twist filtered_twist_;
     double unknown_twist_variance_{1.0e6};
+    double twist_filter_alpha_{0.35}, twist_min_dt_{0.01}, twist_max_dt_{0.40};
+    double twist_max_linear_speed_{2.0}, twist_max_angular_speed_{3.0};
+    double twist_linear_variance_{0.04}, twist_angular_variance_{0.09};
     double sensor_warn_timeout_{0.5}, sensor_lost_timeout_{1.5};
     double odom_warn_timeout_{0.5}, odom_lost_timeout_{1.5};
     double clock_warn_timeout_{0.5}, clock_lost_timeout_{1.5};
     double max_translation_jump_{1.0}, max_rotation_jump_{1.0};
-    double stationary_error_window_{1.0}, stationary_translation_limit_{0.12};
+    double stationary_error_window_{1.0}, stationary_monitor_grace_{3.0};
+    double stationary_translation_limit_{0.12};
     double stationary_command_timeout_{0.5}, stationary_command_threshold_{0.02};
     int initialization_samples_{5};
     int consecutive_valid_{0};

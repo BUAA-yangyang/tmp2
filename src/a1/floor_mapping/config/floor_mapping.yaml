@@ -47,13 +47,28 @@ filter:
   minimum_range: 0.5
   maximum_range: 8.0
   ground_band_below: 0.05
-  ground_clearance: 0.08
+  # The public entrance has an approximately 8 cm traversable sill. Treating
+  # its vertical returns as lethal 2-D obstacles made move_base stop, rotate
+  # away, and retry indefinitely even though State_RL can climb it reliably.
+  # Obstacles above 14 cm remain marked; the low sill is emitted on the
+  # clearing/ground channel.
+  ground_clearance: 0.14
   maximum_obstacle_height: 1.50
   voxel_leaf_size: 0.05
 grid:
-  resolution: 0.05
-  width: 40.0
+  # Keep the lower-cost 7.5 cm grid; corridor continuation no longer depends
+  # solely on a fragile frontier component after a room scan.
+  resolution: 0.075
+  # The single-floor mission ROI extends roughly 39 m forward in odom.
+  # Allocate most longitudinal capacity in that direction and retain a full
+  # Livox-range margin beyond the ROI so its edge can still form frontiers.
+  width: 100.0
   height: 40.0
+  origin_x: -20.0
+  origin_y: -20.0
+  # Room scans and doorway exits need a fresh grid before the no-frontier
+  # confirmation advances. One hertz was the proven setting for reaching the
+  # second room pair and also shortens post-stand/door startup latency.
   publish_rate: 1.0
   p_free: 0.35
   p_occupied: 0.80

@@ -8,7 +8,7 @@ class EntrySpeedLimitError(RuntimeError):
 
 
 class EntrySpeedLimiter:
-    """Temporarily lower selected DWA speed bounds through dynamic_reconfigure.
+    """Temporarily apply a validated State_RL command envelope.
 
     The caller supplies ROS message factories so the state machine can be
     unit-tested without importing ROS.  Calling the service with an empty
@@ -21,8 +21,10 @@ class EntrySpeedLimiter:
         "max_vel_y",
         "max_vel_trans",
         "max_vel_theta",
+        "min_vel_x",
         "min_vel_trans",
         "min_vel_theta",
+        "sim_time",
     )
 
     def __init__(
@@ -36,7 +38,11 @@ class EntrySpeedLimiter:
         self._request_factory = request_factory
         self._double_parameter_factory = double_parameter_factory
         self._limits = {
-            name: float(limits[name]) for name in self.REQUIRED_PARAMETERS
+            name: float(
+                limits.get(name, limits["min_vel_trans"])
+                if name == "min_vel_x" else limits[name]
+            )
+            for name in self.REQUIRED_PARAMETERS
         }
         self._tolerance = float(tolerance)
         self._snapshot = None
@@ -87,9 +93,15 @@ class EntrySpeedLimiter:
                 raise EntrySpeedLimitError(
                     "%s limit must be positive" % name
                 )
+        if self._limits["sim_time"] <= 0.0:
+            raise EntrySpeedLimitError("sim_time must be positive")
         if self._limits["min_vel_trans"] > self._limits["max_vel_trans"]:
             raise EntrySpeedLimitError(
                 "min_vel_trans must not exceed max_vel_trans"
+            )
+        if self._limits["min_vel_x"] > self._limits["max_vel_x"]:
+            raise EntrySpeedLimitError(
+                "min_vel_x must not exceed max_vel_x"
             )
         if self._limits["min_vel_theta"] > self._limits["max_vel_theta"]:
             raise EntrySpeedLimitError(
@@ -98,6 +110,10 @@ class EntrySpeedLimiter:
 
     def _required_values(self, response, operation):
         values = self._config_values(response)
+        # Older test doubles and older DWA releases may omit min_vel_x.  Their
+        # translational minimum is the authoritative compatible fallback.
+        if "min_vel_x" not in values and "min_vel_trans" in values:
+            values["min_vel_x"] = values["min_vel_trans"]
         missing = [
             name for name in self.REQUIRED_PARAMETERS if name not in values
         ]
@@ -142,10 +158,16 @@ class EntrySpeedLimiter:
                 "live configuration query failed: %s" % error
             )
 
+        # Maxima are safety ceilings and may never be raised here. Positive
+        # minima keep DWA out of State_RL's empirically near-stationary command
+        # region while traversing the already validated entrance corridor.
+        maximum_names = (
+            "max_vel_x", "max_vel_y", "max_vel_trans", "max_vel_theta"
+        )
         increases = [
             "%s %.9g -> %.9g"
             % (name, snapshot[name], self._limits[name])
-            for name in self.REQUIRED_PARAMETERS
+            for name in maximum_names
             if self._limits[name] > snapshot[name] + self._tolerance
         ]
         if increases:

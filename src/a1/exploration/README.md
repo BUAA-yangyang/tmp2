@@ -126,7 +126,7 @@ within the configured direct-path length bound. A rejected plan never reaches
 local plan appears before `timeouts/entry_plan`.
 
 Immediately before that one entry MoveBaseAction, the server queries the live
-`DWAPlannerROS` configuration, applies the lower paired minima/maxima under
+`DWAPlannerROS` configuration, applies the validated paired minima/maxima under
 `entry/speed_limit`, verifies the service response, and saves the exact prior
 values. It restores and verifies that snapshot before `ENTERED_FLOOR` or any
 frontier selection. A missing service, incomplete response, attempted speed
