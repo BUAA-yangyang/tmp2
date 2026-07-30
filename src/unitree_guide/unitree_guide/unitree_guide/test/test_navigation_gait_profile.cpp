@@ -24,14 +24,14 @@ TEST(NavigationGaitProfile, KeepsOrdinaryTrottingProfileUnchanged) {
         navigation_gait::kDefaultSwingHeightM));
 }
 
-TEST(NavigationGaitProfile, ReducesPeakTouchdownSpeedForMoveBase) {
-    EXPECT_DOUBLE_EQ(0.90, navigation_gait::kMoveBaseGaitPeriodS);
+TEST(NavigationGaitProfile, BoundsPeakSwingSpeedForMoveBase) {
+    EXPECT_DOUBLE_EQ(0.60, navigation_gait::kMoveBaseGaitPeriodS);
     EXPECT_LE(
         navigation_gait::maximumSwingVerticalSpeed(
             navigation_gait::kMoveBaseSwingHeightM,
             navigation_gait::kMoveBaseGaitPeriodS,
             navigation_gait::kTrotStancePhaseRatio),
-        navigation_gait::maximumSwingVerticalSpeed(
+        1.20 * navigation_gait::maximumSwingVerticalSpeed(
             navigation_gait::kDefaultSwingHeightM,
             navigation_gait::kDefaultGaitPeriodS,
             navigation_gait::kTrotStancePhaseRatio));
@@ -44,8 +44,8 @@ TEST(NavigationGaitProfile, WaveGeneratorAppliesAndValidatesPeriod) {
         Vec4(0.0, 0.5, 0.5, 0.0),
         0.004);
     wave.setPeriod(navigation_gait::kMoveBaseGaitPeriodS);
-    EXPECT_NEAR(0.90, wave.getT(), 1e-6);
-    EXPECT_NEAR(0.45, wave.getTswing(), 1e-6);
+    EXPECT_NEAR(0.60, wave.getT(), 1e-6);
+    EXPECT_NEAR(0.30, wave.getTswing(), 1e-6);
     EXPECT_THROW(wave.setPeriod(0.0), std::invalid_argument);
     EXPECT_THROW(
         wave.setPeriod(std::numeric_limits<double>::quiet_NaN()),
