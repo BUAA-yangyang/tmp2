@@ -9,6 +9,7 @@
     <param name="odom_lost_timeout" value="0.8"/>
     <param name="stationary_error_requires_reinitialization" value="false"/>
     <param name="stationary_error_window" value="0.2"/>
+    <param name="stationary_monitor_grace" value="0.0"/>
     <param name="stationary_translation_limit" value="0.1"/>
   </node>
   <test test-name="localization_pose_adapter_runtime" pkg="a1_localization"

@@ -13,6 +13,10 @@ max_automatic_restarts_per_reason: 1
 require_controller_ready: true
 controller_state_topic: /a1/controller/state
 controller_ready_state: fixed stand
+# The acceptance controller changes to State_RL before the estimator's full
+# stability window elapses. Zero-command State_RL is also a valid stationary
+# initialization posture; the IMU stability gate below remains authoritative.
+controller_ready_states: [fixed stand, State_RL, RL]
 monitor_clock: true
 input_timeout: 3.0
 settle_time: 2.0

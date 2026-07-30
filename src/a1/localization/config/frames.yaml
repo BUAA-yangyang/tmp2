@@ -30,9 +30,17 @@ strict_input_frames: true
 rewrite_registered_cloud_frame: true
 rewrite_map_frame: true
 
-# FAST-LIO does not populate nav_msgs/Odometry.twist. Keep the zero-valued
-# placeholder visibly untrusted instead of advertising an all-zero covariance.
+# Estimate child-frame body twist from consecutive, timestamped FAST-LIO poses.
+# DWA requires this state to construct its dynamic velocity window.
 unknown_twist_variance: 1000000.0
+twist_estimation_enabled: true
+twist_filter_alpha: 0.35
+twist_min_dt: 0.01
+twist_max_dt: 0.40
+twist_max_linear_speed: 2.0
+twist_max_angular_speed: 3.0
+twist_linear_variance: 0.04
+twist_angular_variance: 0.09
 
 # Health and output-validity gate. All timeout values are measured with wall
 # time, so a stopped /clock can still invalidate localization.
@@ -53,7 +61,10 @@ odom_warn_timeout: 1.0
 odom_lost_timeout: 3.0
 clock_warn_timeout: 1.0
 clock_lost_timeout: 3.0
-initialization_samples: 5
+# FAST-LIO's first poses include a repeatable convergence transient. Keep
+# output gated until roughly three seconds of valid odometry have accumulated;
+# stationary-drift monitoring begins only after TRACKING.
+initialization_samples: 30
 max_translation_jump: 1.0
 max_rotation_jump: 1.0
 # Detect the observed FAST-LIO failure mode: continuous horizontal motion while
@@ -63,6 +74,9 @@ stationary_error_requires_reinitialization: true
 controller_state_topic: /a1/controller/state
 cmd_vel_topic: /cmd_vel
 stationary_error_window: 1.0
+# Do not anchor the stationary monitor to FAST-LIO's final convergence
+# transient immediately after TRACKING becomes valid.
+stationary_monitor_grace: 3.0
 stationary_translation_limit: 0.12
 stationary_command_timeout: 0.5
 stationary_command_threshold: 0.02

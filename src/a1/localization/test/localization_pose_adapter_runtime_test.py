@@ -140,7 +140,9 @@ class LocalizationPoseAdapterRuntimeTest(unittest.TestCase):
         self.assertEqual(output.child_frame_id, "base")
         self.assertAlmostEqual(output.pose.pose.position.x, 1.25, places=6)
         self.assertAlmostEqual(output.pose.covariance[0], 0.04, places=6)
-        self.assertEqual(output.twist.covariance[0], 1000000.0)
+        # Consecutive FAST-LIO poses now provide the body twist consumed by
+        # DWA, so a tracked output carries the configured trusted variance.
+        self.assertAlmostEqual(output.twist.covariance[0], 0.04, places=6)
         self.assertEqual(received_cloud[-1].header.frame_id, "world")
         self.assertEqual(received_map[-1].header.frame_id, "world")
         transform = self.tf_buffer.lookup_transform(

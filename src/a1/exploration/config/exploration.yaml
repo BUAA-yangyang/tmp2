@@ -3,6 +3,7 @@ frames:
 
 topics:
   map: /a1/floor_mapping/map
+  doorways: /a1/floor_mapping/doorways
   mapping_status: /a1/floor_mapping/status
   final_cmd_vel: /cmd_vel
   safety_lock: /a1_cmd_mux/safety_lock
@@ -38,8 +39,22 @@ planning:
 # RECORD_START is the outdoor return pose. floor_entry_pose is a distinct pose
 # just inside the public main entrance, with +X pointing into the floor.
 entry:
-  require_explicit_pose: true
-  position_tolerance: 0.40
+  # Dedicated short-horizon entrance transit. State_RL consumes this body
+  # velocity; the explorer never writes leg joint targets.
+  transit_speed: 0.80
+  near_field_distance: 0.70
+  near_field_half_width: 0.30
+  # This is simulation time. With the 0.5 Hz map publisher, four seconds
+  # permits two fresh grids after a transient door/step return.
+  obstacle_hold_timeout: 6.0
+  # The explorer must not consume a simulator-/scene-derived entry pose.
+  # RECORD_START localization plus the robot's initial forward heading defines
+  # the public entrance transit axis; the numeric offset is a mission standoff,
+  # not a world-coordinate truth pose.
+  require_explicit_pose: false
+  # move_base accepts the threshold pose at 0.35 m. Leave 0.10 m for mapping
+  # and TF sampling skew so a valid, strongly observed entry is not rejected.
+  position_tolerance: 0.45
   yaw_tolerance: 0.65
   # OccupancyGrid must show a known-free path this far beyond floor_entry_pose.
   inside_probe_distance: 0.75
@@ -56,23 +71,26 @@ entry:
   plan_endpoint_tolerance: 0.60
   plan_maximum_length_ratio: 1.50
   plan_maximum_length_slack: 0.75
-  # Livox evidence from bounded_v5/v7 shows a floor-height transition across
-  # the full entrance width. Keep the custom controller in its validated
-  # low-speed gait envelope while MoveBaseAction crosses that transition.
+  # Livox evidence shows a floor-height transition across the full entrance
+  # The entrance apron has an 8 cm vertical edge.  State_RL needs enough
+  # forward momentum for the rear legs to follow the front legs onto it.
+  # suppress yaw while crossing the sensor-confirmed straight local corridor.
   # These are temporary DWA maxima, not direct velocity commands; cmd_mux
   # remains the sole /cmd_vel publisher.
   speed_limit:
     enabled: true
     service_wait_wall: 3.0
-    max_vel_x: 0.05
+    max_vel_x: 1.40
     max_vel_y: 0.0
-    max_vel_trans: 0.05
-    max_vel_theta: 0.15
+    max_vel_trans: 1.40
+    max_vel_theta: 0.01
     # DWA rejects every non-zero trajectory when its live minimum speeds remain
     # above the temporary maxima. Lower the paired minima in the same verified
     # transaction and restore them from the same live snapshot.
-    min_vel_trans: 0.02
-    min_vel_theta: 0.05
+    min_vel_trans: 1.25
+    min_vel_x: 1.25
+    min_vel_theta: 0.0
+    sim_time: 0.5
 
 # The ROI is floor-entry-local and covers only the indoor body. The entrance
 # channel is a transit region, so it is excluded from frontier extraction,
@@ -83,11 +101,17 @@ roi:
   default_local_polygon: [0.0, -8.65, 40.0, -8.65,
                           40.0, 8.65, 0.0, 8.65]
   boundary_margin: 0.35
+  map_boundary_margin: 8.0
 
 controller:
   ready_freshness: 0.35
 
 frontier:
+  # The public entrance is a transit edge, not unexplored indoor space.
+  # Once crossed, suppress the narrow doorway band from frontier selection.
+  entry_exclusion:
+    depth: 1.0
+    half_width: 1.25
   min_length: 0.35
   obstacle_clearance: 0.30
   goal_standoff: 0.35
@@ -98,6 +122,62 @@ frontier:
   occupied_threshold: 65
   information_gain_weight: 1.0
   distance_weight: 0.25
+  # Reject tiny local fragments whose information gain is lower than their
+  # travel cost. They commonly appear at a just-exited room mouth and cause an
+  # unnecessary turn/backout cycle instead of axial corridor progress.
+  minimum_score: 0.0
+  # A room scan may make the visible main corridor known-free without leaving
+  # a frontier component. Continue through that observed free space before
+  # accepting no-frontier completion; every probe is checked against the map,
+  # ROI and move_base plan and uses no simulator truth.
+  corridor_probe:
+    enabled: true
+    step: 3.0
+    # Only pre-check the goal cell here. Full footprint clearance, inflation
+    # and path collision checks remain the responsibility of move_base.
+    clearance: 0.0
+    minimum_completed_rooms: 2
+  # In a corridor, do not let a long axial frontier dominate open rooms.
+  # Treat sufficiently lateral frontiers near the current door station as
+  # rooms; visit robot-left first, then robot-right, then continue forward.
+  room_priority:
+    enabled: true
+    lateral_threshold: 1.0
+    # The broad left/right openings beside the public entrance belong to the
+    # entrance junction. In this observation mode only side openings farther
+    # down the main corridor are classified as actual room doors.
+    minimum_door_longitudinal: 7.0
+    # The generator's standard room opening is 1.20 m. Require matching
+    # stable/traversable LiDAR doorway evidence instead of treating every
+    # lateral frontier as a room.
+    door_minimum_width: 1.0
+    door_maximum_width: 1.6
+    door_station_tolerance: 1.25
+    # Valid room doors lie in the wall band beside the main corridor. Openings
+    # detected deep inside a room during its 360-degree scan are not doors on
+    # the corridor mission graph.
+    door_maximum_lateral: 2.2
+    lookahead: 5.0
+    backtrack: 2.0
+    # A branch is explored from its deepest reachable frontier. Once a goal
+    # at this depth succeeds, suppress the whole branch rather than only a
+    # 0.7 m circle around one goal.
+    station_width: 1.5
+    # Associate noisy door centers geometrically before station quantization.
+    identity_longitudinal_tolerance: 1.0
+    identity_lateral_tolerance: 0.75
+    completion_depth: 2.0
+    # Frontier goals normally stop before unknown space. A side branch needs
+    # an explicit room-interior observation point beyond the corridor mouth.
+    goal_extension: 1.2
+    scan_angular_speed: 1.80
+    exit_align_tolerance: 0.12
+    exit_align_timeout: 10.0
+    exit_reobserve_time: 1.0
+    # Before rotating, require a fully known-free disc around the robot. If
+    # the initial room point hugs a wall, search farther into the open area.
+    scan_clearance: 0.78
+    scan_search_distance: 2.5
   visited_radius: 0.70
   failed_radius: 0.75
   failure_cooldown: 4.0
@@ -112,6 +192,14 @@ navigation:
   # Keep frontier targets outside the combined standoff + move_base acceptance
   # radius. This prevents near-goal turn-in-place oscillation at the entrance.
   xy_goal_tolerance: 0.35
+  # Turn-first recovery: DWA normally has min_vel_x=0. If an in-place turn
+  # is collision-invalid, back out one bounded step through the behavior mux,
+  # stop, and retry the same goal. Never reverse continuously through a hall.
+  backout:
+    speed: 0.45
+    step_distance: 0.35
+    max_sim_time: 2.0
+    max_steps: 3
 
 timeouts:
   prerequisites: 30.0
@@ -132,7 +220,10 @@ timeouts:
   # own deceleration/timeout rules. Keep enough wall time for that stop
   # handshake while still requiring a fresh, continuously-zero final output.
   final_zero: 8.0
-  wall_factor: 20.0
+  # Current Gazebo real-time factor is about 0.3.  A factor of five leaves
+  # useful scheduling margin without turning stalled-simulation fallbacks
+  # into multi-minute waits.
+  wall_factor: 5.0
 
 return:
   position_tolerance: 0.40

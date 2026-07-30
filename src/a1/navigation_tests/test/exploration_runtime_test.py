@@ -25,6 +25,7 @@ from nav_msgs.srv import GetPlan, GetPlanResponse
 import rospy
 import rostest
 from std_msgs.msg import Bool
+from std_srvs.srv import Trigger, TriggerResponse
 import tf2_ros
 from visualization_msgs.msg import Marker
 
@@ -36,6 +37,7 @@ class RuntimeTest(unittest.TestCase):
         cls.lock = threading.Lock()
         cls.robot_pose = [-2.0, 0.0, 0.0]
         cls.map_stage = 0
+        cls.floor_session_id = 2
         cls.door_open = False
         cls.door_calls = []
         cls.move_goals = []
@@ -52,7 +54,7 @@ class RuntimeTest(unittest.TestCase):
         cls.move_delay = 0.15
         cls.failed_markers = []
         cls.dwa_config = {
-            "max_vel_x": 0.20,
+            "max_vel_x": 0.30,
             "max_vel_y": 0.0,
             "max_vel_trans": 0.20,
             "max_vel_theta": 0.30,
@@ -89,6 +91,12 @@ class RuntimeTest(unittest.TestCase):
             lambda message: cls.failed_markers.append(message),
             queue_size=5,
         )
+        rospy.Subscriber(
+            "/test/exploration/recovery_cmd_vel",
+            Twist,
+            cls.integrate_recovery_command,
+            queue_size=5,
+        )
 
         cls.tf_broadcaster = tf2_ros.TransformBroadcaster()
         cls.make_plan_service = rospy.Service(
@@ -101,6 +109,9 @@ class RuntimeTest(unittest.TestCase):
             "/test/move_base/DWAPlannerROS/set_parameters",
             Reconfigure,
             cls.reconfigure_dwa,
+        )
+        cls.mapping_reset_service = rospy.Service(
+            "/a1/floor_mapping/reset", Trigger, cls.reset_mapping
         )
         cls.move_server = actionlib.SimpleActionServer(
             "/test/move_base",
@@ -189,7 +200,7 @@ class RuntimeTest(unittest.TestCase):
             KeyValue("map_valid", "true"),
             KeyValue("obstacle_cloud_valid", "true"),
             KeyValue("localization_generation", "7"),
-            KeyValue("floor_session_id", "2"),
+            KeyValue("floor_session_id", str(cls.floor_session_id)),
             KeyValue("floor_id", "1"),
         ]
         cls.mapping_pub.publish(status)
@@ -227,6 +238,18 @@ class RuntimeTest(unittest.TestCase):
         return response
 
     @classmethod
+    def integrate_recovery_command(cls, command):
+        # The runtime fixture has no physical controller. Integrate the
+        # explorer's bounded body-velocity command so entry transit and
+        # recovery code observe the same pose progress they would in Gazebo.
+        dt = 0.02
+        with cls.lock:
+            yaw = cls.robot_pose[2]
+            cls.robot_pose[0] += command.linear.x * math.cos(yaw) * dt
+            cls.robot_pose[1] += command.linear.x * math.sin(yaw) * dt
+            cls.robot_pose[2] += command.angular.z * dt
+
+    @classmethod
     def set_door_state(cls, request):
         with cls.lock:
             cls.door_calls.append((request.door_id, bool(request.open)))
@@ -262,6 +285,18 @@ class RuntimeTest(unittest.TestCase):
             for name, value in response_values.items()
         ]
         return response
+
+    @classmethod
+    def reset_mapping(cls, _request):
+        with cls.lock:
+            cls.floor_session_id += 1
+            # Model the mapper's post-door reset and the first fresh scan:
+            # the newly visible indoor corridor becomes known in generation+1.
+            cls.map_stage = 1
+        return TriggerResponse(
+            success=True,
+            message="runtime-test mapping session reset",
+        )
 
     @classmethod
     def execute_move(cls, goal):
@@ -500,7 +535,7 @@ class RuntimeTest(unittest.TestCase):
                 "min_vel_theta": 0.25,
             },
         )
-        self.assertEqual(self.dwa_config["max_vel_x"], 0.20)
+        self.assertEqual(self.dwa_config["max_vel_x"], 0.30)
         self.assertEqual(self.dwa_config["max_vel_trans"], 0.20)
         self.assertEqual(self.dwa_config["min_vel_trans"], 0.08)
         self.assertEqual(self.dwa_config["min_vel_theta"], 0.25)

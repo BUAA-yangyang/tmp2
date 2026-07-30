@@ -57,16 +57,20 @@ LIVE = {
     "max_vel_y": 0.0,
     "max_vel_trans": 0.20,
     "max_vel_theta": 0.30,
+    "min_vel_x": 0.08,
     "min_vel_trans": 0.08,
     "min_vel_theta": 0.25,
+    "sim_time": 2.0,
 }
 LIMITS = {
-    "max_vel_x": 0.05,
+    "max_vel_x": 0.15,
     "max_vel_y": 0.0,
-    "max_vel_trans": 0.05,
-    "max_vel_theta": 0.15,
-    "min_vel_trans": 0.02,
-    "min_vel_theta": 0.05,
+    "max_vel_trans": 0.15,
+    "max_vel_theta": 0.01,
+    "min_vel_x": 0.15,
+    "min_vel_trans": 0.15,
+    "min_vel_theta": 0.0,
+    "sim_time": 0.5,
 }
 
 
@@ -102,6 +106,12 @@ class EntrySpeedLimiterTest(unittest.TestCase):
             limiter(service, unsafe).apply()
         self.assertEqual(service.requests, [{}])
         self.assertEqual(service.values, LIVE)
+
+    def test_minimum_may_increase_to_avoid_unstable_sub_gait_commands(self):
+        service = FakeDynamicReconfigure(LIVE)
+        subject = limiter(service)
+        subject.apply()
+        self.assertEqual(service.values["min_vel_trans"], 0.15)
 
     def test_missing_live_parameter_fails_before_write(self):
         service = FakeDynamicReconfigure(LIVE)
@@ -144,12 +154,12 @@ class EntrySpeedLimiterTest(unittest.TestCase):
 
     def test_minimum_speed_may_not_exceed_corresponding_maximum(self):
         invalid = dict(LIMITS)
-        invalid["min_vel_trans"] = 0.06
+        invalid["min_vel_trans"] = 0.16
         with self.assertRaisesRegex(
                 EntrySpeedLimitError, "min_vel_trans"):
             limiter(FakeDynamicReconfigure(LIVE), invalid)
         invalid = dict(LIMITS)
-        invalid["min_vel_theta"] = 0.16
+        invalid["min_vel_theta"] = 0.02
         with self.assertRaisesRegex(
                 EntrySpeedLimitError, "min_vel_theta"):
             limiter(FakeDynamicReconfigure(LIVE), invalid)

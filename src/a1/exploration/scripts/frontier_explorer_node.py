@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
 """Single-floor frontier exploration with autonomous return.
 
-The node never publishes velocity.  Every exploration and return target is sent
-through move_base_msgs/MoveBaseAction, so the existing
-move_base -> /cmd_vel_nav -> a1_cmd_mux -> /cmd_vel chain remains the only
-motion path.
+Normal exploration and return targets use MoveBaseAction. Explicit room scans
+and bounded recovery publish desired body velocity only through the higher
+priority behavior input of a1_cmd_mux; State_RL remains the sole joint-level
+locomotion controller.
 """
 
 import copy
 import math
 import threading
 import time
+from types import SimpleNamespace
 
 import actionlib
 from actionlib_msgs.msg import GoalStatus
 from a1_navigation_interfaces.msg import (
+    DoorwayArray,
     ExploreFloorAction,
     ExploreFloorFeedback,
     ExploreFloorResult,
@@ -31,6 +33,7 @@ from nav_msgs.msg import OccupancyGrid, Path
 from nav_msgs.srv import GetPlan
 import rospy
 from std_msgs.msg import Bool
+from std_srvs.srv import Trigger
 import tf2_ros
 from visualization_msgs.msg import Marker, MarkerArray
 
@@ -62,6 +65,10 @@ from a1_exploration.entry_speed_limit import (
 
 def quaternion_from_yaw(yaw):
     return 0.0, 0.0, math.sin(0.5 * yaw), math.cos(0.5 * yaw)
+
+
+def normalize_angle(angle):
+    return math.atan2(math.sin(angle), math.cos(angle))
 
 
 def yaw_from_quaternion(quaternion):
@@ -208,6 +215,8 @@ class FrontierExplorer:
     def __init__(self):
         self.lock = threading.RLock()
         self.map_message = None
+        self.doorway_message = None
+        self.remembered_room_doorways = {}
         self.mapping_status = None
         self.last_mapping_healthy_wall = 0.0
         self.final_command = None
@@ -231,6 +240,13 @@ class FrontierExplorer:
         self.trajectory = Path()
         self.visited_goals = []
         self.failed_goals = []
+        self.completed_room_branches = set()
+        self.approached_room_branches = set()
+        self.room_branch_entry_poses = {}
+        self.room_branch_interior_poses = {}
+        self.selected_room_branch = None
+        self.selected_room_stage = None
+        self.maximum_corridor_progress = 0.0
         self.no_goal_evidence = None
         self.make_plan_failure_since_wall = None
 
@@ -241,8 +257,14 @@ class FrontierExplorer:
         self.mapping_status_topic = self.param(
             "topics/mapping_status", "/a1/floor_mapping/status"
         )
+        self.doorways_topic = self.param(
+            "topics/doorways", "/a1/floor_mapping/doorways"
+        )
         self.final_cmd_topic = self.param(
             "topics/final_cmd_vel", "/cmd_vel"
+        )
+        self.recovery_cmd_topic = self.param(
+            "topics/recovery_cmd_vel", "/cmd_vel_behavior"
         )
         self.safety_lock_topic = self.param(
             "topics/safety_lock", "/a1_cmd_mux/safety_lock"
@@ -325,6 +347,104 @@ class FrontierExplorer:
         self.distance_weight = float(
             self.param("frontier/distance_weight", 0.25)
         )
+        self.minimum_frontier_score = float(
+            self.param("frontier/minimum_score", 0.0)
+        )
+        self.room_priority_enabled = bool(
+            self.param("frontier/room_priority/enabled", True)
+        )
+        self.room_lateral_threshold = float(
+            self.param("frontier/room_priority/lateral_threshold", 1.0)
+        )
+        self.room_minimum_door_longitudinal = float(
+            self.param(
+                "frontier/room_priority/minimum_door_longitudinal", 3.0
+            )
+        )
+        self.room_door_minimum_width = float(
+            self.param("frontier/room_priority/door_minimum_width", 1.0)
+        )
+        self.room_door_maximum_width = float(
+            self.param("frontier/room_priority/door_maximum_width", 1.6)
+        )
+        self.room_door_station_tolerance = float(
+            self.param("frontier/room_priority/door_station_tolerance", 1.25)
+        )
+        self.room_door_maximum_lateral = float(
+            self.param(
+                "frontier/room_priority/door_maximum_lateral", 2.20
+            )
+        )
+        self.room_lookahead = float(
+            self.param("frontier/room_priority/lookahead", 5.0)
+        )
+        self.room_backtrack = float(
+            self.param("frontier/room_priority/backtrack", 2.0)
+        )
+        self.room_station_width = float(
+            self.param("frontier/room_priority/station_width", 1.5)
+        )
+        self.room_identity_longitudinal_tolerance = float(
+            self.param(
+                "frontier/room_priority/identity_longitudinal_tolerance",
+                1.0,
+            )
+        )
+        self.room_identity_lateral_tolerance = float(
+            self.param(
+                "frontier/room_priority/identity_lateral_tolerance", 0.75
+            )
+        )
+        self.room_completion_depth = float(
+            self.param("frontier/room_priority/completion_depth", 2.0)
+        )
+        self.room_goal_extension = float(
+            self.param("frontier/room_priority/goal_extension", 1.2)
+        )
+        self.room_scan_angular_speed = float(
+            self.param("frontier/room_priority/scan_angular_speed", 0.50)
+        )
+        self.room_exit_align_tolerance = float(
+            self.param(
+                "frontier/room_priority/exit_align_tolerance", 0.12
+            )
+        )
+        self.room_exit_align_timeout = float(
+            self.param(
+                "frontier/room_priority/exit_align_timeout", 10.0
+            )
+        )
+        self.room_exit_reobserve_time = float(
+            self.param(
+                "frontier/room_priority/exit_reobserve_time", 1.0
+            )
+        )
+        self.room_scan_clearance = float(
+            self.param("frontier/room_priority/scan_clearance", 0.78)
+        )
+        self.room_scan_search_distance = float(
+            self.param("frontier/room_priority/scan_search_distance", 2.5)
+        )
+        self.corridor_probe_enabled = bool(
+            self.param("frontier/corridor_probe/enabled", True)
+        )
+        self.corridor_probe_step = float(
+            self.param("frontier/corridor_probe/step", 3.0)
+        )
+        self.corridor_probe_clearance = float(
+            self.param("frontier/corridor_probe/clearance", 0.24)
+        )
+        self.corridor_probe_minimum_completed_rooms = int(
+            self.param(
+                "frontier/corridor_probe/minimum_completed_rooms", 2
+            )
+        )
+        self.entry_frontier_exclusion_depth = float(
+            self.param("frontier/entry_exclusion/depth", 1.0)
+        )
+        self.entry_frontier_exclusion_half_width = float(
+            self.param("frontier/entry_exclusion/half_width", 1.25)
+        )
         self.visited_radius = float(
             self.param("frontier/visited_radius", 0.70)
         )
@@ -378,6 +498,18 @@ class FrontierExplorer:
         self.entry_corridor_half_width = float(
             self.param("entry/corridor_half_width", 0.75)
         )
+        self.entry_transit_speed = float(
+            self.param("entry/transit_speed", 0.80)
+        )
+        self.entry_near_field_distance = float(
+            self.param("entry/near_field_distance", 0.70)
+        )
+        self.entry_near_field_half_width = float(
+            self.param("entry/near_field_half_width", 0.30)
+        )
+        self.entry_obstacle_hold_timeout = float(
+            self.param("entry/obstacle_hold_timeout", 2.0)
+        )
         self.entry_plan_endpoint_tolerance = float(
             self.param("entry/plan_endpoint_tolerance", 0.60)
         )
@@ -395,22 +527,28 @@ class FrontierExplorer:
         )
         self.entry_speed_limits = {
             "max_vel_x": float(
-                self.param("entry/speed_limit/max_vel_x", 0.05)
+                self.param("entry/speed_limit/max_vel_x", 0.15)
             ),
             "max_vel_y": float(
                 self.param("entry/speed_limit/max_vel_y", 0.0)
             ),
             "max_vel_trans": float(
-                self.param("entry/speed_limit/max_vel_trans", 0.05)
+                self.param("entry/speed_limit/max_vel_trans", 0.15)
             ),
             "max_vel_theta": float(
-                self.param("entry/speed_limit/max_vel_theta", 0.15)
+                self.param("entry/speed_limit/max_vel_theta", 0.01)
+            ),
+            "min_vel_x": float(
+                self.param("entry/speed_limit/min_vel_x", 0.15)
             ),
             "min_vel_trans": float(
-                self.param("entry/speed_limit/min_vel_trans", 0.02)
+                self.param("entry/speed_limit/min_vel_trans", 0.15)
             ),
             "min_vel_theta": float(
-                self.param("entry/speed_limit/min_vel_theta", 0.05)
+                self.param("entry/speed_limit/min_vel_theta", 0.0)
+            ),
+            "sim_time": float(
+                self.param("entry/speed_limit/sim_time", 0.5)
             ),
         }
         self.roi_entry_forward_offset = float(
@@ -432,6 +570,9 @@ class FrontierExplorer:
         self.roi_boundary_margin = float(
             self.param("roi/boundary_margin", 0.35)
         )
+        self.roi_map_boundary_margin = float(
+            self.param("roi/map_boundary_margin", 8.0)
+        )
         self.controller_ready_freshness = float(
             self.param("controller/ready_freshness", 0.35)
         )
@@ -441,6 +582,18 @@ class FrontierExplorer:
         )
         self.navigation_timeout = float(
             self.param("timeouts/navigation_goal", 45.0)
+        )
+        self.backout_speed = float(
+            self.param("navigation/backout/speed", 0.35)
+        )
+        self.backout_step_distance = float(
+            self.param("navigation/backout/step_distance", 0.35)
+        )
+        self.backout_max_sim_time = float(
+            self.param("navigation/backout/max_sim_time", 2.0)
+        )
+        self.backout_max_steps = int(
+            self.param("navigation/backout/max_steps", 3)
         )
         self.entry_door_timeout = float(
             self.param("timeouts/entry_door_wall", 10.0)
@@ -511,6 +664,9 @@ class FrontierExplorer:
             self.building_behavior_action_name, SpecialBehaviorAction
         )
         self.make_plan = rospy.ServiceProxy(self.make_plan_name, GetPlan)
+        self.floor_mapping_reset = rospy.ServiceProxy(
+            "/a1/floor_mapping/reset", Trigger
+        )
         self.dwa_reconfigure = rospy.ServiceProxy(
             self.dwa_reconfigure_name, Reconfigure
         )
@@ -542,9 +698,18 @@ class FrontierExplorer:
         self.roi_pub = rospy.Publisher(
             self.roi_topic, PolygonStamped, queue_size=1, latch=True
         )
+        self.recovery_cmd_pub = rospy.Publisher(
+            self.recovery_cmd_topic, Twist, queue_size=1
+        )
 
         rospy.Subscriber(
             self.map_topic, OccupancyGrid, self.map_callback, queue_size=1
+        )
+        rospy.Subscriber(
+            self.doorways_topic,
+            DoorwayArray,
+            self.doorways_callback,
+            queue_size=2,
         )
         rospy.Subscriber(
             self.mapping_status_topic,
@@ -597,6 +762,22 @@ class FrontierExplorer:
             "frontier/min_length": self.min_frontier_length,
             "frontier/obstacle_clearance": self.obstacle_clearance,
             "frontier/max_goal_distance": self.max_goal_distance,
+            "frontier/room_priority/scan_clearance":
+                self.room_scan_clearance,
+            "frontier/room_priority/scan_search_distance":
+                self.room_scan_search_distance,
+            "frontier/room_priority/minimum_door_longitudinal":
+                self.room_minimum_door_longitudinal,
+            "frontier/room_priority/door_minimum_width":
+                self.room_door_minimum_width,
+            "frontier/room_priority/door_maximum_width":
+                self.room_door_maximum_width,
+            "frontier/room_priority/door_station_tolerance":
+                self.room_door_station_tolerance,
+            "frontier/entry_exclusion/depth":
+                self.entry_frontier_exclusion_depth,
+            "frontier/entry_exclusion/half_width":
+                self.entry_frontier_exclusion_half_width,
             "navigation/xy_goal_tolerance":
                 self.navigation_xy_goal_tolerance,
             "frontier/stable_no_frontier_duration":
@@ -641,8 +822,6 @@ class FrontierExplorer:
                     self.entry_speed_limits["max_vel_theta"],
                 "entry/speed_limit/min_vel_trans":
                     self.entry_speed_limits["min_vel_trans"],
-                "entry/speed_limit/min_vel_theta":
-                    self.entry_speed_limits["min_vel_theta"],
             })
         for name, value in positive.items():
             if not math.isfinite(value) or value <= 0.0:
@@ -656,6 +835,8 @@ class FrontierExplorer:
             or self.return_attempts < 1
         ):
             raise ValueError("integer exploration limits must be positive")
+        if not math.isfinite(self.minimum_frontier_score):
+            raise ValueError("frontier/minimum_score must be finite")
         if self.entry_plan_maximum_length_ratio < 1.0:
             raise ValueError(
                 "entry/plan_maximum_length_ratio must be at least 1.0"
@@ -667,18 +848,29 @@ class FrontierExplorer:
                 "entry/plan_maximum_length_slack must be finite and nonnegative"
             )
         if (
-                not math.isfinite(self.entry_speed_limits["max_vel_y"])
-                or self.entry_speed_limits["max_vel_y"] < 0.0):
+            not math.isfinite(self.entry_speed_limits["max_vel_y"])
+            or self.entry_speed_limits["max_vel_y"] < 0.0):
             raise ValueError(
                 "entry/speed_limit/max_vel_y must be finite and nonnegative"
+            )
+        if (
+            not math.isfinite(self.entry_speed_limits["min_vel_theta"])
+            or self.entry_speed_limits["min_vel_theta"] < 0.0):
+            raise ValueError(
+                "entry/speed_limit/min_vel_theta must be finite and "
+                "nonnegative"
             )
         if self.roi_enabled:
             if (
                 not math.isfinite(self.roi_entry_forward_offset)
                 or not math.isfinite(self.roi_boundary_margin)
+                or not math.isfinite(self.roi_map_boundary_margin)
                 or self.roi_boundary_margin < 0.0
+                or self.roi_map_boundary_margin < 0.0
             ):
-                raise ValueError("ROI fallback and boundary margin are invalid")
+                raise ValueError(
+                    "ROI fallback and map/boundary margins are invalid"
+                )
             # Validation and zero-area rejection are shared with runtime goals.
             transform_local_polygon(self.default_roi_local, (0.0, 0.0), 0.0)
 
@@ -718,6 +910,30 @@ class FrontierExplorer:
             self.mapping_status = message
             if self.mapping_usable(message):
                 self.last_mapping_healthy_wall = time.monotonic()
+
+    def doorways_callback(self, message):
+        """Keep LiDAR-derived room doors even after they leave the local view."""
+        with self.lock:
+            self.doorway_message = message
+            if (
+                    self.floor_entry_pose is None
+                    or not self.room_priority_enabled):
+                return
+            for doorway in message.doorways:
+                longitudinal, lateral = self.entry_coordinates(
+                    doorway.center.x, doorway.center.y
+                )
+                if (
+                        not doorway.stable
+                        or doorway.state in (doorway.CLOSED, doorway.BLOCKED)
+                        or doorway.width < self.room_door_minimum_width
+                        or doorway.width > self.room_door_maximum_width
+                        or abs(lateral) > self.room_door_maximum_lateral
+                        or longitudinal
+                        < self.room_minimum_door_longitudinal):
+                    continue
+                branch = self.room_branch_key(longitudinal, lateral)
+                self.remembered_room_doorways[branch] = copy.deepcopy(doorway)
 
     def final_command_callback(self, message):
         stamp = rospy.Time.now().to_sec()
@@ -843,13 +1059,48 @@ class FrontierExplorer:
             raise ValueError(
                 "ROI entry frame does not match the current floor map"
             )
+        spec = self.grid_spec(map_message)
         allowed = polygon_mask(
-            self.grid_spec(map_message),
+            spec,
             self.roi_polygon_map,
             self.roi_boundary_margin,
         )
         if not allowed.any():
             raise ValueError("ROI does not overlap the current floor map")
+        minimum_x = spec.origin_x + self.roi_map_boundary_margin
+        minimum_y = spec.origin_y + self.roi_map_boundary_margin
+        maximum_x = (
+            spec.origin_x + spec.width * spec.resolution
+            - self.roi_map_boundary_margin
+        )
+        maximum_y = (
+            spec.origin_y + spec.height * spec.resolution
+            - self.roi_map_boundary_margin
+        )
+        outside = [
+            (x, y)
+            for x, y in self.roi_polygon_map
+            if (
+                x < minimum_x
+                or x > maximum_x
+                or y < minimum_y
+                or y > maximum_y
+            )
+        ]
+        if outside:
+            raise ValueError(
+                "ROI is not fully contained in OccupancyGrid with %.2f m "
+                "sensor margin; map=[%.2f, %.2f]x[%.2f, %.2f], "
+                "outside_vertices=%r"
+                % (
+                    self.roi_map_boundary_margin,
+                    spec.origin_x,
+                    spec.origin_x + spec.width * spec.resolution,
+                    spec.origin_y,
+                    spec.origin_y + spec.height * spec.resolution,
+                    outside,
+                )
+            )
         return allowed
 
     def target_in_roi(self, target):
@@ -1012,37 +1263,17 @@ class FrontierExplorer:
             time.sleep(0.05)
 
     def wait_for_entry_passage(self, baseline_message, outside_pose):
+        """Wait for a fresh post-door local map, without demanding unseen free space.
+
+        Requiring a complete known-free path to an indoor pose deadlocks the
+        mapper outside the doorway: the robot must advance before Livox can
+        observe the far side. Entry motion therefore uses the continuously
+        refreshed near-field obstacle gate below.
+        """
         baseline_version = self.map_version(baseline_message)
-        probe_xy = self.entry_probe_xy()
         start_xy = (
             outside_pose.pose.position.x,
             outside_pose.pose.position.y,
-        )
-        baseline_spec = self.grid_spec(baseline_message)
-        baseline_corridor = segment_corridor_mask(
-            baseline_spec,
-            start_xy,
-            probe_xy,
-            self.entry_corridor_half_width,
-        )
-        baseline_anchor = nearest_known_free_anchor(
-            baseline_message.data,
-            baseline_spec,
-            start_xy,
-            self.entry_anchor_search_radius,
-            self.free_threshold,
-            baseline_corridor,
-        )
-        baseline_path = (
-            baseline_anchor is not None
-            and known_free_path_exists(
-                baseline_message.data,
-                baseline_spec,
-                baseline_anchor,
-                probe_xy,
-                self.free_threshold,
-                baseline_corridor,
-            )
         )
         started_ros = rospy.Time.now()
         started_wall = time.monotonic()
@@ -1063,15 +1294,6 @@ class FrontierExplorer:
             with self.lock:
                 message = copy.deepcopy(self.map_message)
             spec = self.grid_spec(message) if message is not None else None
-            corridor = (
-                segment_corridor_mask(
-                    spec,
-                    start_xy,
-                    probe_xy,
-                    self.entry_corridor_half_width,
-                )
-                if spec is not None else None
-            )
             passage_anchor = (
                 nearest_known_free_anchor(
                     message.data,
@@ -1079,7 +1301,7 @@ class FrontierExplorer:
                     start_xy,
                     self.entry_anchor_search_radius,
                     self.free_threshold,
-                    corridor,
+                    None,
                 )
                 if spec is not None else None
             )
@@ -1089,20 +1311,12 @@ class FrontierExplorer:
                 == self.floor_entry_pose.header.frame_id
                 and self.map_version(message) != baseline_version
                 and passage_anchor is not None
-                and known_free_path_exists(
-                    message.data,
-                    spec,
-                    passage_anchor,
-                    probe_xy,
-                    self.free_threshold,
-                    corridor,
-                )
             ):
                 rospy.loginfo(
-                    "Livox/OccupancyGrid confirmed entry passage: "
-                    "baseline_known_free=%s, post-open_known_free=true, "
+                    "fresh post-door OccupancyGrid accepted for short-horizon "
+                    "entry; unknown space remains fail-safe behind a moving "
+                    "explicit-obstacle gate, "
                     "outside_anchor_offset=%.3f m",
-                    baseline_path,
                     math.hypot(
                         passage_anchor[0] - start_xy[0],
                         passage_anchor[1] - start_xy[1],
@@ -1112,13 +1326,190 @@ class FrontierExplorer:
             time.sleep(0.05)
         raise ExplorationFailure(
             ExploreFloorResult.ERROR_ENTRY_MAP,
-            "door service succeeded but OccupancyGrid did not show a new "
-            "known-free passage from a %.2f m-bounded outside self-clear "
-            "anchor to %.2f m inside the entry"
-            % (
-                self.entry_anchor_search_radius,
-                self.entry_inside_probe_distance,
-            ),
+            "door service succeeded but no fresh post-door OccupancyGrid "
+            "with a local free anchor appeared",
+        )
+
+    def entry_near_field_clear(self, pose, map_message):
+        """Reject only explicit occupied cells in the next short body corridor."""
+        if map_message is None:
+            return False
+        spec = self.grid_spec(map_message)
+        yaw = yaw_from_quaternion(pose.pose.orientation)
+        cos_yaw, sin_yaw = math.cos(yaw), math.sin(yaw)
+        step = max(0.04, spec.resolution)
+        longitudinal = 0.18
+        while longitudinal <= self.entry_near_field_distance + 1e-6:
+            lateral = -self.entry_near_field_half_width
+            while lateral <= self.entry_near_field_half_width + 1e-6:
+                x = (pose.pose.position.x + longitudinal * cos_yaw
+                     - lateral * sin_yaw)
+                y = (pose.pose.position.y + longitudinal * sin_yaw
+                     + lateral * cos_yaw)
+                cell_x = int(math.floor(
+                    (x - spec.origin_x) / spec.resolution
+                ))
+                cell_y = int(math.floor(
+                    (y - spec.origin_y) / spec.resolution
+                ))
+                if (
+                        0 <= cell_x < spec.width
+                        and 0 <= cell_y < spec.height):
+                    value = map_message.data[cell_y * spec.width + cell_x]
+                    if value >= self.occupied_threshold:
+                        return False
+                lateral += step
+            longitudinal += step
+        return True
+
+    def controlled_entry_transit(self):
+        """Cross the apron and doorway with State_RL at 0.8 m/s.
+
+        This is deliberately not a global-planner problem. The explorer emits
+        only a body velocity; State_RL remains the sole joint-level controller.
+        Localization closes heading/position error and the live floor map gates
+        the next 0.7 m for explicit obstacles.
+        """
+        frame = self.floor_entry_pose.header.frame_id
+        target_x = self.floor_entry_pose.pose.position.x
+        target_y = self.floor_entry_pose.pose.position.y
+        started_ros = rospy.Time.now()
+        started_wall = time.monotonic()
+        blocked_since = None
+        blocked_since_ros = None
+        zero = Twist()
+        try:
+            while not rospy.is_shutdown():
+                self.check_cancel_safety_and_deadline()
+                pose = self.pose_in_frame(frame)
+                dx = target_x - pose.pose.position.x
+                dy = target_y - pose.pose.position.y
+                distance = math.hypot(dx, dy)
+                if distance <= self.entry_position_tolerance:
+                    rospy.loginfo(
+                        "controlled entry reached indoor anchor: error=%.3f m",
+                        distance,
+                    )
+                    return
+                ros_elapsed = (rospy.Time.now() - started_ros).to_sec()
+                wall_elapsed = time.monotonic() - started_wall
+                if (
+                        ros_elapsed >= self.entry_transit_timeout
+                        or wall_elapsed
+                        >= self.entry_transit_timeout * self.wall_factor):
+                    raise ExplorationFailure(
+                        ExploreFloorResult.ERROR_ENTRY_TRANSIT,
+                        "controlled entry timed out: remaining %.2f m"
+                        % distance,
+                    )
+                with self.lock:
+                    map_message = copy.deepcopy(self.map_message)
+                if not self.entry_near_field_clear(pose, map_message):
+                    self.recovery_cmd_pub.publish(zero)
+                    if blocked_since is None:
+                        blocked_since = time.monotonic()
+                        blocked_since_ros = rospy.Time.now()
+                        rospy.logwarn(
+                            "entry near-field explicit obstacle; holding for "
+                            "a fresh map"
+                        )
+                    elif (
+                            (
+                                rospy.Time.now() - blocked_since_ros
+                            ).to_sec() >= self.entry_obstacle_hold_timeout
+                            or time.monotonic() - blocked_since
+                            >= (
+                                self.entry_obstacle_hold_timeout
+                                * self.wall_factor
+                            )):
+                        raise ExplorationFailure(
+                            ExploreFloorResult.ERROR_ENTRY_TRANSIT,
+                            "entry remained explicitly occupied for %.1f sim "
+                            "s (wall fallback %.1f s)"
+                            % (
+                                self.entry_obstacle_hold_timeout,
+                                self.entry_obstacle_hold_timeout
+                                * self.wall_factor,
+                            ),
+                        )
+                    time.sleep(0.02)
+                    continue
+                blocked_since = None
+                blocked_since_ros = None
+                current_yaw = yaw_from_quaternion(pose.pose.orientation)
+                desired_yaw = math.atan2(dy, dx)
+                heading_error = normalize_angle(desired_yaw - current_yaw)
+                if abs(heading_error) > 0.55:
+                    raise ExplorationFailure(
+                        ExploreFloorResult.ERROR_ENTRY_TRANSIT,
+                        "entry heading diverged by %.2f rad; refusing a turn "
+                        "on the step" % heading_error,
+                    )
+                command = Twist()
+                command.linear.x = min(
+                    self.entry_transit_speed,
+                    max(0.35, distance * 0.9),
+                )
+                command.angular.z = max(
+                    -0.40, min(0.40, 1.4 * heading_error)
+                )
+                self.recovery_cmd_pub.publish(command)
+                time.sleep(0.02)
+        finally:
+            for _unused in range(15):
+                self.recovery_cmd_pub.publish(zero)
+                time.sleep(0.02)
+
+    def reset_map_after_entry_door_opens(self):
+        """Discard occupancy evidence collected while the public door was shut."""
+        with self.lock:
+            identity_before = self.action_identity
+        try:
+            rospy.wait_for_service("/a1/floor_mapping/reset", timeout=3.0)
+            response = self.floor_mapping_reset()
+            if not response.success:
+                raise RuntimeError(response.message)
+            rospy.loginfo(
+                "floor map reset after entry door opened: %s",
+                response.message,
+            )
+        except (rospy.ROSException, rospy.ServiceException, RuntimeError) as error:
+            raise ExplorationFailure(
+                ExploreFloorResult.ERROR_ENTRY_MAP,
+                "entry door opened but floor map reset failed: %s" % error,
+            )
+        # A commanded reset intentionally advances the mapper generation.
+        # Adopt exactly that next healthy identity here; identity changes at
+        # every other point in the action remain fatal.
+        ros_deadline = (
+            rospy.Time.now() + rospy.Duration(self.entry_map_timeout)
+        )
+        wall_deadline = time.monotonic() + min(
+            60.0,
+            max(8.0, self.entry_map_timeout * self.wall_factor),
+        )
+        while (
+                not rospy.is_shutdown()
+                and rospy.Time.now() < ros_deadline
+                and time.monotonic() < wall_deadline):
+            with self.lock:
+                identity_after = self.mapping_identity(
+                    self.mapping_status, self.map_message
+                )
+                usable = self.mapping_usable(self.mapping_status)
+            if usable and identity_after != identity_before:
+                with self.lock:
+                    self.action_identity = identity_after
+                rospy.loginfo(
+                    "adopted intentional post-door map identity: %r -> %r",
+                    identity_before,
+                    identity_after,
+                )
+                return
+            time.sleep(0.05)
+        raise ExplorationFailure(
+            ExploreFloorResult.ERROR_ENTRY_MAP,
+            "floor mapping reset did not publish a new healthy generation",
         )
 
     def apply_entry_speed_limit(self):
@@ -1148,14 +1539,16 @@ class FrontierExplorer:
             )
         limits = self.entry_speed_limiter.limits
         rospy.loginfo(
-            "entry DWA speed profile active: vx=%.3f vy=%.3f "
-            "trans=[%.3f, %.3f] theta=[%.3f, %.3f]",
+            "entry State_RL speed profile active: vx=[%.3f, %.3f] vy=%.3f "
+            "trans=[%.3f, %.3f] theta=[%.3f, %.3f] sim_time=%.2f",
+            limits["min_vel_x"],
             limits["max_vel_x"],
             limits["max_vel_y"],
             limits["min_vel_trans"],
             limits["max_vel_trans"],
             limits["min_vel_theta"],
             limits["max_vel_theta"],
+            limits["sim_time"],
         )
 
     def restore_entry_speed_limit(self):
@@ -1607,6 +2000,348 @@ class FrontierExplorer:
             quaternion_from_yaw(frontier.yaw)
         return target
 
+    def entry_coordinates(self, x, y):
+        """Return longitudinal/lateral coordinates relative to floor entry."""
+        if self.floor_entry_pose is None:
+            return None
+        entry = self.floor_entry_pose.pose
+        entry_yaw = yaw_from_quaternion(entry.orientation)
+        cosine = math.cos(entry_yaw)
+        sine = math.sin(entry_yaw)
+        dx = x - entry.position.x
+        dy = y - entry.position.y
+        return (
+            dx * cosine + dy * sine,
+            -dx * sine + dy * cosine,
+        )
+
+    def corridor_probe_target(self, map_message, robot_pose):
+        """Return a short, map-verified goal farther down the main corridor.
+
+        A 360-degree room scan can turn the visible corridor into known free
+        space without leaving a free/unknown boundary large enough to survive
+        frontier filtering.  That does not mean the corridor was traversed.
+        After a room pair, advance through already observed free space and
+        collect a new forward scan before permitting no-frontier completion.
+        This uses only localization, the OccupancyGrid and make_plan.
+        """
+        if (
+                not self.corridor_probe_enabled
+                or self.floor_entry_pose is None
+                or len(self.completed_room_branches)
+                < self.corridor_probe_minimum_completed_rooms):
+            return None, False
+        robot_longitudinal, robot_lateral = self.entry_coordinates(
+            robot_pose.pose.position.x, robot_pose.pose.position.y
+        )
+        base = max(robot_longitudinal, self.maximum_corridor_progress)
+        entry = self.floor_entry_pose.pose
+        yaw = yaw_from_quaternion(entry.orientation)
+        cosine = math.cos(yaw)
+        sine = math.sin(yaw)
+        steps = [
+            self.corridor_probe_step,
+            self.corridor_probe_step * 0.75,
+            self.corridor_probe_step * 0.50,
+            self.corridor_probe_step * 0.35,
+            self.corridor_probe_step * 0.25,
+        ]
+        for distance in steps:
+            if distance < 0.70:
+                continue
+            longitudinal = base + distance
+            target = PoseStamped()
+            target.header.frame_id = map_message.header.frame_id
+            target.header.stamp = rospy.Time.now()
+            # Preserve the currently occupied, map-verified corridor lane for
+            # the first forward observation.  The entry axis is not guaranteed
+            # to coincide with the corridor centreline; snapping lateral=0
+            # after leaving a room can point the robot diagonally into a wall.
+            target.pose.position.x = (
+                entry.position.x
+                + longitudinal * cosine
+                - robot_lateral * sine
+            )
+            target.pose.position.y = (
+                entry.position.y
+                + longitudinal * sine
+                + robot_lateral * cosine
+            )
+            target.pose.orientation.x, target.pose.orientation.y, \
+                target.pose.orientation.z, target.pose.orientation.w = \
+                quaternion_from_yaw(yaw)
+            if not self.target_in_roi(target):
+                continue
+            if not self.known_free_clearance(
+                    map_message,
+                    target.pose.position.x,
+                    target.pose.position.y,
+                    self.corridor_probe_clearance):
+                continue
+            if point_near(
+                    self.visited_goals,
+                    target.pose.position.x,
+                    target.pose.position.y,
+                    self.visited_radius):
+                continue
+            reachable = self.path_exists(robot_pose, target)
+            if reachable is None:
+                return None, True
+            if reachable:
+                rospy.loginfo(
+                    "no eligible frontier after completed rooms; advancing "
+                    "through map-verified main-corridor free space by %.2f m "
+                    "to longitudinal %.2f m",
+                    distance,
+                    longitudinal,
+                )
+                return target, False
+        return None, False
+
+    def room_branch_key(self, longitudinal, lateral):
+        """Associate a noisy door observation with a persistent room identity."""
+        station = int(round(longitudinal / self.room_station_width))
+        side = 1 if lateral > 0.0 else -1
+        best_branch = None
+        best_error = float("inf")
+        for branch, doorway in self.remembered_room_doorways.items():
+            remembered_longitudinal, remembered_lateral = (
+                self.entry_coordinates(doorway.center.x, doorway.center.y)
+            )
+            remembered_side = 1 if remembered_lateral > 0.0 else -1
+            longitudinal_error = abs(
+                remembered_longitudinal - longitudinal
+            )
+            lateral_error = abs(remembered_lateral - lateral)
+            error = longitudinal_error + lateral_error
+            if (
+                remembered_side == side
+                and longitudinal_error
+                <= self.room_identity_longitudinal_tolerance
+                and lateral_error <= self.room_identity_lateral_tolerance
+                and error < best_error
+            ):
+                best_branch = branch
+                best_error = error
+        if best_branch is not None:
+            return best_branch
+        return station, side
+
+    def matching_room_doorway(self, frontier):
+        """Match a lateral frontier to a stable, traversable narrow doorway."""
+        if self.floor_entry_pose is None:
+            return None
+        frontier_longitudinal, frontier_lateral = self.entry_coordinates(
+            frontier.goal_x, frontier.goal_y
+        )
+        if (
+                frontier_longitudinal
+                < self.room_minimum_door_longitudinal
+                or abs(frontier_lateral) < self.room_lateral_threshold):
+            return None
+        with self.lock:
+            doorway_message = copy.deepcopy(self.doorway_message)
+        if (
+                doorway_message is None
+                or doorway_message.header.frame_id
+                != self.floor_entry_pose.header.frame_id):
+            return None
+        best = None
+        best_error = float("inf")
+        frontier_side = 1 if frontier_lateral > 0.0 else -1
+        for doorway in doorway_message.doorways:
+            door_longitudinal, door_lateral = self.entry_coordinates(
+                doorway.center.x, doorway.center.y
+            )
+            if (
+                    not doorway.stable
+                    # The structural detector can establish a precise open
+                    # wall gap before its ray-based state estimator has enough
+                    # bins to leave UNKNOWN. Reject only explicit negative
+                    # states here; make_plan validates physical reachability
+                    # before the room target is ever dispatched.
+                    or doorway.state in (doorway.CLOSED, doorway.BLOCKED)
+                    or doorway.width < self.room_door_minimum_width
+                    or doorway.width > self.room_door_maximum_width
+                    or abs(door_lateral)
+                    > self.room_door_maximum_lateral
+                    or door_longitudinal
+                    < self.room_minimum_door_longitudinal
+                    or (1 if door_lateral > 0.0 else -1) != frontier_side):
+                continue
+            error = abs(door_longitudinal - frontier_longitudinal)
+            if (
+                    error <= self.room_door_station_tolerance
+                    and error < best_error):
+                best = doorway
+                best_error = error
+        return best
+
+    def room_target_from_doorway(self, frame, doorway):
+        """Build corridor-side and room-side poses from perceived geometry."""
+        candidates = []
+        for raw_pose in (doorway.entry_pose, doorway.exit_pose):
+            pose = PoseStamped()
+            pose.header.frame_id = frame
+            pose.header.stamp = rospy.Time.now()
+            pose.pose = copy.deepcopy(raw_pose)
+            _longitudinal, lateral = self.entry_coordinates(
+                pose.pose.position.x, pose.pose.position.y
+            )
+            candidates.append((abs(lateral), pose))
+        candidates.sort(key=lambda item: item[0])
+        corridor_pose = candidates[0][1]
+        room_pose = candidates[-1][1]
+        door_longitudinal, door_lateral = self.entry_coordinates(
+            doorway.center.x, doorway.center.y
+        )
+        side = 1.0 if door_lateral > 0.0 else -1.0
+        entry_yaw = yaw_from_quaternion(
+            self.floor_entry_pose.pose.orientation
+        )
+        room_pose.pose.position.x += (
+            -math.sin(entry_yaw) * side * self.room_goal_extension
+        )
+        room_pose.pose.position.y += (
+            math.cos(entry_yaw) * side * self.room_goal_extension
+        )
+        inward_yaw = math.atan2(
+            room_pose.pose.position.y - corridor_pose.pose.position.y,
+            room_pose.pose.position.x - corridor_pose.pose.position.x,
+        )
+        room_pose.pose.orientation.x, room_pose.pose.orientation.y, \
+            room_pose.pose.orientation.z, room_pose.pose.orientation.w = \
+            quaternion_from_yaw(inward_yaw)
+        branch = self.room_branch_key(door_longitudinal, door_lateral)
+        return branch, corridor_pose, room_pose
+
+    def freeze_room_branch_geometry(
+            self, branch, corridor_pose, room_pose):
+        """Freeze both sides of a doorway for one room-exploration transaction.
+
+        Structural doorway tracks can be re-associated while the robot rotates
+        at a door.  Mixing the corridor pose from one detection with the room
+        pose from a later detection can send the second stage across a
+        different opening.  Once a branch is first approached, its two poses
+        therefore remain immutable until the branch is completed.
+        """
+        if branch not in self.room_branch_entry_poses:
+            self.room_branch_entry_poses[branch] = copy.deepcopy(
+                corridor_pose
+            )
+        if branch not in self.room_branch_interior_poses:
+            self.room_branch_interior_poses[branch] = copy.deepcopy(
+                room_pose
+            )
+
+    def frozen_room_branch_geometry(
+            self, branch, corridor_pose, room_pose):
+        self.freeze_room_branch_geometry(
+            branch, corridor_pose, room_pose
+        )
+        return (
+            copy.deepcopy(self.room_branch_entry_poses[branch]),
+            copy.deepcopy(self.room_branch_interior_poses[branch]),
+        )
+
+    def room_interior_progress(self, branch, pose):
+        """Return signed distance crossed from the frozen corridor-side pose."""
+        corridor_pose = self.room_branch_entry_poses.get(branch)
+        room_pose = self.room_branch_interior_poses.get(branch)
+        if corridor_pose is None or room_pose is None:
+            return None
+        start = corridor_pose.pose.position
+        finish = room_pose.pose.position
+        dx = finish.x - start.x
+        dy = finish.y - start.y
+        length = math.hypot(dx, dy)
+        if length <= 1e-6:
+            return None
+        current = pose.pose.position
+        return (
+            (current.x - start.x) * dx
+            + (current.y - start.y) * dy
+        ) / length
+
+    def is_entry_transit_frontier(self, x, y):
+        """Exclude the already traversed public doorway from exploration."""
+        longitudinal, lateral = self.entry_coordinates(x, y)
+        return (
+            longitudinal <= self.entry_frontier_exclusion_depth
+            and abs(lateral) <= self.entry_frontier_exclusion_half_width
+        )
+
+    def known_free_clearance(self, map_message, x, y, radius):
+        """Require a known-free disc so a quadruped can rotate without a wall."""
+        spec = self.grid_spec(map_message)
+        minimum_x = int(math.floor(
+            (x - radius - spec.origin_x) / spec.resolution
+        ))
+        maximum_x = int(math.floor(
+            (x + radius - spec.origin_x) / spec.resolution
+        ))
+        minimum_y = int(math.floor(
+            (y - radius - spec.origin_y) / spec.resolution
+        ))
+        maximum_y = int(math.floor(
+            (y + radius - spec.origin_y) / spec.resolution
+        ))
+        radius_squared = radius * radius
+        for cell_y in range(minimum_y, maximum_y + 1):
+            for cell_x in range(minimum_x, maximum_x + 1):
+                world_x = spec.origin_x + (cell_x + 0.5) * spec.resolution
+                world_y = spec.origin_y + (cell_y + 0.5) * spec.resolution
+                if (world_x - x) ** 2 + (world_y - y) ** 2 > radius_squared:
+                    continue
+                if (
+                        cell_x < 0 or cell_x >= spec.width
+                        or cell_y < 0 or cell_y >= spec.height):
+                    return False
+                value = map_message.data[cell_y * spec.width + cell_x]
+                if value < 0 or value > self.free_threshold:
+                    return False
+        return True
+
+    def open_room_scan_pose(self, branch, current_pose):
+        """Find a reachable observation point deeper in the room with clearance."""
+        with self.lock:
+            map_message = copy.deepcopy(self.map_message)
+        if map_message is None:
+            return None
+        frame = map_message.header.frame_id
+        if current_pose.header.frame_id != frame:
+            return None
+        entry_yaw = yaw_from_quaternion(
+            self.floor_entry_pose.pose.orientation
+        )
+        side = 1.0 if branch[1] > 0 else -1.0
+        deeper_x = -math.sin(entry_yaw) * side
+        deeper_y = math.cos(entry_yaw) * side
+        axial_x = math.cos(entry_yaw)
+        axial_y = math.sin(entry_yaw)
+        # Prefer moving farther into the open area. Small axial alternatives
+        # avoid selecting a point on the same wall when the branch is offset.
+        for distance in [
+                0.0, 0.5, 1.0, 1.5, 2.0, self.room_scan_search_distance]:
+            for axial_offset in (0.0, 0.45, -0.45):
+                candidate = copy.deepcopy(current_pose)
+                candidate.header.stamp = rospy.Time.now()
+                candidate.pose.position.x += (
+                    deeper_x * distance + axial_x * axial_offset
+                )
+                candidate.pose.position.y += (
+                    deeper_y * distance + axial_y * axial_offset
+                )
+                if not self.known_free_clearance(
+                        map_message,
+                        candidate.pose.position.x,
+                        candidate.pose.position.y,
+                        self.room_scan_clearance):
+                    continue
+                if self.path_exists(current_pose, candidate):
+                    return candidate
+        return None
+
     def path_exists(self, start, target):
         last_error = None
         for attempt in range(1, self.make_plan_retry_attempts + 1):
@@ -1647,12 +2382,206 @@ class FrontierExplorer:
         return None
 
     def choose_frontier(self, map_message, robot_pose, frontiers):
+        self.selected_room_branch = None
+        self.selected_room_stage = None
         now = time.monotonic()
         cooling = has_pending_retry(
             self.failed_goals, now, self.maximum_failures
         )
         frame = map_message.header.frame_id
-        for frontier in frontiers:
+        if self.room_priority_enabled and self.floor_entry_pose is not None:
+            with self.lock:
+                remembered_doorways = copy.deepcopy(
+                    self.remembered_room_doorways
+                )
+            robot_longitudinal, _robot_lateral = self.entry_coordinates(
+                robot_pose.pose.position.x, robot_pose.pose.position.y
+            )
+            self.maximum_corridor_progress = max(
+                self.maximum_corridor_progress, robot_longitudinal
+            )
+            doorway_candidates = []
+            if map_message.header.frame_id == frame:
+                for branch, doorway in remembered_doorways.items():
+                    longitudinal, lateral = self.entry_coordinates(
+                        doorway.center.x, doorway.center.y
+                    )
+                    if (
+                            longitudinal
+                            > robot_longitudinal + self.room_lookahead
+                            or longitudinal
+                            < self.maximum_corridor_progress
+                            - self.room_backtrack
+                            or branch in self.completed_room_branches):
+                        continue
+                    retry_state = failed_goal_state(
+                        self.failed_goals,
+                        doorway.center.x,
+                        doorway.center.y,
+                        self.failed_radius,
+                        now,
+                        self.maximum_failures,
+                    )
+                    if retry_state == "permanent":
+                        continue
+                    if retry_state == "cooldown":
+                        cooling = True
+                        continue
+                    doorway_candidates.append(
+                        (
+                            longitudinal,
+                            0 if lateral > 0.0 else 1,
+                            doorway,
+                        )
+                    )
+            doorway_candidates.sort(key=lambda item: (item[0], item[1]))
+            for _longitudinal, _side_order, doorway in doorway_candidates:
+                branch, corridor_pose, room_target = \
+                    self.room_target_from_doorway(frame, doorway)
+                corridor_pose, room_target = \
+                    self.frozen_room_branch_geometry(
+                        branch, corridor_pose, room_target
+                    )
+                if branch not in self.approached_room_branches:
+                    target = PoseStamped()
+                    target.header.frame_id = frame
+                    target.header.stamp = rospy.Time.now()
+                    target.pose.position = copy.deepcopy(doorway.center)
+                    center_yaw = math.atan2(
+                        room_target.pose.position.y - doorway.center.y,
+                        room_target.pose.position.x - doorway.center.x,
+                    )
+                    target.pose.orientation.x, \
+                        target.pose.orientation.y, \
+                        target.pose.orientation.z, \
+                        target.pose.orientation.w = \
+                        quaternion_from_yaw(center_yaw)
+                    stage = "door_center"
+                else:
+                    target = room_target
+                    stage = "room_interior"
+                reachable = self.path_exists(robot_pose, target)
+                if reachable is None:
+                    return None, None, cooling, True
+                if reachable:
+                    self.selected_room_branch = branch
+                    self.selected_room_stage = stage
+                    rospy.loginfo(
+                        "selected structural doorway: id=%d width=%.2f m "
+                        "state=%d station=%d side=%s stage=%s "
+                        "target=(%.2f, %.2f)",
+                        doorway.detection_id,
+                        doorway.width,
+                        doorway.state,
+                        branch[0],
+                        "left" if branch[1] > 0 else "right",
+                        stage,
+                        target.pose.position.x,
+                        target.pose.position.y,
+                    )
+                    synthetic = SimpleNamespace(
+                        goal_x=doorway.center.x,
+                        goal_y=doorway.center.y,
+                        length_m=doorway.width,
+                        score=100.0,
+                    )
+                    return target, synthetic, cooling, False
+                failure = record_failure(
+                    self.failed_goals,
+                    doorway.center.x,
+                    doorway.center.y,
+                    self.failed_radius,
+                    now,
+                    self.failure_cooldown,
+                )
+                rospy.logwarn(
+                    "structural doorway %d has no known-space plan, "
+                    "failure %d/%d",
+                    doorway.detection_id,
+                    failure.failures,
+                    self.maximum_failures,
+                )
+                if failure.failures < self.maximum_failures:
+                    cooling = True
+        ordered_frontiers = list(frontiers)
+        if (
+                self.room_priority_enabled
+                and self.floor_entry_pose is not None):
+            robot_longitudinal, _robot_lateral = self.entry_coordinates(
+                robot_pose.pose.position.x, robot_pose.pose.position.y
+            )
+
+            def room_priority(frontier):
+                longitudinal, lateral = self.entry_coordinates(
+                    frontier.goal_x, frontier.goal_y
+                )
+                doorway = self.matching_room_doorway(frontier)
+                nearby_room = (
+                    doorway is not None
+                    and longitudinal
+                    <= robot_longitudinal + self.room_lookahead
+                    and longitudinal
+                    >= robot_longitudinal - self.room_backtrack
+                )
+                if nearby_room:
+                    branch = self.room_branch_key(longitudinal, lateral)
+                    if branch in self.completed_room_branches:
+                        return (2, 0, 0, 0)
+                    # Progress door station by door station. At the same
+                    # station positive lateral is robot-left, so left rooms
+                    # are deliberately exhausted before right rooms. Within
+                    # one branch, choose the deepest reachable frontier first
+                    # instead of repeatedly nibbling at its doorway.
+                    return (
+                        0,
+                        branch[0],
+                        0 if lateral > 0.0 else 1,
+                        -abs(lateral),
+                    )
+                return (1, 0, 0, -frontier.score)
+
+            ordered_frontiers.sort(key=room_priority)
+
+        for frontier in ordered_frontiers:
+            # Tiny negative-utility fragments arise next to the robot after a
+            # room scan.  They add no observable area, but can require a
+            # collision-invalid turn and trigger repeated backout recovery.
+            # Wait for the next map/frontier instead of moving backwards for
+            # a target that cannot advance exploration.
+            if frontier.score < self.minimum_frontier_score:
+                continue
+            if self.room_priority_enabled and self.floor_entry_pose is not None:
+                longitudinal, lateral = self.entry_coordinates(
+                    frontier.goal_x, frontier.goal_y
+                )
+                # The two large side openings at the public entrance are
+                # branch corridors, not room doors. They occupy the entrance
+                # junction station, whereas real room doors occur farther
+                # down the main corridor. Skip those junction branches in
+                # this simplified observation mode and keep advancing axially.
+                if (
+                        abs(lateral) >= self.room_lateral_threshold
+                        and longitudinal
+                        < self.room_minimum_door_longitudinal):
+                    continue
+                if (
+                        abs(lateral) < self.room_lateral_threshold
+                        and longitudinal
+                        < self.maximum_corridor_progress - 0.75):
+                    continue
+                doorway = None
+                if abs(lateral) >= self.room_lateral_threshold:
+                    doorway = self.matching_room_doorway(frontier)
+                    if doorway is None:
+                        continue
+                if self.is_entry_transit_frontier(
+                        frontier.goal_x, frontier.goal_y):
+                    continue
+                if (
+                        abs(lateral) >= self.room_lateral_threshold
+                        and self.room_branch_key(longitudinal, lateral)
+                        in self.completed_room_branches):
+                    continue
             if point_near(
                 self.visited_goals,
                 frontier.goal_x,
@@ -1674,10 +2603,32 @@ class FrontierExplorer:
                 cooling = True
                 continue
             target = self.pose_for_frontier(frame, frontier)
+            branch = None
+            corridor_pose = None
+            if self.room_priority_enabled and self.floor_entry_pose is not None:
+                longitudinal, lateral = self.entry_coordinates(
+                    frontier.goal_x, frontier.goal_y
+                )
+                doorway = (
+                    self.matching_room_doorway(frontier)
+                    if abs(lateral) >= self.room_lateral_threshold
+                    else None
+                )
+                if doorway is not None:
+                    branch, corridor_pose, target = \
+                        self.room_target_from_doorway(frame, doorway)
+                    corridor_pose, target = \
+                        self.frozen_room_branch_geometry(
+                            branch, corridor_pose, target
+                        )
             reachable = self.path_exists(robot_pose, target)
             if reachable is None:
                 return None, None, cooling, True
             if reachable:
+                self.selected_room_branch = branch
+                self.selected_room_stage = (
+                    "room_interior" if branch is not None else None
+                )
                 return target, frontier, cooling, False
             failure = record_failure(
                 self.failed_goals,
@@ -1696,6 +2647,19 @@ class FrontierExplorer:
             )
             if failure.failures < self.maximum_failures:
                 cooling = True
+        corridor_target, planner_degraded = self.corridor_probe_target(
+            map_message, robot_pose
+        )
+        if planner_degraded:
+            return None, None, cooling, True
+        if corridor_target is not None:
+            synthetic = SimpleNamespace(
+                goal_x=corridor_target.pose.position.x,
+                goal_y=corridor_target.pose.position.y,
+                length_m=self.corridor_probe_step,
+                score=1.0,
+            )
+            return corridor_target, synthetic, cooling, False
         return None, None, cooling, False
 
     def publish_frontiers(self, map_message, frontiers):
@@ -1809,6 +2773,7 @@ class FrontierExplorer:
         self.move_client.send_goal(move_goal)
         started_ros = rospy.Time.now()
         started_wall = time.monotonic()
+        backout_steps = 0
         while not rospy.is_shutdown():
             try:
                 self.check_cancel_safety_and_deadline()
@@ -1824,6 +2789,21 @@ class FrontierExplorer:
                 GoalStatus.RECALLED,
                 GoalStatus.LOST,
             ):
+                if (
+                        state == GoalStatus.ABORTED
+                        and backout_steps < self.backout_max_steps
+                        and self.bounded_backout(target.header.frame_id)):
+                    backout_steps += 1
+                    rospy.logwarn(
+                        "move_base could not turn; completed bounded backout "
+                        "step %d/%d and retrying the same goal",
+                        backout_steps,
+                        self.backout_max_steps,
+                    )
+                    self.check_cancel_safety_and_deadline()
+                    move_goal.target_pose.header.stamp = rospy.Time.now()
+                    self.move_client.send_goal(move_goal)
+                    continue
                 recordable_failure = state in (
                     GoalStatus.ABORTED,
                     GoalStatus.REJECTED,
@@ -1850,6 +2830,221 @@ class FrontierExplorer:
             time.sleep(0.05)
         self.cancel_move_goal()
         return False, GoalStatus.LOST, False
+
+    def bounded_backout(self, frame):
+        """Back up one short step, then hand control back to turn-first DWA.
+
+        The behavior source has higher mux priority than navigation, but is
+        published only for this bounded maneuver. After every step the same
+        move_base goal is retried with min_vel_x=0, so the robot tests for a
+        collision-free turn again instead of reversing continuously.
+        """
+        try:
+            start = self.pose_in_frame(frame)
+        except Exception as error:
+            rospy.logwarn("bounded backout pose unavailable: %s", error)
+            return False
+        started_ros = rospy.Time.now()
+        started_wall = time.monotonic()
+        command = Twist()
+        command.linear.x = -abs(self.backout_speed)
+        moved = 0.0
+        while not rospy.is_shutdown():
+            self.check_cancel_safety_and_deadline()
+            try:
+                current = self.pose_in_frame(frame)
+                moved = math.hypot(
+                    current.pose.position.x - start.pose.position.x,
+                    current.pose.position.y - start.pose.position.y,
+                )
+            except Exception:
+                current = None
+            ros_elapsed = (rospy.Time.now() - started_ros).to_sec()
+            wall_elapsed = time.monotonic() - started_wall
+            if (
+                    moved >= self.backout_step_distance
+                    or ros_elapsed >= self.backout_max_sim_time
+                    or wall_elapsed
+                    >= self.backout_max_sim_time * self.wall_factor):
+                break
+            self.recovery_cmd_pub.publish(command)
+            time.sleep(0.02)
+        zero = Twist()
+        for _unused in range(15):
+            self.recovery_cmd_pub.publish(zero)
+            time.sleep(0.02)
+        rospy.loginfo(
+            "bounded backout finished: distance=%.3f m sim_time=%.3f s",
+            moved,
+            (rospy.Time.now() - started_ros).to_sec(),
+        )
+        return moved >= min(0.15, self.backout_step_distance * 0.5)
+
+    def scan_room_and_exit(self, branch, frame):
+        """Scan once in the open area, then drive forward back to its mouth."""
+        doorway = self.room_branch_entry_poses.get(branch)
+        if doorway is None:
+            rospy.logwarn("room branch %r has no recorded entry pose", branch)
+            return False
+        try:
+            scan_pose = self.pose_in_frame(frame)
+        except Exception as error:
+            rospy.logwarn("room scan pose unavailable: %s", error)
+            return False
+        open_pose = self.open_room_scan_pose(branch, scan_pose)
+        if open_pose is None:
+            rospy.logwarn(
+                "room scan deferred: no reachable %.2f m-clear observation "
+                "point found within %.2f m",
+                self.room_scan_clearance,
+                self.room_scan_search_distance,
+            )
+            return False
+        relocation = math.hypot(
+            open_pose.pose.position.x - scan_pose.pose.position.x,
+            open_pose.pose.position.y - scan_pose.pose.position.y,
+        )
+        if relocation > 0.10:
+            rospy.loginfo(
+                "room wall too close for rotation; moving %.2f m deeper to "
+                "a clearance-verified observation point",
+                relocation,
+            )
+            succeeded, state, _recordable = self.navigate(
+                open_pose, self.navigation_timeout
+            )
+            if not succeeded:
+                rospy.logwarn(
+                    "room observation-point relocation failed: state=%d",
+                    state,
+                )
+                return False
+            scan_pose = self.pose_in_frame(frame)
+        previous = yaw_from_quaternion(scan_pose.pose.orientation)
+        accumulated = 0.0
+        started_ros = rospy.Time.now()
+        started_wall = time.monotonic()
+        command = Twist()
+        command.angular.z = abs(self.room_scan_angular_speed)
+        while not rospy.is_shutdown() and accumulated < 2.0 * math.pi:
+            self.check_cancel_safety_and_deadline()
+            try:
+                current = yaw_from_quaternion(
+                    self.pose_in_frame(frame).pose.orientation
+                )
+                accumulated += abs(normalize_angle(current - previous))
+                previous = current
+            except Exception:
+                pass
+            if (
+                    (rospy.Time.now() - started_ros).to_sec() >= 25.0
+                    or time.monotonic() - started_wall
+                    >= 25.0 * self.wall_factor):
+                break
+            self.recovery_cmd_pub.publish(command)
+            time.sleep(0.02)
+        zero = Twist()
+        for _unused in range(15):
+            self.recovery_cmd_pub.publish(zero)
+            time.sleep(0.02)
+        if accumulated < 1.75 * math.pi:
+            rospy.logwarn(
+                "room scan incomplete: accumulated %.2f rad", accumulated
+            )
+            return False
+
+        current_pose = self.pose_in_frame(frame)
+        exit_pose = copy.deepcopy(doorway)
+        exit_pose.header.stamp = rospy.Time.now()
+        exit_yaw = math.atan2(
+            exit_pose.pose.position.y - current_pose.pose.position.y,
+            exit_pose.pose.position.x - current_pose.pose.position.x,
+        )
+        exit_pose.pose.orientation.x, exit_pose.pose.orientation.y, \
+            exit_pose.pose.orientation.z, exit_pose.pose.orientation.w = \
+            quaternion_from_yaw(exit_yaw)
+        rospy.loginfo(
+            "room scan complete: %.2f rad; navigating forward to branch mouth",
+            accumulated,
+        )
+        succeeded, state, _recordable = self.navigate(
+            exit_pose, self.navigation_timeout
+        )
+        if not succeeded:
+            rospy.logwarn(
+                "room branch exit failed: branch=%r move_base state=%d",
+                branch,
+                state,
+            )
+            return False
+        return self.face_corridor_forward(frame)
+
+    def face_corridor_forward(self, frame):
+        """Restore the remembered main-corridor heading after leaving a room."""
+        corridor_yaw = yaw_from_quaternion(
+            self.floor_entry_pose.pose.orientation
+        )
+        started_ros = rospy.Time.now()
+        started_wall = time.monotonic()
+        zero = Twist()
+        aligned = False
+        try:
+            while not rospy.is_shutdown():
+                self.check_cancel_safety_and_deadline()
+                current = self.pose_in_frame(frame)
+                current_yaw = yaw_from_quaternion(
+                    current.pose.orientation
+                )
+                error = normalize_angle(corridor_yaw - current_yaw)
+                if abs(error) <= self.room_exit_align_tolerance:
+                    aligned = True
+                    break
+                ros_elapsed = (rospy.Time.now() - started_ros).to_sec()
+                wall_elapsed = time.monotonic() - started_wall
+                if (
+                        ros_elapsed >= self.room_exit_align_timeout
+                        or wall_elapsed >=
+                        self.room_exit_align_timeout * self.wall_factor):
+                    rospy.logwarn(
+                        "corridor-forward alignment timed out: error=%.2f rad",
+                        error,
+                    )
+                    return False
+                command = Twist()
+                magnitude = min(
+                    self.room_scan_angular_speed,
+                    max(0.55, 1.8 * abs(error)),
+                )
+                command.angular.z = math.copysign(magnitude, error)
+                self.recovery_cmd_pub.publish(command)
+                time.sleep(0.02)
+        finally:
+            for _unused in range(15):
+                self.recovery_cmd_pub.publish(zero)
+                time.sleep(0.02)
+        if not aligned:
+            return False
+
+        observation_start_ros = rospy.Time.now()
+        observation_start_wall = time.monotonic()
+        while not rospy.is_shutdown():
+            self.check_cancel_safety_and_deadline()
+            if (
+                    (rospy.Time.now() - observation_start_ros).to_sec()
+                    >= self.room_exit_reobserve_time):
+                break
+            if (
+                    time.monotonic() - observation_start_wall
+                    >= self.room_exit_reobserve_time * self.wall_factor):
+                break
+            self.recovery_cmd_pub.publish(zero)
+            time.sleep(0.02)
+        rospy.loginfo(
+            "room exit aligned with remembered corridor heading: yaw=%.2f "
+            "rad; fresh forward Livox observation collected",
+            corridor_yaw,
+        )
+        return True
 
     def cancel_move_goal(self, wait_wall=2.0):
         """Cancel this client's goal and briefly wait for a terminal state."""
@@ -1954,32 +3149,55 @@ class FrontierExplorer:
     def execute_return(self):
         self.transition(
             "RETURNING",
-            "returning to recorded start pose",
-            self.start_pose,
+            "returning through the verified floor-entry corridor",
+            self.floor_entry_pose,
         )
         self.publish_target(self.start_pose, "return_target")
         last_errors = (float("inf"), float("inf"))
-        for attempt in range(1, self.return_attempts + 1):
-            succeeded, action_state, _recordable = self.navigate(
-                self.start_pose, self.return_timeout, returning=True
+        # A single plan from the back of the building to the outdoor spawn is
+        # brittle with an incrementally built map: the entrance threshold can
+        # remain an unknown/disconnected seam even though the robot traversed
+        # it successfully on entry.  Return first to the already validated
+        # indoor entry anchor, then reverse the same short corridor to spawn.
+        stages = (
+            ("indoor entry anchor", self.floor_entry_pose, False),
+            ("outdoor start pose", self.start_pose, True),
+        )
+        for stage_name, target, use_entry_profile in stages:
+            self.transition(
+                "RETURNING", "returning to %s" % stage_name, target
             )
-            if succeeded:
-                last_errors = self.verify_return_pose()
-                if (
-                    last_errors[0] <= self.return_position_tolerance
-                    and last_errors[1] <= self.return_yaw_tolerance
-                    and self.wait_for_final_zero()
-                ):
-                    return last_errors
-            rospy.logwarn(
-                "return attempt %d/%d failed: action_state=%d, "
-                "position_error=%.3f, yaw_error=%.3f",
-                attempt,
-                self.return_attempts,
-                action_state,
-                last_errors[0],
-                last_errors[1],
-            )
+            stage_succeeded = False
+            for attempt in range(1, self.return_attempts + 1):
+                if use_entry_profile:
+                    self.apply_entry_speed_limit()
+                try:
+                    succeeded, action_state, _recordable = self.navigate(
+                        target, self.return_timeout, returning=True
+                    )
+                finally:
+                    if use_entry_profile:
+                        self.restore_entry_speed_limit()
+                if succeeded:
+                    stage_succeeded = True
+                    break
+                rospy.logwarn(
+                    "return %s attempt %d/%d failed: action_state=%d",
+                    stage_name, attempt, self.return_attempts, action_state,
+                )
+            if not stage_succeeded:
+                raise ExplorationFailure(
+                    ExploreFloorResult.ERROR_RETURN_FAILED,
+                    "return failed before reaching %s: move_base state=%d"
+                    % (stage_name, action_state),
+                )
+
+        last_errors = self.verify_return_pose()
+        if (
+                last_errors[0] <= self.return_position_tolerance
+                and last_errors[1] <= self.return_yaw_tolerance
+                and self.wait_for_final_zero()):
+            return last_errors
         raise ExplorationFailure(
             ExploreFloorResult.ERROR_RETURN_FAILED,
             "return failed: position_error=%.3f m, yaw_error=%.3f rad, "
@@ -1997,6 +3215,14 @@ class FrontierExplorer:
             self.roi_polygon_map = ()
             self.visited_goals = []
             self.failed_goals = []
+            self.completed_room_branches = set()
+            self.approached_room_branches = set()
+            self.room_branch_entry_poses = {}
+            self.room_branch_interior_poses = {}
+            self.selected_room_branch = None
+            self.selected_room_stage = None
+            self.remembered_room_doorways = {}
+            self.maximum_corridor_progress = 0.0
             self.no_goal_evidence = NoFrontierEvidence(
                 self.empty_confirmations,
                 self.stable_no_frontier_duration,
@@ -2106,6 +3332,7 @@ class FrontierExplorer:
                 "requesting the public main entrance door and checking response",
             )
             self.request_entry_door_open(goal)
+            self.reset_map_after_entry_door_opens()
             door_open_map = self.wait_for_entry_passage(
                 initial_map, self.start_pose
             )
@@ -2114,42 +3341,11 @@ class FrontierExplorer:
             self.publish_target(self.floor_entry_pose, "floor_entry_target")
             self.transition(
                 "TRANSIT_TO_ENTRY",
-                "validating a local plan through the sensor-confirmed entry "
-                "passage",
+                "crossing the entrance with localization and a continuously "
+                "refreshed short-horizon obstacle gate",
                 self.floor_entry_pose,
             )
-            self.wait_for_local_entry_plan()
-            self.transition(
-                "TRANSIT_TO_ENTRY",
-                "moving through the sensor-confirmed local entry plan",
-                self.floor_entry_pose,
-            )
-            self.apply_entry_speed_limit()
-            transit_failure = None
-            try:
-                succeeded, action_state, _recordable = self.navigate(
-                    self.floor_entry_pose, self.entry_transit_timeout
-                )
-            except Exception as error:
-                transit_failure = error
-                raise
-            finally:
-                try:
-                    self.restore_entry_speed_limit()
-                except ExplorationFailure as restore_failure:
-                    if transit_failure is None:
-                        raise
-                    rospy.logerr(
-                        "entry speed restore also failed while handling %s: %s",
-                        transit_failure,
-                        restore_failure,
-                    )
-            if not succeeded:
-                raise ExplorationFailure(
-                    ExploreFloorResult.ERROR_ENTRY_TRANSIT,
-                    "failed to reach floor_entry_pose: move_base state=%d; "
-                    "entry transit is not a frontier failure" % action_state,
-                )
+            self.controlled_entry_transit()
 
             self.transition(
                 "ENTERED_FLOOR",
@@ -2266,12 +3462,115 @@ class FrontierExplorer:
                     target, self.navigation_timeout
                 )
                 if succeeded:
+                    completed_branch = None
+                    if (
+                            self.room_priority_enabled
+                            and self.floor_entry_pose is not None):
+                        branch = self.selected_room_branch
+                        if (
+                                branch is not None
+                                and self.selected_room_stage
+                                == "door_center"):
+                            self.approached_room_branches.add(branch)
+                            rospy.loginfo(
+                                "door center reached: station=%d side=%s; "
+                                "next stage is room interior",
+                                branch[0],
+                                "left" if branch[1] > 0 else "right",
+                            )
+                        if (
+                                branch is not None
+                                and self.selected_room_stage
+                                == "room_interior"):
+                            actual_pose = self.pose_in_frame(
+                                target.header.frame_id
+                            )
+                            actual_depth = self.room_interior_progress(
+                                branch, actual_pose
+                            )
+                            planned_depth = self.room_interior_progress(
+                                branch,
+                                self.room_branch_interior_poses[branch],
+                            )
+                            required_depth = min(
+                                self.room_completion_depth,
+                                max(0.60, planned_depth - 0.45),
+                            )
+                            if (
+                                    actual_depth is None
+                                    or actual_depth < required_depth):
+                                failure = record_failure(
+                                    self.failed_goals,
+                                    target.pose.position.x,
+                                    target.pose.position.y,
+                                    self.failed_radius,
+                                    time.monotonic(),
+                                    self.failure_cooldown,
+                                )
+                                self.transition(
+                                    "UPDATE_COVERAGE",
+                                    "room target reported reached before "
+                                    "crossing its frozen door plane: "
+                                    "depth=%.2f required=%.2f; failure %d/%d"
+                                    % (
+                                        -1.0 if actual_depth is None
+                                        else actual_depth,
+                                        required_depth,
+                                        failure.failures,
+                                        self.maximum_failures,
+                                    ),
+                                )
+                                self.wait_for_map_update(version)
+                                continue
+                            self.transition(
+                                "NAVIGATING",
+                                "room interior reached through frozen door "
+                                "geometry (depth=%.2f m); scanning 360 "
+                                "degrees then returning through its branch "
+                                "mouth" % actual_depth,
+                                target,
+                            )
+                            if not self.scan_room_and_exit(
+                                    branch, target.header.frame_id):
+                                failure = record_failure(
+                                    self.failed_goals,
+                                    target.pose.position.x,
+                                    target.pose.position.y,
+                                    self.failed_radius,
+                                    time.monotonic(),
+                                    self.failure_cooldown,
+                                )
+                                self.transition(
+                                    "UPDATE_COVERAGE",
+                                    "room scan/forward exit failed; failure "
+                                    "%d/%d"
+                                    % (
+                                        failure.failures,
+                                        self.maximum_failures,
+                                    ),
+                                )
+                                self.wait_for_map_update(version)
+                                continue
+                            self.completed_room_branches.add(branch)
+                            completed_branch = branch
+                            rospy.loginfo(
+                                "room branch scanned and exited: station=%d "
+                                "side=%s depth=%.2f m",
+                                branch[0],
+                                "left" if branch[1] > 0 else "right",
+                                actual_depth,
+                            )
                     self.visited_goals.append(
                         (target.pose.position.x, target.pose.position.y)
                     )
                     self.transition(
                         "UPDATE_COVERAGE",
-                        "frontier reached; waiting for a newer floor map",
+                        (
+                            "room branch scanned, exited, and marked complete"
+                            if completed_branch is not None
+                            else "frontier reached; waiting for a newer "
+                            "floor map"
+                        ),
                     )
                 elif recordable_failure:
                     failure = record_failure(

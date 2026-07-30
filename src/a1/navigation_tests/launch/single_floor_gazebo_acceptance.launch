@@ -29,38 +29,12 @@
           /clock
           /tf
           /tf_static
-          /scan
           /trunk_imu
           /Odometry_gazebo
           /visual/FR_foot_contact/the_force
           /visual/FL_foot_contact/the_force
           /visual/RR_foot_contact/the_force
           /visual/RL_foot_contact/the_force
-          /a1_gazebo/joint_states
-          /a1_gazebo/FR_hip_controller/command
-          /a1_gazebo/FR_thigh_controller/command
-          /a1_gazebo/FR_calf_controller/command
-          /a1_gazebo/FL_hip_controller/command
-          /a1_gazebo/FL_thigh_controller/command
-          /a1_gazebo/FL_calf_controller/command
-          /a1_gazebo/RR_hip_controller/command
-          /a1_gazebo/RR_thigh_controller/command
-          /a1_gazebo/RR_calf_controller/command
-          /a1_gazebo/RL_hip_controller/command
-          /a1_gazebo/RL_thigh_controller/command
-          /a1_gazebo/RL_calf_controller/command
-          /a1_gazebo/FR_hip_controller/state
-          /a1_gazebo/FR_thigh_controller/state
-          /a1_gazebo/FR_calf_controller/state
-          /a1_gazebo/FL_hip_controller/state
-          /a1_gazebo/FL_thigh_controller/state
-          /a1_gazebo/FL_calf_controller/state
-          /a1_gazebo/RR_hip_controller/state
-          /a1_gazebo/RR_thigh_controller/state
-          /a1_gazebo/RR_calf_controller/state
-          /a1_gazebo/RL_hip_controller/state
-          /a1_gazebo/RL_thigh_controller/state
-          /a1_gazebo/RL_calf_controller/state
           /a1/localization/odom
           /a1/localization/status
           /a1/localization/supervisor_status

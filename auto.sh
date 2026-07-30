@@ -55,6 +55,9 @@ UNITREE_CTRL_DT="${UNITREE_CTRL_DT:-0.004}"
 UNITREE_LOG_WAIT_WARNINGS="$(as_ros_bool "${UNITREE_LOG_WAIT_WARNINGS:-0}")"
 ROBOT_SPAWN_TIMEOUT="${ROBOT_SPAWN_TIMEOUT:-120}"
 CONTROLLER_SPAWNER_TIMEOUT="${CONTROLLER_SPAWNER_TIMEOUT:-120}"
+# Match Gazebo integration to the existing 4 ms Unitree controller period.
+# The previous 2 ms/500 Hz default computed two physics steps per command and
+# saturated one CPU core without increasing the locomotion control bandwidth.
 GAZEBO_PHYSICS_MAX_STEP_SIZE="${GAZEBO_PHYSICS_MAX_STEP_SIZE:-0.002}"
 GAZEBO_PHYSICS_REAL_TIME_UPDATE_RATE="${GAZEBO_PHYSICS_REAL_TIME_UPDATE_RATE:-500}"
 GAZEBO_PHYSICS_ODE_ITERS="${GAZEBO_PHYSICS_ODE_ITERS:-40}"

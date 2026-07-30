@@ -11,6 +11,9 @@
 #include <string>
 #include <torch/torch.h>
 #include <torch/script.h>
+#include <std_msgs/Bool.h>
+#include <geometry_msgs/WrenchStamped.h>
+#include "FSM/SafeStandGyroFilter.h"
 #define HISTORY_LEN 5
 class State_RL : public FSMState{
 
@@ -35,6 +38,12 @@ public:
     std::ofstream outfile;
 private:
     void updateCommandTensor();
+    void publishControllerReady(bool ready);
+    void publishSafeStandReady(bool ready);
+    void beginSafeStand();
+    bool safeStandReady();
+    void footForceCallback(
+        const geometry_msgs::WrenchStamped::ConstPtr& msg, std::size_t index);
 
     int debug = false;
     at::string model_path;
@@ -103,6 +112,16 @@ private:
     uint8_t ampthreadRunning = State_RL::STOP;
     float infer_duration = 0.02;
     float amp_duration = 0.005;
+    ros::Publisher _controllerReadyPub;
+    ros::Publisher _safeStandReadyPub;
+    ros::Time _lastReadyPublish;
+    std::array<ros::Subscriber, 4> _footForceSub;
+    std::array<double, 4> _footForceZ;
+    std::array<ros::Time, 4> _footForceStamp;
+    bool _safeStandRequested = false;
+    ros::Time _safeStandRequestStamp;
+    ros::Time _stableSince;
+    SafeStandGyroFilter _safeStandGyroFilter{0.10, 0.05};
 };
 
 #endif

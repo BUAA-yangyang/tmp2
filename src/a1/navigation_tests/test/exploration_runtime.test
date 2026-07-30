@@ -16,6 +16,8 @@
     <param name="topics/mapping_status"
            value="/test/exploration/mapping_status"/>
     <param name="topics/final_cmd_vel" value="/test/exploration/cmd_vel"/>
+    <param name="topics/recovery_cmd_vel"
+           value="/test/exploration/recovery_cmd_vel"/>
     <param name="topics/safety_lock" value="/test/exploration/safety_lock"/>
     <param name="topics/controller_ready"
            value="/test/exploration/controller_ready"/>
@@ -46,6 +48,9 @@
       [0.0, -3.0, 4.5, -3.0, 4.5, 3.0, 0.0, 3.0]
     </rosparam>
     <param name="roi/boundary_margin" value="0.0"/>
+    <!-- The compact 10 m synthetic grid cannot provide the production
+         Livox-range margin; ROI containment itself remains under test. -->
+    <param name="roi/map_boundary_margin" value="0.0"/>
     <param name="controller/ready_freshness" value="0.25"/>
     <param name="timeouts/prerequisites" value="8.0"/>
     <param name="timeouts/navigation_goal" value="3.0"/>
