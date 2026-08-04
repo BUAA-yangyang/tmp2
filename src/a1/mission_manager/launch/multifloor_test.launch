@@ -5,12 +5,15 @@
        A focused F0 ingress test can now reach F1/F2 without disabling their
        real room exploration transactions. -->
   <arg name="upper_floor_special_test_mode" default="false"/>
-  <param name="/frontier_explorer/testing/force_floor_complete_after_mandatory_ingress"
-         value="$(arg force_floor_complete_after_ingress)"/>
-  <param name="/multifloor_mission/mission/special_test_mode"
-         value="$(arg upper_floor_special_test_mode)"/>
   <include file="$(find a1_navigation_tests)/launch/single_floor_exploration_dev.launch">
     <arg name="use_rviz" value="$(arg use_rviz)"/>
   </include>
   <include file="$(find a1_mission_manager)/launch/multifloor_mission.launch"/>
+  <!-- These are intentional final overrides.  multifloor_mission.launch loads
+       multifloor.yaml, whose default special_test_mode would otherwise replace
+       the caller-selected test value. -->
+  <param name="/frontier_explorer/testing/force_floor_complete_after_mandatory_ingress"
+         value="$(arg force_floor_complete_after_ingress)"/>
+  <param name="/multifloor_mission/mission/special_test_mode"
+         value="$(arg upper_floor_special_test_mode)"/>
 </launch>
