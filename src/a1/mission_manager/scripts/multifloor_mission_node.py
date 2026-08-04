@@ -269,6 +269,12 @@ class MultiFloorMission:
             "~elevator/car_opening_max_bearing", 1.05))
         # Upper bound on the exit walk, not a target: a bad side measurement
         # must not be able to march the robot across the floor.
+        # Hand the last stretch to move_base: it is short, and the robot
+        # crossed exactly that ground on the way out.
+        self.return_handover_distance = float(rospy.get_param(
+            "~elevator/return_handover_distance", 1.20))
+        self.return_maximum_legs = int(rospy.get_param(
+            "~elevator/return_maximum_legs", 8))
         self.exit_maximum_distance = float(rospy.get_param(
             "~elevator/exit_maximum_distance", 3.20))
         # Never declare the car cleared before at least clearing its depth.
@@ -1478,6 +1484,47 @@ class MultiFloorMission:
                   advanced=advanced, left=left, right=right)
         return advanced
 
+    def travel_to_map_checked(self, target, label, floor):
+        """Walk to a pose in map-proven steps, re-aiming as it goes.
+
+        advance_map_checked holds one bearing; a return leg needs the bearing
+        recomputed as the robot closes, so this wraps it.
+
+        Why the return leg needs this at all: mf30 fell off floor 2 on the way
+        back to point A. The frames are unambiguous -- z dropped 5.47 -> 5.32
+        while roll and pitch were still under a degree, and only then did the
+        attitude diverge, so the robot walked off an edge rather than clipping
+        a wall. The grid said free the whole way, including the sample 0.3 s
+        before the drop, because floor_mapping discards returns more than
+        ground_band_below beneath the floor plane: past an edge there is no
+        marking at all, so the cells stay UNKNOWN, and an unknown cell is not
+        an obstacle to a costmap. Only a check that treats unknown as
+        impassable catches it, which is what known_free_run does and what a
+        bare navigate() does not. The exit and corridor legs were given that
+        check after mf22; this leg was not, and it is where mf30 fell.
+        """
+        for leg in range(self.return_maximum_legs):
+            here = self.current_pose()
+            dx = target.pose.position.x - here.pose.position.x
+            dy = target.pose.position.y - here.pose.position.y
+            distance = math.hypot(dx, dy)
+            if distance <= self.return_handover_distance:
+                # Close enough that move_base's own approach is short and the
+                # remaining ground has been crossed already on the way out.
+                self.navigate(target, "%s final approach" % label)
+                return True
+            bearing = math.atan2(dy, dx)
+            advanced = self.advance_map_checked(
+                bearing, distance - self.return_handover_distance,
+                "%s leg %d" % (label, leg + 1), floor)
+            if advanced < self.exit_minimum_progress:
+                raise MissionFailure(
+                    "%s stalled %.2f m short: the map proves no further "
+                    "known-free ground toward the target" % (label, distance))
+        raise MissionFailure(
+            "%s did not arrive within %d map-checked legs"
+            % (label, self.return_maximum_legs))
+
     def known_free_run(self, x, y, bearing, max_range, pose=None):
         """How far the published grid is known-free along a bearing.
 
@@ -1895,8 +1942,8 @@ class MultiFloorMission:
                       "TEST MODE: upper-floor main corridor reached")
         else:
             self.explore_floor(floor, entry, False)
-        self.navigate(point_a,
-                      "return to generation-local elevator point A")
+        self.travel_to_map_checked(
+            point_a, "floor %d return to elevator point A" % floor, floor)
         self.emit("INSIDE_ELEVATOR",
                   "returned to point A for next transfer")
 
