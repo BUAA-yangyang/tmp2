@@ -28,7 +28,15 @@ DWAPlannerROS:
   # becomes [0.75, 0.90] and every rotation is slower. Large turns will take
   # longer and may push against navigation timeouts. That is the cost of
   # staying inside the envelope the locomotion policy was trained on.
-  max_vel_theta: 0.90
+  # REVERTED to 1.80 after mf21. Capping at 0.90 while min_vel_theta stays at
+  # 0.75 leaves DWA a 0.15 rad/s sampling band, and that is not enough to plan
+  # into the elevator car: mf21 failed the floor-0 car entry twice with no
+  # progress, a step mf20 had completed on the same code. The envelope problem
+  # is real (mf17 fell at wz 1.78) but it cannot be fixed from the ceiling
+  # alone -- min_vel_theta 0.75 is a policy dead zone, so lowering the ceiling
+  # squeezes the band from both sides. Revisit as a pair, with evidence about
+  # what the policy actually does below 0.75.
+  max_vel_theta: 1.80
   min_vel_theta: 0.75
 
   # ============================================================
