@@ -267,6 +267,18 @@ class MultiFloorMission:
             "~elevator/upper_door_max_distance", 2.20))
         self.car_opening_max_bearing = float(rospy.get_param(
             "~elevator/car_opening_max_bearing", 1.05))
+        # Upper bound on the exit walk, not a target: a bad side measurement
+        # must not be able to march the robot across the floor.
+        self.exit_maximum_distance = float(rospy.get_param(
+            "~elevator/exit_maximum_distance", 3.20))
+        # Never declare the car cleared before at least clearing its depth.
+        self.exit_minimum_distance = float(rospy.get_param(
+            "~elevator/exit_minimum_distance", 1.20))
+        # Combined side clearance that means "not between the car walls any
+        # more". Measured interiors give 0.4-0.8 m per side; 2.60 m total is
+        # comfortably above any of them and below a real lobby.
+        self.exit_clear_width = float(rospy.get_param(
+            "~elevator/exit_clear_width", 2.60))
         self.corridor_minimum_run = float(rospy.get_param(
             "~upper_floor/corridor_minimum_run", 2.0))
         self.corridor_run_margin = float(rospy.get_param(
@@ -1602,12 +1614,30 @@ class MultiFloorMission:
                   x=point_a.pose.position.x, y=point_a.pose.position.y,
                   exit_yaw=yaw_out)
 
-        required_clearance = self.car_depth + self.lobby_standoff
+        # "Out of the car" is observable; 2.30 m was an assumption.
+        #
+        # This used to demand car_depth + lobby_standoff of forward travel, two
+        # fixed numbers that describe the nominal car rather than the one the
+        # robot is standing in. The state that actually matters is whether the
+        # walls have opened up: inside, mf25/mf27/mf28 measured 0.4-0.8 m to
+        # each side; a lobby is far wider. So step forward until the sides say
+        # the car is behind us, with the nominal distance kept only as an upper
+        # bound so a bad measurement cannot walk the robot across the floor.
+        required_clearance = self.exit_maximum_distance
         origin_x = start.pose.position.x
         origin_y = start.pose.position.y
         advanced = 0.0
         steps = 0
         while advanced + self.exit_completion_tolerance < required_clearance:
+            left, right = self.car_lateral_clearances()
+            if (advanced >= self.exit_minimum_distance
+                    and left + right >= self.exit_clear_width):
+                self.emit("ELEVATOR_EXIT_CLEAR_MEASURED",
+                          "sides opened to %.2f + %.2f = %.2f m after %.2f m; "
+                          "the car is behind us"
+                          % (left, right, left + right, advanced),
+                          left=left, right=right, advanced=advanced)
+                break
             if steps >= self.exit_maximum_steps:
                 raise MissionFailure(
                     "floor %d elevator exit exceeded %d bounded steps after "

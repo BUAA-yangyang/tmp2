@@ -63,10 +63,27 @@ def bounded_exit_step(remaining, free_run, maximum_step, minimum_goal,
     """Choose one map-proven step, or return zero until more map is known."""
     if remaining <= 0.0 or maximum_step <= 0.0 or minimum_goal <= 0.0:
         return 0.0
-    desired = min(maximum_step, max(remaining, minimum_goal))
-    if free_run - max(0.0, goal_margin) + 1.0e-9 < desired:
+    margin = max(0.0, goal_margin)
+    # Walk as far as the map has proved, not all-or-nothing.
+    #
+    # This used to make "desired" the whole remaining leg and refuse to move
+    # unless the grid proved that entire distance at once. mf28 stood in the
+    # car for 45 wall seconds and failed with 1.05 m of proven strip ahead,
+    # because the leg was 2.30 m: room for a 0.70 m step existed the whole time
+    # and was never taken. Raising maximum_step to 2.40 made it worse, since
+    # desired then became the full leg; the old 0.85 cap had been accidentally
+    # forcing the small steps that made progress.
+    #
+    # A goal shorter than minimum_goal is still refused: move_base accepts
+    # anything inside xy_goal_tolerance, so such a goal commands no motion.
+    # That is why a remaining distance below minimum_goal still asks for
+    # minimum_goal rather than the remainder.
+    want = max(remaining, minimum_goal)
+    provable = min(maximum_step, max(0.0, free_run - margin))
+    step = min(want, provable)
+    if step + 1.0e-9 < minimum_goal:
         return 0.0
-    return desired
+    return step
 
 
 def choose_corridor_side(left_run, right_run, minimum_run,
