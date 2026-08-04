@@ -16,7 +16,19 @@ DWAPlannerROS:
   # State_RL 在约 0.15 m/s 附近仍可能保持原地，室内平移下限需越过策略死区。
   # 效果是"要么以能走动的速度走，要么干脆停"，不再出现"发得出去但走不动"的中间态。
   min_vel_trans: 0.35
-  max_vel_theta: 1.80
+  # Was 1.80 = 200% of the RL policys 0.9 rad/s training envelope, and the
+  # cmd_vel_guard ceiling. Two independent runs reached it:
+  #   mf17: wz hit 1.78-1.80 during an in-place rotation next to the floor 2
+  #         edge; roll/pitch diverged from <3 deg to +25/-23 deg within one
+  #         sample and the robot fell off the floor (oracle z 5.51 -> 0.14).
+  #   mf20: 201 of 3092 samples exceeded 0.9 rad/s, peak 1.800.
+  # The handoff also records three single-floor falls with the same signature.
+  #
+  # TRADE-OFF, accepted deliberately: min_vel_theta is 0.75, so the usable band
+  # becomes [0.75, 0.90] and every rotation is slower. Large turns will take
+  # longer and may push against navigation timeouts. That is the cost of
+  # staying inside the envelope the locomotion policy was trained on.
+  max_vel_theta: 0.90
   min_vel_theta: 0.75
 
   # ============================================================

@@ -83,7 +83,19 @@ upper_floor:
   known_free_occupied_threshold: 65
   known_free_half_width: 0.22
   exit_map_wait_wall: 45.0
-  exit_step_maximum: 0.85
+  # Was 0.85. mf20 stalled on the 6 cm floor-1 elevator sill with the command
+  # chain intact: /cmd_vel peaked at 0.416 m/s and the robot moved 0.224 m in
+  # 4.4 s. The same robot crossed the same band on floor 0 while ENTERING the
+  # car at |vx| peak 0.767, mean 0.489 -- one continuous move_base goal instead
+  # of a 0.85 m hop. exploration.yaml already records why: "The entrance apron
+  # has an 8 cm vertical edge. State_RL needs enough forward momentum for the
+  # rear legs to follow the front legs onto it." A goal that short makes DWA
+  # decelerate into its tolerance before the rear legs are up.
+  #
+  # The map proof is unchanged -- a step is still only taken over a strip the
+  # grid has shown known-free at footprint width. This only stops chopping a
+  # proven strip into momentum-less pieces.
+  exit_step_maximum: 2.40
   # Must remain above MoveBase's 0.45 m XY tolerance; achieved progress is also
   # checked after every step.
   exit_minimum_goal: 0.65
