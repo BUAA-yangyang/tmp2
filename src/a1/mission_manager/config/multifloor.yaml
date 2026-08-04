@@ -98,7 +98,19 @@ upper_floor:
   exit_step_maximum: 2.40
   # Must remain above MoveBase's 0.45 m XY tolerance; achieved progress is also
   # checked after every step.
-  exit_minimum_goal: 0.65
+  # 0.65 was a move_base tolerance floor. It is also, and more importantly, a
+  # MOMENTUM floor: DWA decelerates into its goal, so a short goal caps the
+  # peak speed, and the 6 cm elevator sill needs the rear legs to follow the
+  # front ones onto it. Measured peak |vx| against outcome at that sill:
+  #     0.416  mf20 exit step 3      stuck
+  #     0.459  mf29 car entry        stuck   (0.65 m step)
+  #     0.690  mf25 car entry        crossed (~1.45 m goal)
+  #     0.767  mf22 single 2.30 m    crossed
+  # The old all-or-nothing step sizing refused short steps by accident and was
+  # protective here; the fix for that let them through. 1.40 m makes the floor
+  # explicit, so an unprovable step waits for more map instead of taking a run
+  # at the sill it cannot finish.
+  exit_minimum_goal: 1.40
   # Navigation footprint reaches 0.30 m forward with 0.02 m padding.
   exit_goal_margin: 0.35
   exit_minimum_progress: 0.15

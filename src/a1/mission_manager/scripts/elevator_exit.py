@@ -81,6 +81,18 @@ def bounded_exit_step(remaining, free_run, maximum_step, minimum_goal,
     want = max(remaining, minimum_goal)
     provable = min(maximum_step, max(0.0, free_run - margin))
     step = min(want, provable)
+    # minimum_goal is not only a move_base tolerance floor, it is a momentum
+    # floor. Measured peak |vx| against outcome at the 6 cm elevator sill:
+    #   0.416 (mf20 exit step 3)   stuck
+    #   0.459 (mf29 car entry)     stuck
+    #   0.690 (mf25 car entry)     crossed
+    #   0.767 (mf22 2.30 m step)   crossed
+    # DWA decelerates into its goal, so a short goal caps the peak speed and
+    # the rear legs never follow the front ones onto the sill -- the mechanism
+    # exploration.yaml already records for the entrance apron. Waiting for the
+    # map to prove a step long enough to build speed is therefore better than
+    # taking a short one that cannot cross; a short step is not a small amount
+    # of progress, it is none.
     if step + 1.0e-9 < minimum_goal:
         return 0.0
     return step
