@@ -278,6 +278,10 @@ class MultiFloorMission:
         self.corridor_probe_max_range = float(rospy.get_param(
             "~upper_floor/corridor_probe_max_range",
             rospy.get_param("~upper_floor/corridor_forward", 5.0)))
+        # Must exceed DWA's xy_goal_tolerance (0.45) so the final in-place yaw
+        # settle is never mistaken for a stall.
+        self.nav_arrival_band = float(rospy.get_param(
+            "~mission/no_progress_arrival_band", 0.70))
         self.nav_progress_timeout = float(rospy.get_param(
             "~mission/no_progress_timeout_wall", 12.0))
         self.nav_progress_distance = float(rospy.get_param(
@@ -1029,6 +1033,16 @@ class MultiFloorMission:
                 improved = True
             best_distance = min(best_distance, distance)
             best_yaw_error = min(best_yaw_error, yaw_error)
+            # Close to the goal there is nothing left to improve BY the step
+            # threshold: the remaining error is smaller than the threshold
+            # itself, so demanding another nav_progress_distance of gain is
+            # unsatisfiable and the timer runs out on a robot that has
+            # essentially arrived. mf24 died exactly there -- "distance 0.46 m,
+            # yaw error 0.10 rad", one centimetre outside move_base's own
+            # 0.45 m xy tolerance, mid final yaw settle. Inside the arrival
+            # band the goal belongs to move_base and its own timeout.
+            if distance <= self.nav_arrival_band:
+                improved = True
             if improved:
                 improved_wall = time.monotonic()
             elif time.monotonic() - improved_wall >= self.nav_progress_timeout:
