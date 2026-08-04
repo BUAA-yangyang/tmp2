@@ -983,56 +983,66 @@ class MultiFloorMission:
         return lobby, threshold, car
 
     def navigate(self, target, label):
-        """Drive to a pose, and give up if the robot stops making progress.
+        """Drive to a pose, giving up only when the robot stops closing on it.
 
-        Without the watchdog this waited out nav_timeout while move_base did
-        whatever it liked. Measured on mf17 floor 2: the goal sat 0.73 m away
-        -- outside xy_goal_tolerance, so the latch never engaged -- DWA could
-        not find a translating trajectory, and emitted pure rotation for three
-        seconds straight. Heading passed through the goal yaw (error 1.0 deg at
-        t=468.0) and kept going, 200 deg in all, until wz hit the guard ceiling
-        of 1.80 and the attitude diverged; the robot then fell off the floor
-        (oracle z 5.51 -> 0.14). Spinning on the spot next to an edge is not a
-        recovery, and an unreachable goal must end the goal, not the robot.
+        The watchdog measures progress as "did either the distance to the goal
+        or the heading error to the goal improve", not "did the robot leave an
+        anchor". The anchor form killed a healthy goal on mf23: the return to
+        point A has to turn around first, and a turn moves the body very little,
+        so twelve seconds elapsed while the robot was in fact executing the task
+        -- it covered 4.34 m, commanded 38 of 42 samples, stayed level and drew
+        no complaint from move_base.
+
+        Converging-on-goal still catches what the anchor form was written for.
+        On mf17 the robot sat 0.73 m from an unreachable goal and rotated for
+        three seconds; its heading passed through the goal yaw and kept going to
+        164 deg of error while the distance never changed. Neither term
+        improved, so this fires -- before wz reaches the guard ceiling and the
+        attitude diverges.
         """
         self.emit("NAVIGATING", label, x=target.pose.position.x,
                   y=target.pose.position.y)
         goal = MoveBaseGoal(target_pose=target)
         self.move.send_goal(goal)
+        goal_yaw = yaw_of(target.pose.orientation)
         deadline = time.monotonic() + self.nav_timeout
-        anchor = self.current_pose()
-        anchor_yaw = yaw_of(anchor.pose.orientation)
-        anchor_wall = time.monotonic()
+        best_distance = float("inf")
+        best_yaw_error = float("inf")
+        improved_wall = time.monotonic()
         while time.monotonic() < deadline and not rospy.is_shutdown():
             if self.move.wait_for_result(rospy.Duration(0.2)):
                 if self.move.get_state() == 3:
                     return
                 break
             now = self.current_pose()
-            moved = math.hypot(
-                now.pose.position.x - anchor.pose.position.x,
-                now.pose.position.y - anchor.pose.position.y)
-            turned = abs(self.angle_error(
-                yaw_of(now.pose.orientation), anchor_yaw))
-            if moved >= self.nav_progress_distance:
-                anchor, anchor_yaw = now, yaw_of(now.pose.orientation)
-                anchor_wall = time.monotonic()
-            elif turned >= self.nav_progress_yaw:
-                # Rotating counts as progress, but only once per re-anchor:
-                # a robot spinning in place re-arms this forever otherwise, so
-                # the anchor yaw is advanced while the position anchor is not.
-                anchor_yaw = yaw_of(now.pose.orientation)
-                if time.monotonic() - anchor_wall < self.nav_progress_timeout:
-                    continue
-            if time.monotonic() - anchor_wall >= self.nav_progress_timeout:
+            distance = math.hypot(
+                target.pose.position.x - now.pose.position.x,
+                target.pose.position.y - now.pose.position.y)
+            yaw_error = abs(self.angle_error(
+                goal_yaw, yaw_of(now.pose.orientation)))
+            improved = False
+            if distance < best_distance - self.nav_progress_distance:
+                best_distance = distance
+                improved = True
+            if yaw_error < best_yaw_error - self.nav_progress_yaw:
+                best_yaw_error = yaw_error
+                improved = True
+            best_distance = min(best_distance, distance)
+            best_yaw_error = min(best_yaw_error, yaw_error)
+            if improved:
+                improved_wall = time.monotonic()
+            elif time.monotonic() - improved_wall >= self.nav_progress_timeout:
                 self.move.cancel_goal()
                 self.emit("NAVIGATION_NO_PROGRESS",
-                          "%s made no progress for %.0f s; abandoning the goal"
-                          % (label, self.nav_progress_timeout),
+                          "%s stopped closing on its goal for %.0f s "
+                          "(distance %.2f m, yaw error %.2f rad); abandoning it"
+                          % (label, self.nav_progress_timeout, distance,
+                             yaw_error),
                           x=now.pose.position.x, y=now.pose.position.y)
                 raise MissionFailure(
-                    "navigation %s made no progress for %.0f wall seconds"
-                    % (label, self.nav_progress_timeout))
+                    "navigation %s stopped closing on its goal for %.0f wall "
+                    "seconds (distance %.2f m, yaw error %.2f rad)"
+                    % (label, self.nav_progress_timeout, distance, yaw_error))
         state = self.move.get_state()
         self.move.cancel_goal()
         raise MissionFailure("navigation %s failed state=%d" % (label, state))
