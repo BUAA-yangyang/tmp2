@@ -25,6 +25,7 @@ from types import SimpleNamespace
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import actionlib
+from align_to_opening import opening_bearing
 from corridor_axis import (
     estimate_corridor_axis,
     generation_is_new,
@@ -32,6 +33,7 @@ from corridor_axis import (
     stamped_snapshot_can_bind,
 )
 from elevator_exit import (
+    apply_forward_speed_floor,
     bounded_exit_step,
     choose_corridor_side,
     known_free_run_in_grid,
@@ -92,9 +94,9 @@ class MultiFloorMission:
         self.floor_entry = None
         self.elevator = {}
         # Target-floor coordinates are generation-local.  Record the physical
-        # exit heading only after localization has restarted on that floor; it
-        # is then the sole directional reference for the short car exit and the
-        # later return transaction.
+        # exit heading only after three current-generation maps identify the
+        # unique opening and the body has turned to it. It is then the sole
+        # directional reference for the short car exit and later return.
         self.arrival_exit_yaws = {}
         self.elevator_candidate_first_seen = {}
         self.elevator_candidate_log_state = {}
@@ -106,6 +108,15 @@ class MultiFloorMission:
         self.elevator_template_width = None
         self.arrived_by_elevator = set()
         self.elevator_return_points = {}
+        # A is the achieved arrival pose after a floor transfer.  MoveBase may
+        # legally stop up to 0.45 m short of it, so upper-floor return computes
+        # and displays a separate point deeper inside the car before transfer.
+        self.elevator_safe_return_points = {}
+        # Upper floors have no semantic Doorway landmark by design.  Preserve
+        # the actually achieved pose just outside the car separately so return
+        # can retrace corridor -> lobby B -> in-car A instead of cutting the
+        # lobby corner with one diagonal goal aimed directly at A.
+        self.elevator_lobby_return_points = {}
         self.floor = 0
         self.state = "STARTING"
         self.event = 0
@@ -119,6 +130,13 @@ class MultiFloorMission:
         self.supervisor_state = ""
         self.supervisor_values = {}
         self.supervisor_stamp = 0.0
+        # Initialized before subscribers: a latched/nav message may arrive as
+        # soon as the subscription is created.  The real parameter values are
+        # loaded below, before the mission starts moving.
+        self.car_entry_speed_floor_active = False
+        self.car_entry_speed_floor = 0.55
+        self.car_entry_speed_floor_max_abs_yaw_rate = 0.25
+        self.car_entry_speed_floor_boost_count = 0
         self.joy_pub = rospy.Publisher("/joy", Joy, queue_size=2)
         self.behavior_cmd_pub = rospy.Publisher(
             rospy.get_param("~elevator/scan_cmd_vel_topic", "/cmd_vel_behavior"),
@@ -145,6 +163,8 @@ class MultiFloorMission:
                          self.localization_cb, queue_size=5)
         rospy.Subscriber("/a1/localization/supervisor_status", DiagnosticStatus,
                          self.supervisor_cb, queue_size=5)
+        rospy.Subscriber("/cmd_vel_nav", Twist,
+                         self.nav_cmd_cb, queue_size=1)
         self.explore = actionlib.SimpleActionClient(
             "/a1/exploration/explore_floor", ExploreFloorAction)
         self.move = actionlib.SimpleActionClient("/move_base", MoveBaseAction)
@@ -207,6 +227,21 @@ class MultiFloorMission:
             "~elevator/lobby_standoff", 0.85))
         self.car_depth = float(rospy.get_param(
             "~elevator/car_depth", 1.45))
+        self.car_entry_speed_floor = float(rospy.get_param(
+            "~elevator/car_entry_speed_floor", 0.55))
+        self.car_entry_speed_floor_max_abs_yaw_rate = float(rospy.get_param(
+            "~elevator/car_entry_speed_floor_max_abs_yaw_rate", 0.25))
+        self.upper_transfer_safe_inset = float(rospy.get_param(
+            "~elevator/upper_transfer_safe_inset", 0.40))
+        if (self.car_entry_speed_floor < 0.0 or
+                self.car_entry_speed_floor > 0.60 or
+                self.car_entry_speed_floor_max_abs_yaw_rate < 0.0 or
+                self.upper_transfer_safe_inset <= 0.0 or
+                self.upper_transfer_safe_inset > 0.60):
+            raise ValueError(
+                "elevator car-entry speed floor must be in [0.0, 0.60] and "
+                "the yaw-rate gate must be non-negative; upper transfer safe "
+                "inset must be in (0.0, 0.60]")
         self.floor0_corridor_ingress = float(rospy.get_param(
             "~entry/floor0_corridor_ingress", 7.0))
         self.stand_attempt_timeout = float(rospy.get_param(
@@ -253,6 +288,92 @@ class MultiFloorMission:
             "~upper_floor/exit_maximum_steps", 10))
         self.known_free_half_width = float(rospy.get_param(
             "~upper_floor/known_free_half_width", 0.22))
+        # The body yaw surviving a teleport is only a provisional observation,
+        # not a door direction.  On every upper floor, identify one long,
+        # footprint-wide lobe in three distinct current-generation grids and
+        # settle to it before locking arrival_exit_yaws.
+        self.opening_map_ready_wait_wall = float(rospy.get_param(
+            "~upper_floor/opening_alignment/map_ready_wait_wall", 45.0))
+        self.opening_map_ready_probe = float(rospy.get_param(
+            "~upper_floor/opening_alignment/map_ready_probe", 0.10))
+        # The Livox/rear occlusion can leave the car enclosure incomplete after
+        # a floor switch.  Before interpreting any long-ray lobe as the door,
+        # actively observe one full turn in place.  Keep this below State_RL's
+        # 0.9 rad/s training envelope and bind the scan to one map identity.
+        self.opening_active_scan_speed = float(rospy.get_param(
+            "~upper_floor/opening_alignment/active_scan_speed", 0.65))
+        self.opening_active_scan_timeout_wall = float(rospy.get_param(
+            "~upper_floor/opening_alignment/active_scan_timeout_wall", 90.0))
+        self.opening_active_scan_timeout_sim = float(rospy.get_param(
+            "~upper_floor/opening_alignment/active_scan_timeout_sim", 20.0))
+        self.opening_active_scan_no_progress_wall = float(rospy.get_param(
+            "~upper_floor/opening_alignment/active_scan_no_progress_wall",
+            15.0))
+        self.opening_active_scan_return_tolerance = float(rospy.get_param(
+            "~upper_floor/opening_alignment/active_scan_return_tolerance",
+            0.20))
+        self.opening_active_scan_settle_wall = float(rospy.get_param(
+            "~upper_floor/opening_alignment/active_scan_settle_wall", 0.5))
+        self.opening_wait_wall = float(rospy.get_param(
+            "~upper_floor/opening_alignment/wait_wall", 20.0))
+        self.opening_max_range = float(rospy.get_param(
+            "~upper_floor/opening_alignment/max_range", 2.75))
+        self.opening_ray_count = int(rospy.get_param(
+            "~upper_floor/opening_alignment/ray_count", 180))
+        self.opening_min_contrast = float(rospy.get_param(
+            "~upper_floor/opening_alignment/min_contrast", 0.80))
+        self.opening_minimum_run = float(rospy.get_param(
+            "~upper_floor/opening_alignment/minimum_run", 1.40))
+        self.opening_minimum_lobe_width = float(rospy.get_param(
+            "~upper_floor/opening_alignment/minimum_lobe_width", 0.14))
+        self.opening_maximum_lobe_width = float(rospy.get_param(
+            "~upper_floor/opening_alignment/maximum_lobe_width", 1.40))
+        self.opening_minimum_peak_advantage = float(rospy.get_param(
+            "~upper_floor/opening_alignment/minimum_peak_advantage", 0.40))
+        self.opening_stable_samples = int(rospy.get_param(
+            "~upper_floor/opening_alignment/stable_samples", 3))
+        self.opening_stable_tolerance = float(rospy.get_param(
+            "~upper_floor/opening_alignment/stable_tolerance", 0.08))
+        self.opening_maximum_correction = float(rospy.get_param(
+            "~upper_floor/opening_alignment/maximum_correction", 1.05))
+        self.opening_turn_max_speed = float(rospy.get_param(
+            "~upper_floor/opening_alignment/turn_max_speed", 0.80))
+        self.opening_turn_min_speed = float(rospy.get_param(
+            "~upper_floor/opening_alignment/turn_min_speed", 0.55))
+        self.opening_turn_gain = float(rospy.get_param(
+            "~upper_floor/opening_alignment/turn_gain", 1.40))
+        self.opening_turn_tolerance = float(rospy.get_param(
+            "~upper_floor/opening_alignment/turn_tolerance", 0.12))
+        self.opening_turn_timeout_wall = float(rospy.get_param(
+            "~upper_floor/opening_alignment/turn_timeout_wall", 30.0))
+        self.opening_turn_timeout_sim = float(rospy.get_param(
+            "~upper_floor/opening_alignment/turn_timeout_sim", 10.0))
+        self.opening_turn_settle_wall = float(rospy.get_param(
+            "~upper_floor/opening_alignment/turn_settle_wall", 0.5))
+        if (self.opening_stable_samples < 3 or
+                self.opening_ray_count < 8 or
+                self.opening_map_ready_wait_wall <= 0.0 or
+                self.opening_map_ready_probe <= 0.0 or
+                self.opening_active_scan_speed <= 0.0 or
+                self.opening_active_scan_speed > 0.80 or
+                self.opening_active_scan_timeout_wall <= 0.0 or
+                self.opening_active_scan_timeout_sim <= 0.0 or
+                self.opening_active_scan_no_progress_wall <= 0.0 or
+                self.opening_active_scan_return_tolerance <= 0.0 or
+                self.opening_active_scan_return_tolerance > 0.50 or
+                self.opening_active_scan_settle_wall < 0.0 or
+                self.opening_minimum_run <= 0.0 or
+                self.opening_minimum_run > self.opening_max_range or
+                self.opening_minimum_lobe_width <= 0.0 or
+                self.opening_maximum_lobe_width <
+                self.opening_minimum_lobe_width or
+                self.opening_maximum_correction <= 0.0 or
+                self.opening_maximum_correction > math.pi or
+                self.opening_turn_min_speed <= 0.0 or
+                self.opening_turn_max_speed < self.opening_turn_min_speed or
+                self.opening_turn_max_speed > 0.80 or
+                self.opening_turn_tolerance <= 0.0):
+            raise ValueError("invalid upper-floor opening-alignment parameters")
         # try_freeze_elevator's upper-floor branch still reads these three.
         # Their definitions were dropped when the width-based gate was removed,
         # leaving live code referencing missing attributes: any doorway with a
@@ -267,14 +388,17 @@ class MultiFloorMission:
             "~elevator/upper_door_max_distance", 2.20))
         self.car_opening_max_bearing = float(rospy.get_param(
             "~elevator/car_opening_max_bearing", 1.05))
-        # Upper bound on the exit walk, not a target: a bad side measurement
-        # must not be able to march the robot across the floor.
-        # Hand the last stretch to move_base: it is short, and the robot
-        # crossed exactly that ground on the way out.
-        self.return_handover_distance = float(rospy.get_param(
-            "~elevator/return_handover_distance", 1.20))
-        self.return_maximum_legs = int(rospy.get_param(
-            "~elevator/return_maximum_legs", 8))
+        self.upper_return_staging_tolerance = float(rospy.get_param(
+            "~elevator/upper_return_staging_tolerance", 0.60))
+        self.upper_return_heading_tolerance = float(rospy.get_param(
+            "~elevator/upper_return_heading_tolerance", 0.35))
+        if (self.upper_return_staging_tolerance <= 0.45 or
+                self.upper_return_heading_tolerance <= 0.0):
+            raise ValueError(
+                "upper return staging tolerance must exceed MoveBase's 0.45 m "
+                "tolerance and heading tolerance must be positive")
+        # Upper bound on the first-time exit walk, not a target: a bad side
+        # measurement must not be able to march the robot across the floor.
         self.exit_maximum_distance = float(rospy.get_param(
             "~elevator/exit_maximum_distance", 3.20))
         # Never declare the car cleared before at least clearing its depth.
@@ -291,6 +415,8 @@ class MultiFloorMission:
             "~upper_floor/corridor_run_margin", 0.6))
         self.corridor_minimum_advantage = float(rospy.get_param(
             "~upper_floor/corridor_minimum_advantage", 0.40))
+        self.corridor_entry_yaw_tolerance = float(rospy.get_param(
+            "~upper_floor/corridor_entry_yaw_tolerance", 0.50))
         self.corridor_map_wait = float(rospy.get_param(
             "~upper_floor/corridor_map_wait_wall", 30.0))
         self.corridor_probe_max_range = float(rospy.get_param(
@@ -356,6 +482,37 @@ class MultiFloorMission:
     def controller_state_cb(self, message):
         with self.lock:
             self.controller_state = str(message.data).strip().lower()
+
+    def nav_cmd_cb(self, message):
+        """Own the existing behavior channel only during armed car entry.
+
+        DWA still chooses the path and yaw correction.  This callback merely
+        prevents its forward command from collapsing into the empirically
+        impassable 0.35--0.47 m/s band at the six-centimetre sill.  Reverse,
+        stop and meaningful turn/recovery commands are never boosted.
+        """
+        with self.lock:
+            if not self.car_entry_speed_floor_active:
+                return
+            command = copy.deepcopy(message)
+            command.linear.x, boosted = apply_forward_speed_floor(
+                command.linear.x,
+                command.angular.z,
+                self.car_entry_speed_floor,
+                self.car_entry_speed_floor_max_abs_yaw_rate,
+            )
+            if boosted:
+                self.car_entry_speed_floor_boost_count += 1
+                rospy.loginfo_throttle(
+                    1.0,
+                    "ELEVATOR_SILL_SPEED_FLOOR nav_vx=%.3f -> behavior_vx=%.3f "
+                    "wz=%.3f",
+                    message.linear.x, command.linear.x, command.angular.z)
+            # Publish while holding the same lock used to disarm the gate.  A
+            # callback that observed active=True therefore cannot race a final
+            # non-zero behavior command after drive_straight_into_car publishes
+            # its shutdown zero.
+            self.behavior_cmd_pub.publish(command)
 
     def localization_cb(self, message):
         values = {item.key: item.value for item in message.values}
@@ -1106,7 +1263,13 @@ class MultiFloorMission:
         goal.floor_id = floor
         goal.entry_mode = (goal.LEGACY_MAIN_ENTRANCE if main_entrance
                            else goal.ALREADY_AT_FLOOR_ENTRY)
-        goal.completion_mode = goal.STAY_ON_FLOOR
+        # F0 must remain at its exploration endpoint so mission_manager can
+        # approach the independently localized elevator. Upper-floor actions
+        # start at the achieved main-corridor point C; use the action's formal
+        # verified-return contract so success means the robot is back at C,
+        # not merely stopped at an arbitrary exploration endpoint.
+        goal.completion_mode = (goal.STAY_ON_FLOOR if main_entrance
+                                else goal.LEGACY_RETURN_TO_START)
         goal.target_coverage_ratio = 0.80
         goal.timeout_s = 0.0
         goal.floor_entry_pose = copy.deepcopy(entry)
@@ -1127,8 +1290,20 @@ class MultiFloorMission:
             if self.explore.wait_for_result(rospy.Duration(0.5)):
                 result = self.explore.get_result()
                 if result and result.success:
+                    if not main_entrance:
+                        achieved = self.current_pose()
+                        entry_error = math.hypot(
+                            achieved.pose.position.x - entry.pose.position.x,
+                            achieved.pose.position.y - entry.pose.position.y)
+                        if (achieved.header.frame_id != entry.header.frame_id or
+                                entry_error > self.nav_arrival_band):
+                            raise MissionFailure(
+                                "floor %d ExploreFloor reported return success "
+                                "but finished %.2f m from entry point C" %
+                                (floor, entry_error))
                     self.emit("FLOOR_COMPLETE", result.message,
-                              coverage=result.final_coverage_ratio)
+                              coverage=result.final_coverage_ratio,
+                              completion_mode=int(goal.completion_mode))
                     return
                 raise MissionFailure("floor %d exploration failed: %s" %
                                      (floor, result.message if result else "no result"))
@@ -1195,6 +1370,10 @@ class MultiFloorMission:
             self.floor_grid_accept_after_ros = rospy.Time.now()
             self.wall_message = None
             self.doorways = None
+        # The odom coordinates below now belong to another localization
+        # generation.  Clear source-floor RViz anchors immediately; current-
+        # floor A/B markers will be republished when their poses are measured.
+        self.publish_markers()
         rospy.wait_for_service("/a1/localization/reinitialize", timeout=10.0)
         restart = self.reinitialize()
         if not restart.success:
@@ -1235,14 +1414,18 @@ class MultiFloorMission:
             self.floor_grid_accept_after_ros = rospy.Time.now()
         arrival = self.current_pose()
         arrival_yaw = yaw_of(arrival.pose.orientation)
-        with self.lock:
-            self.arrival_exit_yaws[target] = arrival_yaw
+        # Do not call this the exit direction. mf32 arrived on floor 1 with the
+        # body 37.7 degrees away from the physical opening; storing this yaw and
+        # immediately comparing it with itself made the old exit check a
+        # tautology. exit_upper_floor_without_doorway() now locks an exit yaw
+        # only after three fresh maps identify the unique opening and the body
+        # has turned to it.
         after = arrival.pose.position.z
         self.emit("FLOOR_SWITCH_VERIFIED",
                   "localization and mapping restarted after elevator discontinuity",
                   source_floor=old_floor, target_floor=target,
                   z_before=before, z_after=after,
-                  arrival_exit_yaw=arrival_yaw)
+                  provisional_arrival_yaw=arrival_yaw)
 
     def supervisor_running_after(self, restart_stamp, previous_generation):
         """Observe completion of the supervisor's asynchronous restart."""
@@ -1429,6 +1612,326 @@ class MultiFloorMission:
             return None
         return grid
 
+    @staticmethod
+    def circular_mean(angles):
+        sin_sum = sum(math.sin(angle) for angle in angles)
+        cos_sum = sum(math.cos(angle) for angle in angles)
+        return math.atan2(sin_sum, cos_sum)
+
+    def turn_to_upper_floor_opening(self, floor, target_yaw):
+        """Settle an in-place behavior turn to a map-measured opening."""
+        start_yaw = yaw_of(self.current_pose().pose.orientation)
+        deadline = time.monotonic() + self.opening_turn_timeout_wall
+        start_ros = rospy.Time.now()
+        settled_since = None
+        self.emit(
+            "ELEVATOR_OPENING_TURN",
+            "turning in place toward the unique current-map opening",
+            floor=floor, start_yaw=start_yaw, target_yaw=target_yaw,
+            correction=self.angle_error(target_yaw, start_yaw))
+        try:
+            while time.monotonic() < deadline and not rospy.is_shutdown():
+                now_ros = rospy.Time.now()
+                if (now_ros >= start_ros and
+                        (now_ros - start_ros).to_sec() >
+                        self.opening_turn_timeout_sim):
+                    break
+                current_yaw = yaw_of(self.current_pose().pose.orientation)
+                error = self.angle_error(target_yaw, current_yaw)
+                if abs(error) <= self.opening_turn_tolerance:
+                    self.behavior_cmd_pub.publish(Twist())
+                    if settled_since is None:
+                        settled_since = time.monotonic()
+                    if (time.monotonic() - settled_since >=
+                            self.opening_turn_settle_wall):
+                        return current_yaw
+                else:
+                    settled_since = None
+                    command = Twist()
+                    magnitude = min(
+                        self.opening_turn_max_speed,
+                        max(self.opening_turn_min_speed,
+                            self.opening_turn_gain * abs(error)))
+                    command.angular.z = math.copysign(magnitude, error)
+                    self.behavior_cmd_pub.publish(command)
+                time.sleep(0.05)
+        finally:
+            # The behavior input outranks navigation in twist_mux.  Clear it
+            # repeatedly so success, failure or shutdown cannot leave a stale
+            # angular command owning the controller.
+            for _ in range(5):
+                self.behavior_cmd_pub.publish(Twist())
+                time.sleep(0.02)
+        raise MissionFailure(
+            "floor %d timed out turning toward the measured elevator opening"
+            % floor)
+
+    def actively_scan_upper_floor_elevator(self, floor):
+        """Observe the complete car enclosure before classifying its opening.
+
+        A start/end yaw comparison cannot prove a full turn.  Accumulate signed
+        wrapped increments instead, so oscillation does not masquerade as scan
+        progress.  Any mapping-identity change revokes the observation.
+        """
+        identity = self.current_mapping_identity()
+        if identity[0] < 0 or identity[1] < 0:
+            raise MissionFailure(
+                "floor %d has no valid mapping identity for active opening scan"
+                % floor)
+        start_yaw = yaw_of(self.current_pose().pose.orientation)
+        previous_yaw = start_yaw
+        accumulated_yaw = 0.0
+        best_progress = 0.0
+        last_progress_wall = time.monotonic()
+        deadline = time.monotonic() + self.opening_active_scan_timeout_wall
+        start_ros = rospy.Time.now()
+        completed = False
+        self.emit(
+            "ELEVATOR_OPENING_ACTIVE_SCAN",
+            "turning once in place before interpreting opening geometry",
+            floor=floor, start_yaw=start_yaw,
+            angular_speed=self.opening_active_scan_speed,
+            localization_generation=identity[0], floor_session_id=identity[1])
+        try:
+            while time.monotonic() < deadline and not rospy.is_shutdown():
+                if self.current_mapping_identity() != identity:
+                    raise MissionFailure(
+                        "floor %d mapping identity changed during active "
+                        "opening scan" % floor)
+                now_ros = rospy.Time.now()
+                if (now_ros >= start_ros and
+                        (now_ros - start_ros).to_sec() >
+                        self.opening_active_scan_timeout_sim):
+                    break
+                current_yaw = yaw_of(self.current_pose().pose.orientation)
+                delta = self.angle_error(current_yaw, previous_yaw)
+                # At 20 Hz and <=0.8 rad/s, a legitimate increment is far below
+                # this bound.  A larger jump is localization discontinuity, not
+                # evidence that the sensor observed the intervening headings.
+                if abs(delta) > 0.50:
+                    raise MissionFailure(
+                        "floor %d localization yaw jumped %.1f deg during "
+                        "active opening scan" % (floor, math.degrees(delta)))
+                accumulated_yaw += delta
+                previous_yaw = current_yaw
+                if accumulated_yaw >= 2.0 * math.pi:
+                    completed = True
+                    break
+                if accumulated_yaw >= best_progress + 0.05:
+                    best_progress = accumulated_yaw
+                    last_progress_wall = time.monotonic()
+                elif (time.monotonic() - last_progress_wall >
+                      self.opening_active_scan_no_progress_wall):
+                    raise MissionFailure(
+                        "floor %d made no yaw progress during active opening "
+                        "scan (%.1f/360.0 deg)" %
+                        (floor, math.degrees(accumulated_yaw)))
+                command = Twist()
+                command.angular.z = self.opening_active_scan_speed
+                self.behavior_cmd_pub.publish(command)
+                time.sleep(0.05)
+        finally:
+            # /cmd_vel_behavior outranks navigation.  Always relinquish it,
+            # including identity changes, timeouts and shutdown.
+            for _ in range(5):
+                self.behavior_cmd_pub.publish(Twist())
+                time.sleep(0.02)
+            time.sleep(self.opening_active_scan_settle_wall)
+
+        if not completed:
+            raise MissionFailure(
+                "floor %d timed out during active opening scan at %.1f/360.0 deg"
+                % (floor, math.degrees(accumulated_yaw)))
+        if self.current_mapping_identity() != identity:
+            raise MissionFailure(
+                "floor %d mapping identity changed after active opening scan"
+                % floor)
+        achieved_yaw = yaw_of(self.current_pose().pose.orientation)
+        return_error = self.angle_error(start_yaw, achieved_yaw)
+        if abs(return_error) > self.opening_active_scan_return_tolerance:
+            raise MissionFailure(
+                "floor %d active opening scan ended %.1f deg from its start yaw"
+                % (floor, math.degrees(abs(return_error))))
+        self.emit(
+            "ELEVATOR_OPENING_ACTIVE_SCAN_READY",
+            "one identity-bound full in-place observation completed",
+            floor=floor, accumulated_yaw=accumulated_yaw,
+            start_yaw=start_yaw, achieved_yaw=achieved_yaw,
+            return_error=return_error,
+            localization_generation=identity[0], floor_session_id=identity[1])
+
+    def align_to_upper_floor_opening(self, floor):
+        """Wait for a decidable footprint, then lock one opening on three grids."""
+        self.actively_scan_upper_floor_elevator(floor)
+        readiness_deadline = (
+            time.monotonic() + self.opening_map_ready_wait_wall)
+        detection_deadline = None
+        ready_identity = None
+        last_grid_stamp = None
+        stable_identity = None
+        stable_bearings = []
+        last_reason = "no fresh current-generation map"
+        last_diagnostics = {}
+        target_yaw = None
+
+        while not rospy.is_shutdown():
+            now_wall = time.monotonic()
+            if ready_identity is None:
+                if now_wall >= readiness_deadline:
+                    break
+            elif now_wall >= detection_deadline:
+                break
+            pose = self.current_pose()
+            identity_before = self.current_mapping_identity()
+            grid = self.fresh_floor_grid(pose)
+            identity_after = self.current_mapping_identity()
+            if (grid is None or identity_before != identity_after or
+                    identity_after[0] < 0 or identity_after[1] < 0):
+                time.sleep(0.05)
+                continue
+            if stable_identity != identity_after:
+                stable_identity = identity_after
+                stable_bearings = []
+                last_grid_stamp = None
+                if (ready_identity is not None and
+                        ready_identity != identity_after):
+                    ready_identity = None
+                    detection_deadline = None
+            grid_stamp = grid.header.stamp.to_nsec()
+            if grid_stamp <= 0 or grid_stamp == last_grid_stamp:
+                time.sleep(0.05)
+                continue
+            last_grid_stamp = grid_stamp
+
+            if ready_identity is None:
+                map_ready_run = known_free_run_in_grid(
+                    grid, pose.pose.position.x, pose.pose.position.y,
+                    yaw_of(pose.pose.orientation),
+                    self.opening_map_ready_probe,
+                    self.known_free_occupied_threshold,
+                    half_width=self.known_free_half_width)
+                if (map_ready_run + 1e-6 <
+                        self.opening_map_ready_probe):
+                    last_reason = (
+                        "current footprint strip is not known-free "
+                        "(%.2f/%.2f m)" %
+                        (map_ready_run, self.opening_map_ready_probe))
+                    rospy.loginfo_throttle(
+                        1.0,
+                        "floor %d opening map readiness waiting: %s",
+                        floor, last_reason)
+                    time.sleep(0.05)
+                    continue
+                ready_identity = identity_after
+                detection_deadline = (
+                    time.monotonic() + self.opening_wait_wall)
+                stable_bearings = []
+                self.emit(
+                    "ELEVATOR_OPENING_MAP_READY",
+                    "current-generation footprint strip is known-free; "
+                    "starting bounded stable opening detection",
+                    localization_generation=ready_identity[0],
+                    floor_session_id=ready_identity[1],
+                    grid_stamp=grid_stamp,
+                    proven_run=map_ready_run,
+                    required_run=self.opening_map_ready_probe)
+
+            diagnostics = {}
+            bearing = opening_bearing(
+                grid, pose.pose.position.x, pose.pose.position.y,
+                occupied_threshold=self.known_free_occupied_threshold,
+                max_range=self.opening_max_range,
+                ray_count=self.opening_ray_count,
+                min_contrast=self.opening_min_contrast,
+                half_width=self.known_free_half_width,
+                minimum_open_run=self.opening_minimum_run,
+                minimum_lobe_width=self.opening_minimum_lobe_width,
+                maximum_lobe_width=self.opening_maximum_lobe_width,
+                minimum_peak_advantage=self.opening_minimum_peak_advantage,
+                diagnostics=diagnostics)
+            last_diagnostics = diagnostics
+            if bearing is None:
+                stable_bearings = []
+                last_reason = diagnostics.get("reason", "no unique opening")
+                rospy.loginfo_throttle(
+                    1.0,
+                    "floor %d opening alignment waiting: %s raw_lobes=%d "
+                    "plausible_lobes=%d",
+                    floor, last_reason,
+                    len(diagnostics.get("raw_lobes", [])),
+                    len(diagnostics.get("lobes", [])))
+                time.sleep(0.05)
+                continue
+
+            correction = self.angle_error(
+                bearing, yaw_of(pose.pose.orientation))
+            if abs(correction) > self.opening_maximum_correction:
+                stable_bearings = []
+                last_reason = "opening correction %.1f deg exceeds %.1f deg" % (
+                    math.degrees(abs(correction)),
+                    math.degrees(self.opening_maximum_correction))
+                rospy.loginfo_throttle(
+                    1.0, "floor %d opening alignment waiting: %s",
+                    floor, last_reason)
+                time.sleep(0.05)
+                continue
+
+            if stable_bearings:
+                reference = self.circular_mean(stable_bearings)
+                if (abs(self.angle_error(bearing, reference)) >
+                        self.opening_stable_tolerance):
+                    stable_bearings = [bearing]
+                else:
+                    stable_bearings.append(bearing)
+            else:
+                stable_bearings = [bearing]
+            target_yaw = self.circular_mean(stable_bearings)
+            best_lobes = diagnostics.get("lobes", [])
+            best = best_lobes[0] if best_lobes else {}
+            rospy.loginfo(
+                "ELEVATOR_OPENING_SAMPLE floor=%d stable=%d/%d stamp=%d "
+                "bearing=%.1fdeg correction=%.1fdeg run=%.2f width=%.1fdeg",
+                floor, len(stable_bearings), self.opening_stable_samples,
+                grid_stamp, math.degrees(bearing), math.degrees(correction),
+                best.get("peak_run", 0.0),
+                math.degrees(best.get("width", 0.0)))
+            if len(stable_bearings) >= self.opening_stable_samples:
+                break
+            time.sleep(0.05)
+
+        if ready_identity is None:
+            raise MissionFailure(
+                "floor %d did not produce a current-generation known-free "
+                "footprint strip within %.0f wall seconds (%s)" %
+                (floor, self.opening_map_ready_wait_wall, last_reason))
+        if (target_yaw is None or
+                len(stable_bearings) < self.opening_stable_samples):
+            raise MissionFailure(
+                "floor %d did not produce %d agreeing current-map opening "
+                "samples within %.0f wall seconds (%s; raw lobes %d, "
+                "plausible lobes %d)" % (
+                    floor, self.opening_stable_samples,
+                    self.opening_wait_wall, last_reason,
+                    len(last_diagnostics.get("raw_lobes", [])),
+                    len(last_diagnostics.get("lobes", []))))
+
+        initial_yaw = yaw_of(self.current_pose().pose.orientation)
+        achieved_yaw = self.turn_to_upper_floor_opening(floor, target_yaw)
+        final_error = self.angle_error(target_yaw, achieved_yaw)
+        with self.lock:
+            self.arrival_exit_yaws[floor] = target_yaw
+        self.emit(
+            "ELEVATOR_OPENING_ALIGNED",
+            "three distinct current-generation maps agreed; body settled "
+            "toward the unique opening",
+            samples=len(stable_bearings), measured_yaw=target_yaw,
+            localization_generation=stable_identity[0],
+            floor_session_id=stable_identity[1],
+            initial_yaw=initial_yaw, achieved_yaw=achieved_yaw,
+            correction=self.angle_error(target_yaw, initial_yaw),
+            final_error=final_error)
+        return target_yaw
+
     def car_lateral_clearances(self, pose=None):
         """Free distance to left and right of the body, from the published grid.
 
@@ -1448,6 +1951,30 @@ class MultiFloorMission:
             here.pose.position.x, here.pose.position.y,
             heading - 0.5 * math.pi, self.recenter_probe_range, here)
         return left, right
+
+    def arm_car_entry_speed_floor(self, floor, context):
+        with self.lock:
+            self.car_entry_speed_floor_boost_count = 0
+            self.car_entry_speed_floor_active = True
+        rospy.loginfo(
+            "ELEVATOR_SILL_SPEED_FLOOR_ARMED floor=%d context=%s "
+            "minimum_vx=%.3f maximum_abs_wz=%.3f",
+            floor, context, self.car_entry_speed_floor,
+            self.car_entry_speed_floor_max_abs_yaw_rate)
+
+    def disarm_car_entry_speed_floor(self, floor, context):
+        with self.lock:
+            self.car_entry_speed_floor_active = False
+            boosted = self.car_entry_speed_floor_boost_count
+        # behavior outranks navigation in twist_mux.  Explicitly relinquish it
+        # with zero so an exception cannot leave a boosted command alive until
+        # the mux timeout.
+        for _ in range(5):
+            self.behavior_cmd_pub.publish(Twist())
+            time.sleep(0.02)
+        rospy.loginfo(
+            "ELEVATOR_SILL_SPEED_FLOOR_DISARMED floor=%d context=%s "
+            "boosted_samples=%d", floor, context, boosted)
 
     def drive_straight_into_car(self, floor):
         """Enter the car by going straight in from the threshold.
@@ -1473,9 +2000,14 @@ class MultiFloorMission:
         """
         here = self.current_pose()
         heading = yaw_of(here.pose.orientation)
-        advanced = self.advance_map_checked(
-            heading, self.car_depth,
-            "floor %d straight car entry" % floor, floor)
+        context = "floor-zero map-checked entry"
+        self.arm_car_entry_speed_floor(floor, context)
+        try:
+            advanced = self.advance_map_checked(
+                heading, self.car_depth,
+                "floor %d straight car entry" % floor, floor)
+        finally:
+            self.disarm_car_entry_speed_floor(floor, context)
         left, right = self.car_lateral_clearances()
         self.emit("CAR_ENTRY_STRAIGHT",
                   "entered %.2f m of %.2f m straight along the threshold "
@@ -1484,46 +2016,178 @@ class MultiFloorMission:
                   advanced=advanced, left=left, right=right)
         return advanced
 
-    def travel_to_map_checked(self, target, label, floor):
-        """Walk to a pose in map-proven steps, re-aiming as it goes.
+    def enter_upper_floor_car_from_lobby(self, floor, point_a, point_b):
+        """Retrace B->A continuously, then stop safely beyond A in the car.
 
-        advance_map_checked holds one bearing; a return leg needs the bearing
-        recomputed as the robot closes, so this wraps it.
+        A and B are achieved poses from this localization generation. The robot
+        already traversed A->B while leaving the car, so that exact reverse
+        segment is stronger safety evidence than a short current-grid ray that
+        ends at the sill. mf35 split B->A into 0.82/0.65/0.65 m goals; every
+        final-goal command remained below 0.55 m/s and the robot stopped at the
+        six-centimetre threshold. Preserve acceleration distance by keeping
+        this one measured axis continuous and arm the same bounded speed floor
+        used by floor-zero car entry.
 
-        Why the return leg needs this at all: mf30 fell off floor 2 on the way
-        back to point A. The frames are unambiguous -- z dropped 5.47 -> 5.32
-        while roll and pitch were still under a degree, and only then did the
-        attitude diverge, so the robot walked off an edge rather than clipping
-        a wall. The grid said free the whole way, including the sample 0.3 s
-        before the drop, because floor_mapping discards returns more than
-        ground_band_below beneath the floor plane: past an edge there is no
-        marking at all, so the cells stay UNKNOWN, and an unknown cell is not
-        an obstacle to a costmap. Only a check that treats unknown as
-        impassable catches it, which is what known_free_run does and what a
-        bare navigate() does not. The exit and corridor legs were given that
-        check after mf22; this leg was not, and it is where mf30 fell.
+        mf37 exposed a second tolerance failure: MoveBase accepted a pose 0.361 m
+        short of A.  The base was only about 0.26 m inside the opening and rolled
+        96 degrees when the simulator moved the car.  The successful floor-zero
+        transfer was about 0.38 m deeper.  Therefore A remains the generation-
+        local arrival reference while A_safe adds a measured inward inset.  The
+        postcondition checks projection past the original A plane, rather than
+        treating a broad Euclidean goal tolerance as proof of safe occupancy.
         """
-        for leg in range(self.return_maximum_legs):
-            here = self.current_pose()
-            dx = target.pose.position.x - here.pose.position.x
-            dy = target.pose.position.y - here.pose.position.y
-            distance = math.hypot(dx, dy)
-            if distance <= self.return_handover_distance:
-                # Close enough that move_base's own approach is short and the
-                # remaining ground has been crossed already on the way out.
-                self.navigate(target, "%s final approach" % label)
-                return True
-            bearing = math.atan2(dy, dx)
-            advanced = self.advance_map_checked(
-                bearing, distance - self.return_handover_distance,
-                "%s leg %d" % (label, leg + 1), floor)
-            if advanced < self.exit_minimum_progress:
-                raise MissionFailure(
-                    "%s stalled %.2f m short: the map proves no further "
-                    "known-free ground toward the target" % (label, distance))
-        raise MissionFailure(
-            "%s did not arrive within %d map-checked legs"
-            % (label, self.return_maximum_legs))
+        here = self.current_pose()
+        if (here.header.frame_id != point_a.header.frame_id or
+                here.header.frame_id != point_b.header.frame_id):
+            raise MissionFailure(
+                "floor %d upper return A/B frame does not match current pose"
+                % floor)
+        staging_error = math.hypot(
+            here.pose.position.x - point_b.pose.position.x,
+            here.pose.position.y - point_b.pose.position.y)
+        if staging_error > self.upper_return_staging_tolerance:
+            raise MissionFailure(
+                "floor %d is %.2f m from lobby point B before continuous "
+                "car entry (limit %.2f m)" %
+                (floor, staging_error, self.upper_return_staging_tolerance))
+
+        ab_dx = point_a.pose.position.x - point_b.pose.position.x
+        ab_dy = point_a.pose.position.y - point_b.pose.position.y
+        ab_distance = math.hypot(ab_dx, ab_dy)
+        if not (self.exit_minimum_distance <= ab_distance <=
+                self.exit_maximum_distance):
+            raise MissionFailure(
+                "floor %d measured A-B car segment %.2f m is outside "
+                "[%.2f, %.2f] m" %
+                (floor, ab_distance, self.exit_minimum_distance,
+                 self.exit_maximum_distance))
+        ab_bearing = math.atan2(ab_dy, ab_dx)
+        recorded_heading_error = abs(self.angle_error(
+            ab_bearing, yaw_of(point_b.pose.orientation)))
+        current_bearing = math.atan2(
+            point_a.pose.position.y - here.pose.position.y,
+            point_a.pose.position.x - here.pose.position.x)
+        current_heading_error = abs(self.angle_error(
+            current_bearing, ab_bearing))
+        if (recorded_heading_error > self.upper_return_heading_tolerance or
+                current_heading_error > self.upper_return_heading_tolerance):
+            raise MissionFailure(
+                "floor %d A-B entry geometry is inconsistent "
+                "(recorded %.1f deg, current %.1f deg)" %
+                (floor, math.degrees(recorded_heading_error),
+                 math.degrees(current_heading_error)))
+
+        safe_point = copy.deepcopy(point_a)
+        safe_point.header.stamp = rospy.Time.now()
+        safe_point.pose.position.x += (
+            self.upper_transfer_safe_inset * math.cos(ab_bearing))
+        safe_point.pose.position.y += (
+            self.upper_transfer_safe_inset * math.sin(ab_bearing))
+        safe_distance = ab_distance + self.upper_transfer_safe_inset
+        with self.lock:
+            self.elevator_safe_return_points[floor] = copy.deepcopy(safe_point)
+        self.publish_markers()
+
+        self.emit(
+            "ELEVATOR_CAR_ENTRY_CONTINUOUS",
+            "entering from lobby B through arrival anchor A to A_safe as one "
+            "%.2f m goal (%.2f m inward safety inset) with %.2f m/s speed "
+            "floor" % (safe_distance, self.upper_transfer_safe_inset,
+                       self.car_entry_speed_floor),
+            distance=safe_distance, measured_ab_distance=ab_distance,
+            safe_inset=self.upper_transfer_safe_inset,
+            staging_error=staging_error,
+            x=safe_point.pose.position.x, y=safe_point.pose.position.y)
+        context = "upper-floor continuous B-to-A entry"
+        self.arm_car_entry_speed_floor(floor, context)
+        try:
+            self.navigate(
+                safe_point,
+                "floor %d continuous elevator entry from point B through "
+                "point A to point A_safe" % floor)
+        finally:
+            self.disarm_car_entry_speed_floor(floor, context)
+
+        achieved = self.current_pose()
+        arrival_error = math.hypot(
+            achieved.pose.position.x - safe_point.pose.position.x,
+            achieved.pose.position.y - safe_point.pose.position.y)
+        if arrival_error > self.upper_return_staging_tolerance:
+            raise MissionFailure(
+                "floor %d continuous car entry stopped %.2f m from A_safe"
+                % (floor, arrival_error))
+        achieved_from_b_x = (
+            achieved.pose.position.x - point_b.pose.position.x)
+        achieved_from_b_y = (
+            achieved.pose.position.y - point_b.pose.position.y)
+        inward_progress = (
+            achieved_from_b_x * math.cos(ab_bearing) +
+            achieved_from_b_y * math.sin(ab_bearing))
+        lateral_error = abs(
+            -achieved_from_b_x * math.sin(ab_bearing) +
+            achieved_from_b_y * math.cos(ab_bearing))
+        if inward_progress < ab_distance:
+            raise MissionFailure(
+                "floor %d MoveBase accepted A_safe while still %.2f m short "
+                "of the original in-car A plane" %
+                (floor, ab_distance - inward_progress))
+        self.emit("ELEVATOR_CAR_ENTRY_CONTINUOUS_READY",
+                  "continuous B-to-A_safe entry passed the original in-car "
+                  "A plane",
+                  arrival_error=arrival_error,
+                  inward_progress=inward_progress,
+                  required_inward_progress=ab_distance,
+                  lateral_error=lateral_error)
+
+    def return_upper_floor_over_traversed_segments(self, floor, entry,
+                                                   point_a, point_b):
+        """Return over measured C->B->A topology without distance stepping.
+
+        ExploreFloor's verified-return mode owns arbitrary endpoint->C motion.
+        This method only reverses the two achieved straight segments used on
+        ingress: B->C along the selected corridor, then A->B through the car
+        opening. Their lengths come from current-session poses, not step-size
+        policy. The B->A sill segment has its own scoped speed floor.
+        """
+        here = self.current_pose()
+        poses = (entry, point_a, point_b)
+        if any(pose.header.frame_id != here.header.frame_id for pose in poses):
+            raise MissionFailure(
+                "floor %d C/B/A return frames do not match current pose" % floor)
+        entry_error = math.hypot(
+            here.pose.position.x - entry.pose.position.x,
+            here.pose.position.y - entry.pose.position.y)
+        if entry_error > self.nav_arrival_band:
+            raise MissionFailure(
+                "floor %d is %.2f m from verified entry point C before "
+                "traversed-segment return" % (floor, entry_error))
+
+        cb_dx = point_b.pose.position.x - entry.pose.position.x
+        cb_dy = point_b.pose.position.y - entry.pose.position.y
+        cb_distance = math.hypot(cb_dx, cb_dy)
+        cb_bearing = math.atan2(cb_dy, cb_dx)
+        expected_return_bearing = yaw_of(entry.pose.orientation) + math.pi
+        cb_heading_error = abs(self.angle_error(
+            cb_bearing, expected_return_bearing))
+        if (not math.isfinite(cb_distance) or
+                cb_distance < self.corridor_minimum_run or
+                cb_heading_error > self.corridor_entry_yaw_tolerance):
+            raise MissionFailure(
+                "floor %d measured C-B segment is inconsistent "
+                "(distance %.2f m, heading error %.1f deg)" %
+                (floor, cb_distance, math.degrees(cb_heading_error)))
+
+        self.emit(
+            "ELEVATOR_LOBBY_RETURN_CONTINUOUS",
+            "reversing the previously traversed C-to-B corridor segment as "
+            "one %.2f m goal" % cb_distance,
+            distance=cb_distance, entry_error=entry_error,
+            x=point_b.pose.position.x, y=point_b.pose.position.y)
+        self.navigate(
+            point_b,
+            "floor %d continuous return from entry point C to lobby point B"
+            % floor)
+        self.enter_upper_floor_car_from_lobby(floor, point_a, point_b)
 
     def known_free_run(self, x, y, bearing, max_range, pose=None):
         """How far the published grid is known-free along a bearing.
@@ -1540,7 +2204,7 @@ class MultiFloorMission:
             self.known_free_half_width)
 
     def advance_map_checked(self, bearing, distance, label, floor,
-                            step_maximum=None):
+                            step_maximum=None, minimum_goal=None):
         """Walk a bearing in steps, re-proving the map before every one.
 
         The exit-from-car loop already worked this way and mf22 crossed the
@@ -1556,6 +2220,10 @@ class MultiFloorMission:
         Returns the distance actually advanced along ``bearing``.
         """
         step_maximum = step_maximum or self.exit_step_maximum
+        minimum_goal = (self.exit_minimum_goal if minimum_goal is None else
+                        minimum_goal)
+        if minimum_goal <= 0.0:
+            raise ValueError("map-checked minimum goal must be positive")
         start = self.current_pose()
         origin_x = start.pose.position.x
         origin_y = start.pose.position.y
@@ -1575,14 +2243,14 @@ class MultiFloorMission:
             while not rospy.is_shutdown() and time.monotonic() < deadline:
                 probe_range = min(
                     step_maximum + self.exit_goal_margin,
-                    max(self.exit_minimum_goal + self.exit_goal_margin,
+                    max(minimum_goal + self.exit_goal_margin,
                         remaining + self.exit_goal_margin))
                 free_run = self.known_free_run(
                     here.pose.position.x, here.pose.position.y,
                     bearing, probe_range, here)
                 step = bounded_exit_step(
                     remaining, free_run, step_maximum,
-                    self.exit_minimum_goal, self.exit_goal_margin)
+                    minimum_goal, self.exit_goal_margin)
                 if step > 0.0:
                     break
                 rospy.loginfo_throttle(
@@ -1623,28 +2291,23 @@ class MultiFloorMission:
         return advanced
 
     def exit_upper_floor_without_doorway(self, floor):
-        """Execute option A: preserved heading exit, then map-probed corridor.
+        """Execute option A: measured-opening exit, then map-probed corridor.
 
-        No upper-floor semantic doorway is required.  The robot arrives facing
-        the physical opening, and the freshly restarted localization expresses
-        that heading in the new generation.  It advances in short goals only
-        when a footprint-width strip is fresh and known-free.  Once clear by
-        ``car_depth + lobby_standoff``, perpendicular probes select the corridor
-        direction.  Weak, stale or ambiguous evidence fails closed in the car
+        No upper-floor semantic doorway or building coordinate is required.
+        Three current-generation maps must expose one unique, footprint-wide
+        long opening; the body turns to that measured bearing before moving.
+        It then advances only when a footprint-width strip is fresh and
+        known-free.  Weak, stale or ambiguous evidence fails closed in the car
         or lobby instead of falling back to fixed 2 m / 95 deg / 5 m motion.
         """
+        yaw_out = self.align_to_upper_floor_opening(floor)
         start = self.current_pose()
         frame = start.header.frame_id
-        with self.lock:
-            yaw_out = self.arrival_exit_yaws.get(floor)
-        if yaw_out is None:
-            raise MissionFailure(
-                "floor %d has no generation-local arrival exit heading" % floor)
         current_yaw = yaw_of(start.pose.orientation)
         yaw_error = abs(self.angle_error(yaw_out, current_yaw))
-        if yaw_error > self.transfer_turn_tolerance:
+        if yaw_error > self.opening_turn_tolerance:
             raise MissionFailure(
-                "floor %d arrival heading drifted %.1f deg before exit"
+                "floor %d measured opening heading drifted %.1f deg before exit"
                 % (floor, math.degrees(yaw_error)))
 
         # Point A is the actual post-relocalization car pose, not a door-derived
@@ -1660,6 +2323,7 @@ class MultiFloorMission:
                   "locked point A at the achieved generation-local arrival pose",
                   x=point_a.pose.position.x, y=point_a.pose.position.y,
                   exit_yaw=yaw_out)
+        self.publish_markers()
 
         # "Out of the car" is observable; 2.30 m was an assumption.
         #
@@ -1754,6 +2418,23 @@ class MultiFloorMission:
                   % (advanced, steps),
                   advanced=advanced, required=required_clearance)
 
+        # Point B is the achieved pose just outside the car.  It is the upper-
+        # floor equivalent of floor zero's measured lobby/threshold staging:
+        # the outbound A->B segment is known to cross the only opening, so the
+        # return must first regain B and only then command B->A.  Never infer B
+        # from a scene coordinate or from the later main-corridor endpoint.
+        lobby = self.current_pose()
+        point_b = self.make_pose(
+            lobby.pose.position.x, lobby.pose.position.y,
+            yaw_out + math.pi, frame)
+        with self.lock:
+            self.elevator_lobby_return_points[floor] = copy.deepcopy(point_b)
+        self.emit("ELEVATOR_LOBBY_RETURN_POINT_LOCKED",
+                  "locked point B at the achieved pose just outside the car",
+                  x=point_b.pose.position.x, y=point_b.pose.position.y,
+                  entry_yaw=yaw_out + math.pi)
+        self.publish_markers()
+
         # Probe both perpendicular directions repeatedly while the lobby map
         # fills.  If both look equally open, direction is not proven and the
         # mission stays put instead of selecting a sign by tuple ordering.
@@ -1814,8 +2495,8 @@ class MultiFloorMission:
         with self.lock:
             self.floor_entry = copy.deepcopy(entry)
         self.emit("UPPER_FLOOR_MAIN_CORRIDOR",
-                  "reached the main corridor from the preserved arrival heading")
-        return entry, point_a
+                  "reached the main corridor from the measured opening heading")
+        return entry, point_a, point_b
 
     def current_mapping_identity(self):
         with self.lock:
@@ -1935,29 +2616,32 @@ class MultiFloorMission:
         return corrected
 
     def complete_upper_floor_and_return_to_a(self, floor, special_test):
-        """Run the shared F1/F2 fixed exit and generation-local return."""
-        entry, point_a = self.exit_upper_floor_without_doorway(floor)
+        """Run the shared F1/F2 exit and staged generation-local return."""
+        entry, point_a, point_b = self.exit_upper_floor_without_doorway(floor)
         if special_test:
             self.emit("FLOOR_COMPLETE",
                       "TEST MODE: upper-floor main corridor reached")
         else:
             self.explore_floor(floor, entry, False)
-        self.travel_to_map_checked(
-            point_a, "floor %d return to elevator point A" % floor, floor)
+        self.return_upper_floor_over_traversed_segments(
+            floor, entry, point_a, point_b)
         self.emit("INSIDE_ELEVATOR",
-                  "returned to point A for next transfer")
+                  "returned through lobby point B to in-car point A")
 
     def publish_markers(self):
-        markers = []
+        delete_all = Marker()
+        delete_all.action = Marker.DELETEALL
+        markers = [delete_all]
         colors = [ColorRGBA(0.1, 0.5, 1.0, 0.95),
                   ColorRGBA(0.1, 1.0, 0.3, 0.95),
                   ColorRGBA(1.0, 0.4, 0.8, 0.95)]
-        for floor, item in self.elevator.items():
+        item = self.elevator.get(self.floor)
+        if item is not None:
             marker = Marker()
             marker.header.frame_id = item["door"].header.frame_id
             marker.header.stamp = rospy.Time.now()
             marker.ns = "multifloor_elevator_center"
-            marker.id = floor
+            marker.id = self.floor
             marker.type = Marker.CYLINDER
             marker.action = Marker.ADD
             marker.pose.position = copy.deepcopy(item["door"].center)
@@ -1965,7 +2649,33 @@ class MultiFloorMission:
             marker.pose.orientation.w = 1.0
             marker.scale.x = marker.scale.y = 0.28
             marker.scale.z = 0.9
-            marker.color = colors[floor % len(colors)]
+            marker.color = colors[self.floor % len(colors)]
+            markers.append(marker)
+
+        for namespace, pose, color, height in (
+                ("multifloor_elevator_point_a",
+                 self.elevator_return_points.get(self.floor),
+                 ColorRGBA(0.1, 0.5, 1.0, 0.95), 0.55),
+                ("multifloor_elevator_point_a_safe",
+                 self.elevator_safe_return_points.get(self.floor),
+                 ColorRGBA(0.1, 1.0, 0.35, 0.95), 0.68),
+                ("multifloor_elevator_lobby_point_b",
+                 self.elevator_lobby_return_points.get(self.floor),
+                 ColorRGBA(1.0, 0.75, 0.05, 0.95), 0.42)):
+            if pose is None:
+                continue
+            marker = Marker()
+            marker.header.frame_id = pose.header.frame_id
+            marker.header.stamp = rospy.Time.now()
+            marker.ns = namespace
+            marker.id = self.floor
+            marker.type = Marker.CYLINDER
+            marker.action = Marker.ADD
+            marker.pose = copy.deepcopy(pose.pose)
+            marker.pose.position.z = 0.5 * height
+            marker.scale.x = marker.scale.y = 0.34
+            marker.scale.z = height
+            marker.color = color
             markers.append(marker)
         self.marker_pub.publish(MarkerArray(markers=markers))
 

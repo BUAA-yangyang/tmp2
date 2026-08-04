@@ -10,6 +10,7 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from elevator_exit import (  # noqa: E402
+    apply_forward_speed_floor,
     bounded_exit_step,
     choose_corridor_side,
     known_free_run_in_grid,
@@ -76,6 +77,30 @@ class ElevatorExitGeometryTest(unittest.TestCase):
             bounded_exit_step(1.2, 0.95, 0.8, 0.65, 0.15), 0.8)
         self.assertAlmostEqual(
             bounded_exit_step(0.2, 0.85, 0.8, 0.65, 0.15), 0.65)
+
+    def test_return_specific_minimum_uses_only_proven_strip(self):
+        # mf33 failure geometry: 1.50 m known-free, with 0.35 m held back.
+        self.assertEqual(
+            bounded_exit_step(2.166, 1.50, 2.40, 1.40, 0.35), 0.0)
+        self.assertAlmostEqual(
+            bounded_exit_step(2.166, 1.50, 2.40, 0.65, 0.35), 1.15)
+
+    def test_forward_speed_floor_only_boosts_slow_straight_motion(self):
+        self.assertEqual(
+            apply_forward_speed_floor(0.38, 0.05, 0.55, 0.25),
+            (0.55, True))
+        self.assertEqual(
+            apply_forward_speed_floor(0.60, 0.05, 0.55, 0.25),
+            (0.60, False))
+        self.assertEqual(
+            apply_forward_speed_floor(-0.20, 0.05, 0.55, 0.25),
+            (-0.20, False))
+        self.assertEqual(
+            apply_forward_speed_floor(0.38, 0.40, 0.55, 0.25),
+            (0.38, False))
+        self.assertEqual(
+            apply_forward_speed_floor(0.0, 0.0, 0.55, 0.25),
+            (0.0, False))
 
     def test_corridor_choice_requires_run_and_non_ambiguous_advantage(self):
         self.assertIsNone(choose_corridor_side(1.8, 1.9, 2.0, 0.4))

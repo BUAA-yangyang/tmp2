@@ -46,6 +46,27 @@ elevator:
   # Keep the whole quadruped, including both rear feet, clear of the threshold
   # before the in-car pre-transfer turn.
   car_depth: 1.45
+  # Fixed-seed bag evidence at the 6 cm sill: mf25 crossed cleanly while the
+  # final command stayed in [0.575, 0.770] m/s; mf30/mf31 stalled at the same
+  # contact with positive-command means 0.384/0.379 and maxima below 0.472.
+  # Apply this floor only while drive_straight_into_car owns the existing
+  # behavior channel.  It does not change ordinary DWA exploration/navigation.
+  car_entry_speed_floor: 0.55
+  # Never turn a recovery or meaningful steering command into a forward shove.
+  car_entry_speed_floor_max_abs_yaw_rate: 0.25
+  # mf37 returned to the measured in-car arrival point A, but MoveBase legally
+  # stopped 0.361 m short under its 0.45 m XY tolerance.  The base was then only
+  # about 0.26 m inside the opening and rolled 96 degrees when the car moved.
+  # The successful F0 transfer stood 0.376 m deeper.  Keep A as a measured
+  # reference and target A_safe this far farther inward along measured B->A;
+  # mission_manager also verifies that the achieved pose passed A's plane.
+  upper_transfer_safe_inset: 0.40
+  # Upper-floor exploration formally returns to measured corridor point C,
+  # then mission_manager reverses the achieved C->B->A topology as two
+  # continuous goals. MoveBase's XY tolerance is 0.45 m; these guards admit
+  # ordinary terminal error but reject a shortcut from another lobby position.
+  upper_return_staging_tolerance: 0.60
+  upper_return_heading_tolerance: 0.35
   detection_timeout_wall: 20.0
   # Generation-local occupancy/wall/door evidence must be recent when it is
   # frozen into an elevator or corridor landmark.
@@ -76,12 +97,54 @@ elevator:
   template_min_observations: 5
   template_min_age_wall: 0.8
 upper_floor:
-  # Option A: preserve the generation-local arrival heading, then take only
-  # short goals whose entire footprint strip is fresh and known-free. Unknown
-  # cells never become traversable merely because the old fixed route expected
-  # a door there.
+  # Option A: use the generation-local map to find the car's one long opening,
+  # turn to it, then take only goals whose entire footprint strip is fresh and
+  # known-free. The teleport-preserved body yaw is only provisional: mf32
+  # measured it 37.7 deg away from the physical opening.
   known_free_occupied_threshold: 65
   known_free_half_width: 0.22
+  opening_alignment:
+    # No world/elevator coordinate enters this test. Unknown, occupied and
+    # out-of-grid cells stop every footprint-width ray.
+    # Map generation can be healthy while the robot footprint is still unknown.
+    # mf38 F2 produced only 5.2 sim seconds during the old 20 wall-second window;
+    # all 180 opening rays were 0 m.  First wait for a short footprint-wide strip
+    # to become known-free, then spend the existing budget on lobe stability.
+    map_ready_wait_wall: 45.0
+    map_ready_probe: 0.10
+    # The sensor cannot complete the enclosure behind a stationary body. Before
+    # classifying a long-ray lobe, collect one signed 360-degree in-place scan in
+    # the current localization generation/session. This is perception motion,
+    # not a world-coordinate shortcut; linear velocity remains exactly zero.
+    active_scan_speed: 0.65
+    active_scan_timeout_wall: 90.0
+    active_scan_timeout_sim: 20.0
+    active_scan_no_progress_wall: 15.0
+    active_scan_return_tolerance: 0.20
+    active_scan_settle_wall: 0.5
+    wait_wall: 20.0
+    max_range: 2.75
+    ray_count: 180
+    min_contrast: 0.80
+    minimum_run: 1.40
+    # Reject needle-like gaps and open-room/all-direction evidence. mf30/mf32
+    # formal maps each showed one stable lobe approximately 26-52 deg wide.
+    minimum_lobe_width: 0.14
+    maximum_lobe_width: 1.40
+    minimum_peak_advantage: 0.40
+    # Each sample must have a distinct current-generation OccupancyGrid stamp.
+    stable_samples: 3
+    stable_tolerance: 0.08
+    maximum_correction: 1.05
+    # Deliberately remain inside the State_RL training angular envelope while
+    # correcting the observed mf32 error. The 0.55 floor clears its dead zone.
+    turn_max_speed: 0.80
+    turn_min_speed: 0.55
+    turn_gain: 1.40
+    turn_tolerance: 0.12
+    turn_timeout_wall: 30.0
+    turn_timeout_sim: 10.0
+    turn_settle_wall: 0.5
   exit_map_wait_wall: 45.0
   # Was 0.85. mf20 stalled on the 6 cm floor-1 elevator sill with the command
   # chain intact: /cmd_vel peaked at 0.416 m/s and the robot moved 0.224 m in

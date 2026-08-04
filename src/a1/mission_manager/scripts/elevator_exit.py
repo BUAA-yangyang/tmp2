@@ -98,6 +98,25 @@ def bounded_exit_step(remaining, free_run, maximum_step, minimum_goal,
     return step
 
 
+def apply_forward_speed_floor(vx, wz, minimum_speed, maximum_abs_yaw_rate):
+    """Raise a low straight-ahead command while leaving all other motion alone.
+
+    The caller owns the spatial and temporal gate.  This helper only decides
+    whether an already-forward DWA command is straight enough for a bounded
+    elevator-sill speed floor.
+    """
+    values = (vx, wz, minimum_speed, maximum_abs_yaw_rate)
+    if not all(math.isfinite(value) for value in values):
+        return vx, False
+    if minimum_speed <= 0.0 or maximum_abs_yaw_rate < 0.0:
+        return vx, False
+    if vx <= 0.0 or vx >= minimum_speed:
+        return vx, False
+    if abs(wz) > maximum_abs_yaw_rate:
+        return vx, False
+    return minimum_speed, True
+
+
 def choose_corridor_side(left_run, right_run, minimum_run,
                          minimum_advantage):
     """Select a measured corridor side, failing closed on weak/ambiguous data."""
