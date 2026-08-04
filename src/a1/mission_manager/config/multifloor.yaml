@@ -11,7 +11,7 @@ mission:
   mapping_recovery_timeout_wall: 30.0
   # Abort a MoveBase goal that produces no meaningful translation for this
   # wall-time bound. Rotation is observed but cannot re-arm the bound forever.
-  no_progress_timeout_wall: 12.0
+  no_progress_timeout_wall: 35.0
   no_progress_distance: 0.15
   no_progress_yaw: 0.35
 startup:
