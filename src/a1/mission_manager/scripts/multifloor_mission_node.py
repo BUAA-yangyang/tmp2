@@ -234,6 +234,25 @@ class MultiFloorMission:
         # existed in the config all along and were simply never read.
         self.exit_forward = float(rospy.get_param(
             "~upper_floor/exit_forward", 2.0))
+        # Mission-side no-progress watchdog. Deliberately generous: this is a
+        # fault bound to stop an unreachable goal from spinning the robot off a
+        # floor, not a performance target.
+        # Measured on floor 0 and reused on the upper floors; never a literal.
+        self.car_opening_width = None
+        self.corridor_minimum_run = float(rospy.get_param(
+            "~upper_floor/corridor_minimum_run", 2.0))
+        self.corridor_run_margin = float(rospy.get_param(
+            "~upper_floor/corridor_run_margin", 0.6))
+        self.car_opening_width_tolerance = float(rospy.get_param(
+            "~elevator/car_opening_width_tolerance", 0.35))
+        self.car_opening_max_bearing = float(rospy.get_param(
+            "~elevator/car_opening_max_bearing", 1.05))
+        self.nav_progress_timeout = float(rospy.get_param(
+            "~mission/no_progress_timeout_wall", 12.0))
+        self.nav_progress_distance = float(rospy.get_param(
+            "~mission/no_progress_distance", 0.15))
+        self.nav_progress_yaw = float(rospy.get_param(
+            "~mission/no_progress_yaw", 0.35))
         self.corridor_forward = float(rospy.get_param(
             "~upper_floor/corridor_forward", 5.0))
         self.corridor_turn = float(rospy.get_param(
@@ -864,6 +883,27 @@ class MultiFloorMission:
                 if door.confidence < self.elevator_min_confidence:
                     reasons.append("confidence=%.2f<%.2f" % (
                         door.confidence, self.elevator_min_confidence))
+                # The width band alone is far too permissive: mf17 froze a
+                # 1.238 m ROOM door at 2.19 m as "the elevator" on floor 1,
+                # because 1.238 sits inside [1.20, 2.00] and 2.19 inside the
+                # distance window. Two measured facts make the real opening
+                # separable, and neither is a scene constant:
+                #   * the same shaft is used on every floor, so its opening
+                #     width was already measured on floor 0 (1.99 m on mf17);
+                #   * the robot arrives facing that opening, because the
+                #     pre-transfer turn aims at it and the car preserves yaw.
+                if self.car_opening_width is not None:
+                    error = abs(door.width - self.car_opening_width)
+                    if error > self.car_opening_width_tolerance:
+                        reasons.append("width=%.2f vs floor0 %.2f (|d|=%.2f)"
+                                       % (door.width,
+                                          self.car_opening_width, error))
+                bearing = math.atan2(dy, dx)
+                ahead = abs(self.angle_error(
+                    bearing, yaw_of(pose.pose.pose.orientation)))
+                if ahead > self.car_opening_max_bearing:
+                    reasons.append("bearing=%.2f rad off the arrival heading"
+                                   % ahead)
                 key = ("upper", int(door.localization_generation),
                        int(door.floor_session_id), int(door.detection_id))
                 signature = (bool(door.stable), int(door.observation_count),
@@ -893,6 +933,14 @@ class MultiFloorMission:
                     "door": door, "outward": outward,
                     "session": int(door.floor_session_id),
                     "generation": int(door.localization_generation)}
+                if self.floor == 0 and self.car_opening_width is None:
+                    # Learn the shaft's opening width once, from the floor
+                    # where it is observed from the lobby side and the
+                    # detector is at its best.
+                    self.car_opening_width = float(door.width)
+                    rospy.loginfo(
+                        "learned elevator opening width %.3f m from floor 0",
+                        self.car_opening_width)
                 self.emit("ELEVATOR_LOCALIZED",
                           "frozen earliest stable LiDAR doorway center",
                           x=door.center.x, y=door.center.y,
@@ -927,16 +975,56 @@ class MultiFloorMission:
         return lobby, threshold, car
 
     def navigate(self, target, label):
+        """Drive to a pose, and give up if the robot stops making progress.
+
+        Without the watchdog this waited out nav_timeout while move_base did
+        whatever it liked. Measured on mf17 floor 2: the goal sat 0.73 m away
+        -- outside xy_goal_tolerance, so the latch never engaged -- DWA could
+        not find a translating trajectory, and emitted pure rotation for three
+        seconds straight. Heading passed through the goal yaw (error 1.0 deg at
+        t=468.0) and kept going, 200 deg in all, until wz hit the guard ceiling
+        of 1.80 and the attitude diverged; the robot then fell off the floor
+        (oracle z 5.51 -> 0.14). Spinning on the spot next to an edge is not a
+        recovery, and an unreachable goal must end the goal, not the robot.
+        """
         self.emit("NAVIGATING", label, x=target.pose.position.x,
                   y=target.pose.position.y)
         goal = MoveBaseGoal(target_pose=target)
         self.move.send_goal(goal)
         deadline = time.monotonic() + self.nav_timeout
+        anchor = self.current_pose()
+        anchor_yaw = yaw_of(anchor.pose.orientation)
+        anchor_wall = time.monotonic()
         while time.monotonic() < deadline and not rospy.is_shutdown():
             if self.move.wait_for_result(rospy.Duration(0.2)):
                 if self.move.get_state() == 3:
                     return
                 break
+            now = self.current_pose()
+            moved = math.hypot(
+                now.pose.position.x - anchor.pose.position.x,
+                now.pose.position.y - anchor.pose.position.y)
+            turned = abs(self.angle_error(
+                yaw_of(now.pose.orientation), anchor_yaw))
+            if moved >= self.nav_progress_distance:
+                anchor, anchor_yaw = now, yaw_of(now.pose.orientation)
+                anchor_wall = time.monotonic()
+            elif turned >= self.nav_progress_yaw:
+                # Rotating counts as progress, but only once per re-anchor:
+                # a robot spinning in place re-arms this forever otherwise, so
+                # the anchor yaw is advanced while the position anchor is not.
+                anchor_yaw = yaw_of(now.pose.orientation)
+                if time.monotonic() - anchor_wall < self.nav_progress_timeout:
+                    continue
+            if time.monotonic() - anchor_wall >= self.nav_progress_timeout:
+                self.move.cancel_goal()
+                self.emit("NAVIGATION_NO_PROGRESS",
+                          "%s made no progress for %.0f s; abandoning the goal"
+                          % (label, self.nav_progress_timeout),
+                          x=now.pose.position.x, y=now.pose.position.y)
+                raise MissionFailure(
+                    "navigation %s made no progress for %.0f wall seconds"
+                    % (label, self.nav_progress_timeout))
         state = self.move.get_state()
         self.move.cancel_goal()
         raise MissionFailure("navigation %s failed state=%d" % (label, state))
@@ -1137,7 +1225,35 @@ class MultiFloorMission:
         """
         start = self.current_pose()
         start_yaw = yaw_of(start.pose.orientation)
-        target_yaw = start_yaw + math.pi
+        # Aim at the MEASURED door normal, not at start_yaw + pi.
+        #
+        # start_yaw is whatever move_base left the robot at when it reached the
+        # car interior pose, and its yaw_goal_tolerance is 0.80 rad (46 deg).
+        # Adding 180 degrees to a reference that is itself up to 46 deg wrong
+        # cannot produce a good heading. Measured on mf17: the floor-0 door
+        # normal was -173.0 deg (recovered from the straight push into the car,
+        # where body heading and travel direction agreed to 0.1 deg) while the
+        # robot arrived on floor 1 facing -158.4 deg -- 14.6 deg of error,
+        # injected here, before any upper-floor logic ran.
+        #
+        # The elevator preserves body yaw through the teleport (measured 0.3
+        # deg on mf17), so whatever heading is settled here is the heading the
+        # robot arrives with. It is worth getting right.
+        with self.lock:
+            item = self.elevator.get(self.floor)
+        if item is not None:
+            ox, oy = item["outward"]
+            target_yaw = math.atan2(oy, ox)
+            rospy.loginfo(
+                "pre-transfer turn aims at the measured door normal "
+                "%.1f deg (geometric fallback would have been %.1f deg)",
+                math.degrees(target_yaw),
+                math.degrees(self.angle_error(start_yaw + math.pi, 0.0)))
+        else:
+            target_yaw = start_yaw + math.pi
+            rospy.logwarn(
+                "pre-transfer turn has no measured door for floor %d; falling "
+                "back to start_yaw + pi", self.floor)
         deadline = time.monotonic() + self.transfer_turn_timeout
         start_ros = rospy.Time.now()
         settled_since = None
@@ -1286,6 +1402,35 @@ class MultiFloorMission:
         except Exception as error:  # noqa: BLE001 - diagnostics must not kill the mission
             rospy.logwarn("align dump failed: %s", error)
 
+    def known_free_run(self, x, y, bearing, max_range):
+        """How far the published grid is known-free along a bearing.
+
+        Used instead of a hardcoded transit distance. Unknown cells stop the
+        run as firmly as occupied ones: the corridor ingress must not be aimed
+        into space the sensor has not seen, which is how mf13/mf17 put a goal
+        past the floor edge.
+        """
+        with self.lock:
+            grid = self.floor_grid
+        if grid is None:
+            return 0.0
+        info = grid.info
+        step = info.resolution * 0.5
+        steps = max(1, int(max_range / step))
+        cos_b, sin_b = math.cos(bearing), math.sin(bearing)
+        for index in range(1, steps + 1):
+            distance = index * step
+            column = int((x + distance * cos_b - info.origin.position.x)
+                         / info.resolution)
+            row = int((y + distance * sin_b - info.origin.position.y)
+                      / info.resolution)
+            if not (0 <= column < info.width and 0 <= row < info.height):
+                return distance - step
+            value = grid.data[row * info.width + column]
+            if value < 0 or value >= self.align_occupied_threshold:
+                return distance - step
+        return max_range
+
     def align_to_car_opening(self, floor):
         """Turn to face the car's opening, using the map rather than history.
 
@@ -1386,70 +1531,93 @@ class MultiFloorMission:
                   "alignment did not settle; proceeding on current heading")
 
     def exit_upper_floor_without_doorway(self, floor):
-        """Fixed exit route: the target-floor door cannot be measured in time.
+        """Leave the car on measured geometry, with no dead-reckoned constants.
 
-        ⚠️ NEGATIVE RESULT, mf16 (2026-08-04). This was rewritten to derive
-        every pose from floor_mapping's measured doorway -- the same perception
-        the floor-0 entry trusts -- and it does not work, because the doorway
-        detector produces *nothing at all* from inside the car: zero
-        DOORWAY_RAW messages on floor 1 across 90 s wall (~25 s sim) while the
-        robot stood in the car. That is a property of the detector's geometry,
-        not a tuning miss -- it needs two flanking wall segments of at least
-        minimum_wall_length 0.80 m either side of the gap, and a 1.45 m deep
-        car seen from within, with filter/minimum_range 0.5 m discarding the
-        nearest returns, does not present them. The original author's name for
-        this function ("without_doorway") records the same finding.
+        What this replaces, and why each piece went:
 
-        So the route stays dead-reckoned for now, with the one reference that
-        IS sound by construction: turn_inside_elevator_before_transfer() faces
-        the door on the *source* floor, where the geometry is exact, and the
-        car preserves body yaw through the teleport.
+        * align_to_car_opening(): its rays stop at UNKNOWN cells, so "longest
+          free run" is really "the direction the map has been observed
+          furthest" -- straight after a floor reset, wherever the robot last
+          looked. Dumped on mf15: 0.24% of the grid known and a bearing
+          accepted on the first attempt. Across four runs it returned 8.0,
+          11.1, -35.0 and 57.1/92.1 deg for one physical geometry. Deleted.
+        * the 2 m / 95 deg / 5 m route: dead reckoning with no feedback. Its
+          5 m goal landed 0.73 m short of reachable on mf17 floor 2, next to
+          the floor edge; move_base then rotated on the spot for three seconds
+          until the attitude diverged and the robot fell (oracle z 5.51 ->
+          0.14). mf13 fell the same way at a different spot, mf14 wedged.
 
-        Still open (do not lose): the 95 degree turn and the 5 m transit are
-        calibrated on one building. The measurable fix is to leave the car
-        first -- the detector does fire once outside (mf13 t=104.3, mf14
-        t=138.7) -- and take the corridor direction from the door measured
-        from the lobby side, instead of from a remembered heading.
+        What replaces them: the arrival heading is now trustworthy (the
+        pre-transfer turn aims at the measured floor-0 door normal, and the
+        car preserves body yaw to 0.3 deg), so the opening is straight ahead
+        and the detector -- which does publish it from inside the car, 1.99 m
+        wide for 13 s on mf17 -- is checked against the width learned on floor
+        0. Every pose below comes from that measurement, and the corridor
+        ingress walks only as far as the grid is known-free.
         """
-        self.align_to_car_opening(floor)
+        self.wait_until(lambda: floor in self.elevator,
+                        self.upper_exit_detection_timeout,
+                        "floor %d car opening measured from inside the car"
+                        % floor)
+        lobby, threshold, car = self.elevator_poses(floor)
+        ox, oy = self.elevator[floor]["outward"]
+        yaw_out = math.atan2(oy, ox)
         current = self.current_pose()
-        yaw_out = yaw_of(current.pose.orientation)
+        frame = current.header.frame_id
 
-        # Point A belongs to this localization generation.  Store it facing
-        # into the car so a later return arrives in the same configuration as
-        # an ordinary car entry; transfer() will then turn back toward the door.
-        point_a = self.make_pose(current.pose.position.x,
-                                 current.pose.position.y,
-                                 yaw_out + math.pi,
-                                 current.header.frame_id)
+        # Point A is the measured car interior facing in, so a later return
+        # arrives in the configuration transfer() expects.
+        point_a = copy.deepcopy(car)
         with self.lock:
             self.elevator_return_points[floor] = copy.deepcopy(point_a)
         self.emit("ELEVATOR_RETURN_POINT_LOCKED",
-                  "locked generation-local elevator return point A",
+                  "locked point A from the measured car geometry",
                   x=point_a.pose.position.x, y=point_a.pose.position.y)
 
-        exit_pose = self.make_pose(
-            current.pose.position.x + self.exit_forward * math.cos(yaw_out),
-            current.pose.position.y + self.exit_forward * math.sin(yaw_out),
-            yaw_out, current.header.frame_id)
-        self.navigate(exit_pose, "fixed-route exit from elevator car")
+        turn_out = self.make_pose(current.pose.position.x,
+                                  current.pose.position.y, yaw_out, frame)
+        self.navigate(turn_out, "face the measured car opening")
+        threshold.pose.orientation = copy.deepcopy(turn_out.pose.orientation)
+        lobby.pose.orientation = copy.deepcopy(turn_out.pose.orientation)
+        self.navigate(threshold, "cross the measured elevator threshold")
+        self.navigate(lobby, "stand clear of the measured elevator door")
 
-        yaw_corridor = yaw_out - self.corridor_turn
-        turn_pose = self.make_pose(exit_pose.pose.position.x,
-                                   exit_pose.pose.position.y,
-                                   yaw_corridor, current.header.frame_id)
-        self.navigate(turn_pose, "fixed-route turn toward main corridor")
-
+        # The corridor runs across the door, so its axis is the measured
+        # normal turned a quarter turn. Which of the two ways is decided by
+        # the map, not by a calibrated sign: walk whichever is actually open.
+        here = self.current_pose()
+        options = []
+        for sign, name in ((1.0, "right"), (-1.0, "left")):
+            bearing = math.atan2(-sign * ox, sign * oy)
+            run = self.known_free_run(here.pose.position.x,
+                                      here.pose.position.y,
+                                      bearing, self.corridor_forward)
+            options.append((run, bearing, name))
+            rospy.loginfo("corridor option %s: bearing=%.1f deg free run=%.2f m",
+                          name, math.degrees(bearing), run)
+        run, yaw_corridor, side = max(options)
+        if run < self.corridor_minimum_run:
+            raise MissionFailure(
+                "no corridor direction beside the floor %d elevator has %.2f m "
+                "of known-free space (best %.2f m to the %s)"
+                % (floor, self.corridor_minimum_run, run, side))
+        # Stop short of the last observed cell so the goal is inside space the
+        # sensor has actually seen, never on its edge.
+        advance = max(0.0, run - self.corridor_run_margin)
         entry = self.make_pose(
-            turn_pose.pose.position.x + self.corridor_forward * math.cos(yaw_corridor),
-            turn_pose.pose.position.y + self.corridor_forward * math.sin(yaw_corridor),
-            yaw_corridor, current.header.frame_id)
-        self.navigate(entry, "fixed-route transit to main corridor")
+            here.pose.position.x + advance * math.cos(yaw_corridor),
+            here.pose.position.y + advance * math.sin(yaw_corridor),
+            yaw_corridor, frame)
+        self.emit("UPPER_FLOOR_CORRIDOR_INGRESS",
+                  "advancing %.2f m along the %s corridor axis measured free "
+                  "for %.2f m" % (advance, side, run),
+                  x=entry.pose.position.x, y=entry.pose.position.y)
+        self.navigate(entry, "transit to the main corridor")
         entry = self.correct_upper_floor_entry_axis(entry)
         with self.lock:
             self.floor_entry = copy.deepcopy(entry)
         self.emit("UPPER_FLOOR_MAIN_CORRIDOR",
-                  "fixed elevator exit route reached the main corridor")
+                  "reached the main corridor from the measured car opening")
         return entry, point_a
 
     def current_mapping_identity(self):
