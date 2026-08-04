@@ -253,6 +253,20 @@ class MultiFloorMission:
             "~upper_floor/exit_maximum_steps", 10))
         self.known_free_half_width = float(rospy.get_param(
             "~upper_floor/known_free_half_width", 0.22))
+        # try_freeze_elevator's upper-floor branch still reads these three.
+        # Their definitions were dropped when the width-based gate was removed,
+        # leaving live code referencing missing attributes: any doorway with a
+        # matching identity on an upper floor would raise AttributeError inside
+        # a subscriber callback. mf22 never reached it because the callback
+        # returned at an earlier gate, but mf17 exercised this path at t=124.
+        # (The width gate itself stays removed: the wall template measures a
+        # boundary span, not the doorway width, and mixing them was wrong.)
+        self.upper_door_min_distance = float(rospy.get_param(
+            "~elevator/upper_door_min_distance", 0.25))
+        self.upper_door_max_distance = float(rospy.get_param(
+            "~elevator/upper_door_max_distance", 2.20))
+        self.car_opening_max_bearing = float(rospy.get_param(
+            "~elevator/car_opening_max_bearing", 1.05))
         self.corridor_minimum_run = float(rospy.get_param(
             "~upper_floor/corridor_minimum_run", 2.0))
         self.corridor_run_margin = float(rospy.get_param(
@@ -1365,6 +1379,89 @@ class MultiFloorMission:
             self.known_free_occupied_threshold,
             self.known_free_half_width)
 
+    def advance_map_checked(self, bearing, distance, label, floor,
+                            step_maximum=None):
+        """Walk a bearing in steps, re-proving the map before every one.
+
+        The exit-from-car loop already worked this way and mf22 crossed the
+        floor-1 and floor-2 sills with it. The corridor ingress did not: it
+        probed ONCE at the lobby, then issued a single long goal. mf22 measured
+        the consequence -- the probe at the exit point reported 5.00 m free to
+        the right, the mission committed to 4.40 m, and 3.94 m later the robot
+        stepped off floor 2 (oracle z 5.53 -> 4.00). The grid was not wrong: at
+        the moment of the fall it showed free to 1.80 m ahead and UNKNOWN from
+        1.95 m. Nobody asked it again after the robot left the vantage point
+        the single probe was taken from.
+
+        Returns the distance actually advanced along ``bearing``.
+        """
+        step_maximum = step_maximum or self.exit_step_maximum
+        start = self.current_pose()
+        origin_x = start.pose.position.x
+        origin_y = start.pose.position.y
+        frame = start.header.frame_id
+        advanced = 0.0
+        steps = 0
+        while advanced + self.exit_completion_tolerance < distance:
+            if steps >= self.exit_maximum_steps:
+                raise MissionFailure(
+                    "%s exceeded %d bounded steps after advancing %.2f/%.2f m"
+                    % (label, self.exit_maximum_steps, advanced, distance))
+            here = self.current_pose()
+            remaining = distance - advanced
+            deadline = time.monotonic() + self.exit_map_wait
+            step = 0.0
+            free_run = 0.0
+            while not rospy.is_shutdown() and time.monotonic() < deadline:
+                probe_range = min(
+                    step_maximum + self.exit_goal_margin,
+                    max(self.exit_minimum_goal + self.exit_goal_margin,
+                        remaining + self.exit_goal_margin))
+                free_run = self.known_free_run(
+                    here.pose.position.x, here.pose.position.y,
+                    bearing, probe_range, here)
+                step = bounded_exit_step(
+                    remaining, free_run, step_maximum,
+                    self.exit_minimum_goal, self.exit_goal_margin)
+                if step > 0.0:
+                    break
+                rospy.loginfo_throttle(
+                    1.0, "%s waiting for a known-free strip ahead "
+                    "(observed %.2f m, %.2f/%.2f m done)",
+                    label, free_run, advanced, distance)
+                time.sleep(0.10)
+                here = self.current_pose()
+            if step <= 0.0:
+                # Not a failure when the leg has already covered useful ground:
+                # the corridor simply ends, or the map has not seen further.
+                # The caller decides whether what was achieved is enough.
+                rospy.logwarn(
+                    "%s stopped early: no further known-free strip after "
+                    "%.2f/%.2f m (observed %.2f m)",
+                    label, advanced, distance, free_run)
+                return advanced
+            target = self.make_pose(
+                here.pose.position.x + step * math.cos(bearing),
+                here.pose.position.y + step * math.sin(bearing),
+                bearing, frame)
+            self.emit("MAP_CHECKED_STEP",
+                      "%s step %d advances %.2f m inside a %.2f m known-free "
+                      "strip" % (label, steps + 1, step, free_run),
+                      x=target.pose.position.x, y=target.pose.position.y,
+                      advanced=advanced, required=distance, floor=floor)
+            self.navigate(target, "%s step %d" % (label, steps + 1))
+            achieved = self.current_pose()
+            new_advanced = (
+                (achieved.pose.position.x - origin_x) * math.cos(bearing) +
+                (achieved.pose.position.y - origin_y) * math.sin(bearing))
+            if new_advanced - advanced < self.exit_minimum_progress:
+                raise MissionFailure(
+                    "%s step %d achieved only %.2f m forward progress"
+                    % (label, steps + 1, new_advanced - advanced))
+            advanced = new_advanced
+            steps += 1
+        return advanced
+
     def exit_upper_floor_without_doorway(self, floor):
         """Execute option A: preserved heading exit, then map-probed corridor.
 
@@ -1515,21 +1612,26 @@ class MultiFloorMission:
                 % (floor, self.corridor_map_wait, left_run, right_run))
         yaw_corridor = left_bearing if side == "left" else right_bearing
         run = left_run if side == "left" else right_run
-        advance = run - self.corridor_run_margin
-        if advance <= 0.0:
-            raise MissionFailure(
-                "floor %d corridor run %.2f m does not exceed margin %.2f m"
-                % (floor, run, self.corridor_run_margin))
-        entry = self.make_pose(
-            here.pose.position.x + advance * math.cos(yaw_corridor),
-            here.pose.position.y + advance * math.sin(yaw_corridor),
-            yaw_corridor, frame)
+        # The single probe above only chooses the SIDE. How far to walk is
+        # re-proved at every step, because a probe is valid from where it was
+        # taken and nowhere else -- see advance_map_checked.
+        requested = max(0.0, run - self.corridor_run_margin)
         self.emit("UPPER_FLOOR_CORRIDOR_INGRESS",
-                  "advancing %.2f m along the %s corridor probe (left %.2f, "
-                  "right %.2f m)" %
-                  (advance, side, left_run, right_run),
-                  x=entry.pose.position.x, y=entry.pose.position.y)
-        self.navigate(entry, "map-probed transit to the main corridor")
+                  "walking up to %.2f m along the %s corridor, re-proving the "
+                  "map every step (probe: left %.2f, right %.2f m)"
+                  % (requested, side, left_run, right_run),
+                  requested=requested, side=side)
+        achieved = self.advance_map_checked(
+            yaw_corridor, requested,
+            "floor %d corridor ingress" % floor, floor)
+        if achieved < self.corridor_minimum_run:
+            raise MissionFailure(
+                "floor %d corridor ingress advanced only %.2f m of a requested "
+                "%.2f m before the map stopped proving free space"
+                % (floor, achieved, requested))
+        final = self.current_pose()
+        entry = self.make_pose(final.pose.position.x, final.pose.position.y,
+                               yaw_corridor, frame)
         entry = self.correct_upper_floor_entry_axis(entry)
         with self.lock:
             self.floor_entry = copy.deepcopy(entry)
