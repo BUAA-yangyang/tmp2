@@ -9,6 +9,11 @@ mission:
   service_timeout_wall: 15.0
   localization_recovery_timeout_wall: 45.0
   mapping_recovery_timeout_wall: 30.0
+  # Abort a MoveBase goal that produces no meaningful translation for this
+  # wall-time bound. Rotation is observed but cannot re-arm the bound forever.
+  no_progress_timeout_wall: 12.0
+  no_progress_distance: 0.15
+  no_progress_yaw: 0.35
 startup:
   stand_attempt_timeout_wall: 120.0
   localization_timeout_wall: 300.0
@@ -45,15 +50,8 @@ elevator:
   # Generation-local occupancy/wall/door evidence must be recent when it is
   # frozen into an elevator or corridor landmark.
   perception_max_age_sim: 1.5
+  # Backward-compatible source for upper_floor/known_free_occupied_threshold.
   align_occupied_threshold: 65
-  # 20 s wall is only about 6 s of sim at the measured RTF ~0.3, i.e. ~6 map
-  # frames after the floor reset -- not enough for the car walls to become
-  # known and the opening to stand out. mf13 floor 2 found nothing in that
-  # window and the blind fixed route then walked the robot off the floor.
-  # This is an observation budget, not a safety margin: the wait exits as
-  # soon as a confident opening appears (floor 1 took under 2 s).
-  align_observation_timeout: 60.0
-  align_max_range: 3.0
   minimum_height_change: 1.5
   # Dedicated F0 landmark template, evaluated only during the 2.5 m
   # post-entrance right-side scan.  It does not create a generic doorway.
@@ -78,19 +76,35 @@ elevator:
   template_min_observations: 5
   template_min_age_wall: 0.8
 upper_floor:
-  # These three are the fixed exit route calibrated on this building. They
-  # were literals in the function body (2.0 / 95 deg / 5.0); exit_forward and
-  # corridor_forward existed here all along but were never read, and this file
-  # said 1.0 while the code walked 2.0. Values below are what actually ran.
-  exit_forward: 2.0
-  corridor_forward: 5.0
-  corridor_turn_rad: 1.658063
+  # Option A: preserve the generation-local arrival heading, then take only
+  # short goals whose entire footprint strip is fresh and known-free. Unknown
+  # cells never become traversable merely because the old fixed route expected
+  # a door there.
+  known_free_occupied_threshold: 65
+  known_free_half_width: 0.22
+  exit_map_wait_wall: 45.0
+  exit_step_maximum: 0.85
+  # Must remain above MoveBase's 0.45 m XY tolerance; achieved progress is also
+  # checked after every step.
+  exit_minimum_goal: 0.65
+  # Navigation footprint reaches 0.30 m forward with 0.02 m padding.
+  exit_goal_margin: 0.35
+  exit_minimum_progress: 0.15
+  exit_completion_tolerance: 0.10
+  exit_maximum_steps: 10
+  # Perpendicular probes choose the corridor from current-map evidence. The
+  # range is a measurement cap, not a commanded transit distance.
+  corridor_probe_max_range: 5.0
+  corridor_minimum_run: 2.0
+  corridor_run_margin: 0.60
+  corridor_minimum_advantage: 0.40
+  corridor_map_wait_wall: 30.0
   corridor_entry_yaw_tolerance: 0.5
   # ExploreFloor interprets floor_entry_pose as both an ROI anchor and the
   # longitudinal/lateral room axis.  MoveBase's broad goal tolerance is not a
   # sufficient orientation proof, so fit a fresh pair of opposite stable walls
-  # after the fixed route.  Failure is bounded and falls back to the declared
-  # route axis; no simulator/layout truth is used.
+  # after map-probed corridor ingress. Failure is bounded and falls back to the
+  # selected probe axis; no simulator/layout truth is used.
   corridor_axis:
     wait_wall: 5.0
     max_age_sim: 1.5
