@@ -1,0 +1,134 @@
+frames: {odom: odom, base: base, sensor: laser_livox}
+topics:
+  pointcloud: /a1_localization/livox_pointcloud
+  odom: /a1/localization/odom
+  localization_status: /a1/localization/status
+  supervisor_status: /a1/localization/supervisor_status
+  # Pure obstacle returns used for marking and door/wall perception.
+  obstacle_cloud: /a1/floor_mapping/obstacle_cloud
+  # Ground + obstacle returns retaining the LiDAR-origin ray semantics for
+  # costmap clearing. It must not be used as a wall-detector input.
+  clearing_cloud: /a1/floor_mapping/clearing_cloud
+  occupancy_grid: /a1/floor_mapping/map
+  walls: /a1/floor_mapping/walls
+  doorways: /a1/floor_mapping/doorways
+  status: /a1/floor_mapping/status
+  structure_status: /a1/floor_mapping/structure_status
+  diagnostics: /a1/floor_mapping/diagnostics
+timeouts:
+  # Point clouds and the localization TF for the same sensor stamp travel
+  # through different processing chains. Queue clouds until their exact TF is
+  # available; ROS time bounds normal simulation progress and wall time bounds
+  # a frozen simulator/process.
+  tf_queue_ros: 0.30
+  tf_queue_wall: 2.0
+  tf_queue_poll_wall: 0.01
+  input_degraded: 1.0
+  input_lost: 3.0
+queues: {pointcloud: 10}
+recovery: {valid_frames: 3}
+ground:
+  search_radius: 2.5
+  min_relative_z: -0.8
+  max_relative_z: 0.15
+  minimum_candidates: 80
+  # Applied to initialization and unsupported-new-floor candidates. Once a
+  # floor is ready, its local height band uses minimum_candidates as an
+  # absolute support threshold so nearby walls do not dilute floor coverage.
+  minimum_inlier_ratio: 0.20
+  maximum_dispersion: 0.08
+  initialization_frames: 6
+  maximum_frame_delta: 0.08
+  unsupported_floor_delta: 0.35
+  floor_change_frames: 10
+  invalid_frame_tolerance: 3
+filter:
+  self_clear_radius: 0.45
+  minimum_range: 0.5
+  maximum_range: 8.0
+  ground_band_below: 0.05
+  # The public entrance has an approximately 8 cm traversable sill. Treating
+  # its vertical returns as lethal 2-D obstacles made move_base stop, rotate
+  # away, and retry indefinitely even though State_RL can climb it reliably.
+  # Obstacles above 14 cm remain marked; the low sill is emitted on the
+  # clearing/ground channel.
+  ground_clearance: 0.14
+  maximum_obstacle_height: 1.50
+  voxel_leaf_size: 0.05
+grid:
+  # Keep the lower-cost 7.5 cm grid; corridor continuation no longer depends
+  # solely on a fragile frontier component after a room scan.
+  resolution: 0.075
+  # The grid is axis-aligned in odom, and odom is re-anchored on the robot at
+  # every localization (re)initialization.  On F0 that anchor is the outdoor
+  # spawn facing the entrance, so the floor really does extend along +odom X.
+  # On F1/F2 the anchor is the robot's pose *inside the elevator car*, whose
+  # odom orientation is whatever the car pose, the opening alignment and the
+  # fixed 95 degree turn happen to produce -- it is not a building axis.
+  #
+  # The previous 100 x 80 grid at origin (-20, -60) assumed F1/F2 would run
+  # along -odom Y.  Measured on mf08 (seed 382835531) the F1 odom frame is
+  # rotated 219.2 deg from truth, which puts the floor at odom
+  # x in [-24.8, 12.0], y in [-31.6, 8.3]: nearly 5 m of the floor fell
+  # outside the grid entirely and could never be mapped, let alone explored.
+  #
+  # So the grid must be rotation-agnostic about the anchor.  Sizing is driven
+  # by the ROI, which must sit a full 8 m Livox range inside the grid edge:
+  #   F0  ROI reaches odom x = 43.5 (entry at 3.5 + 40 m depth)   -> need 51.5
+  #   F1/F2 ROI corner is at most 7 + sqrt(32^2 + 10.5^2) = 40.7 m
+  #         from the anchor in *any* direction                     -> need 48.7
+  # 104 x 100 at origin (-50, -50) leaves an inset of x in [-42, 46],
+  # y in [-42, 42]: an inscribed radius of 42 m for the rotated upper floors
+  # and 2.5 m of slack on F0's deterministic axis.  At 0.075 m this is
+  # 1387 x 1334 = 1.85 M cells versus 1.42 M before -- +30% on the map and the
+  # static global costmap, in exchange for the whole floor being
+  # representable, and reachable, in every floor frame.
+  width: 104.0
+  height: 100.0
+  origin_x: -50.0
+  origin_y: -50.0
+  # Room scans and doorway exits need a fresh grid before the no-frontier
+  # confirmation advances. One hertz was the proven setting for reaching the
+  # second room pair and also shortens post-stand/door startup latency.
+  publish_rate: 1.0
+  p_free: 0.35
+  p_occupied: 0.80
+  minimum_observations: 2
+door_wall:
+  enabled: true
+  extraction_cell_size: 0.08
+  line_fit_error: 0.08
+  max_segment_gap: 0.24
+  minimum_wall_length: 0.80
+  # Only used while the entrance-lobby elevator scan gate is active.  The
+  # fixed elevator shaft leaves about 0.71 m of wall on each side of its door.
+  elevator_opening_flank_min_length: 0.55
+  # 0.71 m / 0.08 m cells yields roughly 9 independent samples; allow six
+  # during the gated scan to tolerate jamb and viewing-angle occlusion.
+  elevator_opening_flank_min_support: 6
+  minimum_wall_height: 0.60
+  minimum_wall_support: 12
+  max_ransac_iterations: 360
+  max_segments_per_frame: 24
+  wall_track_distance: 0.15
+  wall_track_angle_rad: 0.15
+  wall_stable_frames: 3
+  max_wall_misses: 6
+  collinear_distance: 0.12
+  opening_min_width: 1.00
+  opening_max_width: 2.20
+  opening_stable_frames: 3
+  doorway_match_distance: 0.30
+  max_doorway_misses: 45
+  state_min_height: 0.25
+  state_band_depth: 0.14
+  free_ray_clearance: 0.15
+  state_bins: 8
+  minimum_state_bins: 3
+  open_fraction: 0.50
+  closed_fraction: 0.65
+  state_stable_frames: 3
+  robot_radius: 0.35
+  traversable_margin: 0.15
+  approach_offset: 0.70
+services: {reset: /a1/floor_mapping/reset}

@@ -1,0 +1,45 @@
+<launch>
+  <!-- DEV-ONLY short transition test. Start unitree_guide/gazeboSim.launch
+       with wname:=a1_safe_stop and foot contacts enabled first. This launch
+       owns junior_ctrl explicitly; gazeboSim.launch does not start it. -->
+  <arg name="output"/>
+  <arg name="bag_path"/>
+  <arg name="command_sim_s" default="1.5"/>
+  <arg name="workspace_root" default="/workspace/SimEnv"/>
+
+  <include file="$(find a1_cmd_mux)/launch/cmd_mux.launch">
+    <arg name="require_ready" value="true"/>
+    <arg name="respawn" value="false"/>
+  </include>
+
+  <node pkg="unitree_guide" type="junior_ctrl" name="junior_ctrl"
+        output="screen" required="true"
+        launch-prefix="bash -lc 'cd $(arg workspace_root) &amp;&amp; exec &quot;$@&quot;' --"/>
+
+  <node pkg="rosbag" type="record" name="safe_stop_short_bag"
+        output="screen"
+        args="--lz4 -O $(arg bag_path)
+          /clock
+          /rosout_agg
+          /trunk_imu
+          /Odometry_gazebo
+          /visual/FR_foot_contact/the_force
+          /visual/FL_foot_contact/the_force
+          /visual/RR_foot_contact/the_force
+          /visual/RL_foot_contact/the_force
+          /a1_gazebo/joint_states
+          /cmd_vel_nav
+          /cmd_vel_muxed
+          /cmd_vel
+          /a1/controller_ready
+          /a1/safe_stand_ready
+          /a1_cmd_mux/safety_lock
+          /a1/cmd_mux/status
+          /joy"/>
+
+  <node pkg="a1_navigation_tests" type="safe_stop_short_test.py"
+        name="safe_stop_short_test" output="screen" required="true">
+    <param name="output" value="$(arg output)"/>
+    <param name="command_sim_s" value="$(arg command_sim_s)"/>
+  </node>
+</launch>

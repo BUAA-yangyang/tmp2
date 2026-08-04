@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>a1_cmd_mux</name>
+  <version>0.1.0</version>
+  <description>
+    所有上层速度命令到 A1 底层的唯一出口。对导航、特殊行为、人工接管和紧急停止
+    等速度源进行优先级仲裁、限速、加速度限制和超时保护，最终只由本模块发布 /cmd_vel。
+  </description>
+
+  <maintainer email="xujc@buaa.edu.cn">xujc</maintainer>
+  <license>TODO</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <build_depend>a1_navigation_interfaces</build_depend>
+  <build_depend>rospy</build_depend>
+  <build_export_depend>a1_navigation_interfaces</build_export_depend>
+  <build_export_depend>rospy</build_export_depend>
+  <exec_depend>a1_navigation_interfaces</exec_depend>
+  <exec_depend>rospy</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <!-- 固定优先级仲裁用现成的 twist_mux，不重复造轮子。
+       注意：simenv:noetic-cu128 镜像未预装，需 apt install ros-noetic-twist-mux，
+       长期应烤进 Dockerfile。 -->
+  <exec_depend>twist_mux</exec_depend>
+</package>

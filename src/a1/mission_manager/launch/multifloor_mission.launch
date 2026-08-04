@@ -1,0 +1,7 @@
+<launch>
+  <arg name="config" default="$(find a1_mission_manager)/config/multifloor.yaml"/>
+  <node pkg="a1_mission_manager" type="multifloor_mission_node.py"
+        name="multifloor_mission" output="screen" required="true">
+    <rosparam command="load" file="$(arg config)"/>
+  </node>
+</launch>

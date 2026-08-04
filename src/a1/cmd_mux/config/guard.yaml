@@ -1,0 +1,68 @@
+# cmd_vel_guard：/cmd_vel 的唯一出口，负责限幅、限加速度、超时归零、就绪门控。
+#
+# 为什么 twist_mux 之后还要这一层：
+#   1. twist_mux 在所有源都沉默时是"停止发布"，不是"发布零"。而 A1 的 State_RL
+#      对 /cmd_vel 既不限幅也不超时——停止发布后它会保持最后一个速度一直走下去。
+#      所以必须有人主动持续发零。
+#   2. twist_mux 不做限速和限加速度，而超出 RL 策略训练范围的指令会让步态发散。
+#   3. 控制器没进 /cmd_vel 模式时就不该有速度指令流出去。
+
+# ---- 速度上限 ----
+# 依据 A1 的 RL 策略训练范围（State_RL_test.h 里的键盘 scale）：
+#   vx 0.6 / vy 0.35 / wz 0.9
+# 这里取略低于训练上限的值作为硬顶，导航侧自己还有一层更保守的限制。
+max_vel_x: 1.40
+max_vel_y: 0.30
+max_vel_theta: 1.80
+
+# ---- 加速度上限（单位 m/s^2 与 rad/s^2）----
+# 注意不是越小越平滑：RL 本身是速度跟踪器，吃阶跃指令没问题，
+# 限太死会让起步迟钝甚至因为指令长期低于死区而走不动。
+max_acc_x: 4.0
+max_acc_y: 3.0
+max_acc_theta: 6.0
+
+# ---- 输出 ----
+publish_rate: 50.0        # 固定频率发布，不依赖输入频率
+# Timer 偶发延迟或 /clock 大步前跳时，一次最多按 0.1s 计算速度变化，
+# 避免节点恢复运行的第一帧出现过大跳变。
+max_timer_dt: 0.1
+
+# ---- 超时保护 ----
+# 超过这个时间没收到上游指令，就开始按 max_acc 减速到零并持续发零。
+# 必须略大于 twist_mux 里最大的源超时（当前均为 0.5s）：高优先级源撤走时，
+# 先让 mux 回落到仍在发布的低优先级源，guard 不应抢先误判断流而制造停顿。
+# 当所有源都断开时，最坏约 0.7s 开始减速，按当前 vx 上限约 0.87s 内归零。
+input_timeout: 0.7
+# 减速到零是走加速度限制平滑降速，还是直接发零。
+# 普通断流平滑减速对四足更友好；急停和 safety_lock 都会绕过本项立即归零。
+decelerate_to_stop: true
+
+# ---- 立即停止通道 ----
+# /cmd_vel_emergency 仍是 twist_mux 的最高优先级速度源；guard 也直接订阅它。
+# 任何新消息都被解释为“急停有效”，消息内容即使误填非零也只会输出零。
+# 发布端需要以高于 2Hz 持续发布；停发 0.5s 后自动释放。
+emergency_topic: /cmd_vel_emergency
+emergency_timeout: 0.5
+# 仅用于 CmdMuxStatus 的源身份/年龄跟踪；真正仲裁仍由 twist_mux 完成。
+source_timeout: 0.5
+
+# std_msgs/Bool。True 立即锁死为零，并保持到明确收到 False；
+# 用于 mission_manager 故障保护，不会因为发布者崩溃而自动解锁。
+safety_lock_topic: /a1_cmd_mux/safety_lock
+
+# ---- 就绪门控 ----
+# 控制器没进 RL /cmd_vel 模式时（比如还在 passive / fixed stand），
+# 上层的非零速度指令不该流到底层。ready 必须是持续发布的 std_msgs/Bool；
+# 超过 ready_timeout 没有心跳会立即归零。
+#
+# 当前 unitree_guide 没有暴露可靠的 FSM 状态话题，且 MODULES.md 原则上禁止
+# 上层为此修改 State_RL 控制链，所以默认兼容关闭。接口与验收已经实现；
+# 底层或 mission_manager 提供真实 ready 后，在 bringup 中改为 true。
+require_ready: false
+ready_topic: /a1/controller_ready
+ready_timeout: 1.0
+
+# ---- 诊断 ----
+status_topic: /a1/cmd_mux/status
+status_rate: 2.0

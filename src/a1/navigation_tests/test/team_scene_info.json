@@ -1,0 +1,23 @@
+{
+  "schema": "team_scene_info_v1",
+  "allowed_interfaces": {
+    "services": [
+      "/set_door_state"
+    ]
+  },
+  "public_scene": {
+    "door_ids": [
+      {
+        "floor_index": 0,
+        "id": "runtime-main-entrance",
+        "initial_open": true,
+        "kind": "main_entrance"
+      }
+    ]
+  },
+  "referee_only": {
+    "forbidden_files": [
+      "generated_building/layout_metadata.json"
+    ]
+  }
+}

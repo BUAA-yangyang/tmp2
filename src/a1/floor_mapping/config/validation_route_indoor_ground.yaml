@@ -1,0 +1,10 @@
+limits:
+  linear: 0.40
+  angular: 0.40
+segments:
+  - {name: doorway_scan_left, duration: 5.0, angular: 0.35}
+  - {name: doorway_scan_right, duration: 5.0, angular: -0.35}
+  - {name: move_further_inside, duration: 15.0, linear: 0.40}
+  - {name: indoor_scan_left, duration: 5.0, angular: 0.35}
+  - {name: indoor_scan_right, duration: 5.0, angular: -0.35}
+  - {name: return_to_doorway, duration: 15.0, linear: -0.40}

@@ -1,0 +1,33 @@
+# managed_launch is set by localization.launch because rosparam scalar values
+# do not perform roslaunch $(find ...) substitution.
+status_topic: /a1/localization/status
+pointcloud_topic: /a1_localization/livox_pointcloud
+imu_topic: /trunk_imu
+clock_topic: /clock
+reinitialize_service: /a1/localization/reinitialize
+supervisor_status_topic: /a1/localization/supervisor_status
+automatic_reinitialize: true
+# One controlled retry is useful for a transient estimator failure. Repeating
+# the same drift fault must latch invalid instead of creating a restart storm.
+max_automatic_restarts_per_reason: 1
+require_controller_ready: true
+controller_state_topic: /a1/controller/state
+controller_ready_state: fixed stand
+# The acceptance controller changes to State_RL before the estimator's full
+# stability window elapses. Zero-command State_RL is also a valid stationary
+# initialization posture; the IMU stability gate below remains authoritative.
+controller_ready_states: [fixed stand, State_RL, RL]
+monitor_clock: true
+input_timeout: 3.0
+settle_time: 2.0
+# FAST-LIO must initialize only while the trunk is upright and dynamically
+# quiet. These bounds are intentionally far above fixed-stand sensor noise but
+# reject passive/falling and the measured RL zero-command body oscillation.
+imu_stability_window: 2.0
+imu_min_samples: 100
+max_gyro_std: 0.03
+max_accel_std: 0.20
+max_horizontal_accel_mean: 1.0
+min_vertical_accel_mean: 8.0
+max_vertical_accel_mean: 11.0
+shutdown_timeout: 8.0

@@ -1,0 +1,52 @@
+<launch>
+  <!-- Single-floor persistent-map mode.  The standard /move_base Action and
+       /cmd_vel_nav output remain unchanged. -->
+  <arg name="obstacle_cloud_topic"
+       default="/a1/floor_mapping/obstacle_cloud"/>
+  <arg name="clearing_cloud_topic"
+       default="/a1/floor_mapping/clearing_cloud"/>
+  <arg name="cmd_vel_topic" default="/cmd_vel_nav"/>
+  <arg name="odom_topic" default="/Odometry_gazebo"/>
+  <arg name="dwa_acc_lim_theta" default="3.0"/>
+  <arg name="dwa_max_vel_x" default="0.40"/>
+  <arg name="dwa_min_vel_x" default="-0.15"/>
+  <arg name="dwa_max_vel_y" default="0.25"/>
+  <arg name="dwa_min_vel_y" default="-0.25"/>
+  <arg name="dwa_max_vel_trans" default="0.40"/>
+  <arg name="dwa_max_vel_theta" default="0.60"/>
+  <arg name="inflation_radius" default="0.25"/>
+  <arg name="inflation_cost_scaling_factor" default="5.0"/>
+
+  <include file="$(find a1_navigation)/launch/navigation.launch">
+    <arg name="obstacle_cloud_topic" value="$(arg obstacle_cloud_topic)"/>
+    <arg name="obstacle_cloud_type" value="PointCloud2"/>
+    <arg name="cmd_vel_topic" value="$(arg cmd_vel_topic)"/>
+    <arg name="odom_topic" value="$(arg odom_topic)"/>
+    <arg name="dwa_acc_lim_theta" value="$(arg dwa_acc_lim_theta)"/>
+    <arg name="dwa_max_vel_x" value="$(arg dwa_max_vel_x)"/>
+    <arg name="dwa_min_vel_x" value="$(arg dwa_min_vel_x)"/>
+    <arg name="dwa_max_vel_y" value="$(arg dwa_max_vel_y)"/>
+    <arg name="dwa_min_vel_y" value="$(arg dwa_min_vel_y)"/>
+    <arg name="dwa_max_vel_trans" value="$(arg dwa_max_vel_trans)"/>
+    <arg name="dwa_max_vel_theta" value="$(arg dwa_max_vel_theta)"/>
+    <arg name="inflation_radius" value="$(arg inflation_radius)"/>
+    <arg name="inflation_cost_scaling_factor"
+         value="$(arg inflation_cost_scaling_factor)"/>
+    <arg name="move_base_config"
+         value="$(find a1_navigation)/config/move_base_floor_mapping_params.yaml"/>
+    <arg name="global_costmap_config"
+         value="$(find a1_navigation)/config/global_costmap_floor_mapping_params.yaml"/>
+    <arg name="local_costmap_config"
+         value="$(find a1_navigation)/config/local_costmap_floor_mapping_params.yaml"/>
+    <arg name="obstacle_layer_config"
+         value="$(find a1_navigation)/config/obstacle_layer_floor_mapping_params.yaml"/>
+  </include>
+
+  <!-- The standard navigation include relays the obstacle-only marking cloud
+       to /a1_nav/obstacle_cloud. Add the paired ground+obstacle clearing cloud
+       without changing MoveBaseAction or /cmd_vel_nav. -->
+  <node if="$(eval arg('clearing_cloud_topic') != '/a1_nav/clearing_cloud')"
+        pkg="topic_tools" type="relay" name="clearing_cloud_relay"
+        args="$(arg clearing_cloud_topic) /a1_nav/clearing_cloud"
+        output="screen"/>
+</launch>

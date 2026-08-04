@@ -1,0 +1,15 @@
+<launch>
+  <node pkg="a1_floor_mapping" type="floor_mapping_node" name="floor_mapping_costmap_test" output="screen" required="true">
+    <rosparam command="load" file="$(find a1_floor_mapping)/config/floor_mapping.yaml"/>
+    <param name="topics/pointcloud" value="/test/costmap/cloud"/><param name="topics/odom" value="/test/costmap/odom"/>
+    <param name="topics/localization_status" value="/test/costmap/localization"/><param name="topics/supervisor_status" value="/test/costmap/supervisor"/>
+    <param name="topics/obstacle_cloud" value="/test/costmap/mapping_cloud"/><param name="topics/clearing_cloud" value="/test/costmap/clearing_cloud"/><param name="topics/occupancy_grid" value="/test/costmap/mapping_grid"/>
+    <param name="topics/status" value="/test/costmap/status"/><param name="topics/diagnostics" value="/test/costmap/diagnostics"/>
+    <param name="services/reset" value="/test/costmap/reset"/><param name="ground/initialization_frames" value="3"/>
+    <param name="ground/minimum_candidates" value="20"/><param name="recovery/valid_frames" value="1"/>
+  </node>
+  <node pkg="costmap_2d" type="costmap_2d_node" name="test_costmap" output="screen" required="true">
+    <rosparam command="load" ns="costmap" file="$(find a1_floor_mapping)/test/costmap_test.yaml"/>
+  </node>
+  <test pkg="a1_floor_mapping" type="floor_mapping_costmap_test.py" test-name="floor_mapping_costmap" time-limit="45"/>
+</launch>

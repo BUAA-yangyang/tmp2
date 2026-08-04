@@ -1,0 +1,30 @@
+common:
+  lid_topic: /a1_localization/livox_pointcloud
+  imu_topic: /trunk_imu
+  time_sync_en: false
+  time_offset_lidar_to_imu: 0.0
+preprocess:
+  lidar_type: 4
+  scan_line: 4
+  blind: 0.5
+mapping:
+  acc_cov: 0.1
+  gyr_cov: 0.1
+  b_acc_cov: 0.0001
+  b_gyr_cov: 0.0001
+  fov_degree: 180.0
+  det_range: 40.0
+  extrinsic_est_en: false
+  # laser_livox -> imu_link. The trunk IMU is gravity-aligned at rest and is
+  # the configuration validated by the original SLAM integration.
+  extrinsic_T: [0.2, 0.0, 0.08]
+  extrinsic_R: [0.7073883, 0.0, 0.7068252, 0.0, 1.0, 0.0, -0.7068252, 0.0, 0.7073883]
+publish:
+  path_en: false
+  scan_publish_en: true
+  dense_publish_en: true
+  scan_bodyframe_pub_en: true
+  # Export the current ikd-tree at a bounded rate. Product validation and
+  # persistent storage are owned by localization_map_manager.
+  map_publish_en: true
+  map_publish_interval: 2.0

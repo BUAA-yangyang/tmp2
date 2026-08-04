@@ -1,0 +1,13 @@
+<launch>
+  <node pkg="a1_floor_mapping" type="floor_mapping_node" name="floor_mapping_door_wall_test" output="screen" required="true">
+    <rosparam command="load" file="$(find a1_floor_mapping)/config/floor_mapping.yaml"/>
+    <param name="topics/pointcloud" value="/test/door_wall/cloud"/><param name="topics/odom" value="/test/door_wall/odom"/>
+    <param name="topics/localization_status" value="/test/door_wall/localization"/><param name="topics/supervisor_status" value="/test/door_wall/supervisor"/>
+    <param name="topics/obstacle_cloud" value="/test/door_wall/obstacle_cloud"/><param name="topics/clearing_cloud" value="/test/door_wall/clearing_cloud"/><param name="topics/occupancy_grid" value="/test/door_wall/map"/>
+    <param name="topics/walls" value="/test/door_wall/walls"/><param name="topics/doorways" value="/test/door_wall/doorways"/><param name="topics/status" value="/test/door_wall/status"/><param name="topics/structure_status" value="/test/door_wall/structure_status"/><param name="topics/diagnostics" value="/test/door_wall/diagnostics"/>
+    <param name="ground/initialization_frames" value="3"/><param name="ground/minimum_candidates" value="20"/><param name="recovery/valid_frames" value="1"/>
+    <param name="door_wall/wall_stable_frames" value="2"/><param name="door_wall/opening_stable_frames" value="2"/><param name="door_wall/state_stable_frames" value="2"/>
+    <param name="door_wall/minimum_wall_support" value="8"/><param name="door_wall/minimum_state_bins" value="3"/>
+  </node>
+  <test pkg="a1_floor_mapping" type="floor_mapping_door_wall_test.py" test-name="floor_mapping_door_wall" time-limit="55"/>
+</launch>

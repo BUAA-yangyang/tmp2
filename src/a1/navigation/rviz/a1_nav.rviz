@@ -1,0 +1,179 @@
+Panels:
+  - Class: rviz/Displays
+    Name: Displays
+    Property Tree Widget:
+      Expanded: ~
+    Tree Height: 700
+  - Class: rviz/Views
+    Name: Views
+  - Class: rviz/Tool Properties
+    Name: Tool Properties
+Visualization Manager:
+  Class: ""
+  Global Options:
+    Background Color: 48; 48; 48
+    Default Light: true
+    # 固定坐标系用 odom：里程碑1 没有 map 帧的静态地图，costmap 也跑在 odom 下
+    Fixed Frame: odom
+    Frame Rate: 10
+  Displays:
+    - Class: rviz/Grid
+      Name: Grid
+      Enabled: true
+      Cell Size: 1
+      Plane Cell Count: 40
+      Color: 160; 160; 164
+      Reference Frame: <Fixed Frame>
+    - Class: rviz/TF
+      Name: TF
+      Enabled: false
+      Show Names: true
+      Show Axes: true
+      Marker Scale: 0.3
+    - Class: rviz/RobotModel
+      Name: RobotModel
+      Enabled: true
+      Robot Description: robot_description
+      TF Prefix: ""
+      Visual Enabled: true
+      Collision Enabled: false
+    # 障碍点云：本模块的规范障碍输入（假障碍 / RealSense 走这个，类型 PointCloud2）
+    - Class: rviz/PointCloud2
+      Name: ObstacleCloud
+      Enabled: true
+      Topic: /a1_nav/obstacle_cloud
+      Unreliable: false
+      Queue Size: 2
+      Size (m): 0.03
+      Style: Flat Squares
+      Color: 255; 80; 80
+      Color Transformer: FlatColor
+      Decay Time: 0
+    # Livox 原始 /scan 一帧约 2.4 万点；远程桌面默认关闭，避免和过滤点云重复渲染。
+    # 排查预处理器时可手动打开。
+    - Class: rviz/PointCloud
+      Name: LivoxScan
+      Enabled: false
+      Topic: /scan
+      Unreliable: false
+      Queue Size: 2
+      Size (m): 0.02
+      Style: Points
+      Color: 0; 255; 200
+      Color Transformer: FlatColor
+      Decay Time: 0
+    # 全局代价地图是 20m 滚动窗口，远程演示默认关闭；需要检查全局代价时手动打开。
+    - Class: rviz/Map
+      Name: GlobalCostmap
+      Enabled: false
+      Topic: /move_base/global_costmap/costmap
+      Color Scheme: costmap
+      Draw Behind: true
+      Alpha: 0.5
+    - Class: rviz/Map
+      Name: PersistentFloorMap
+      Enabled: true
+      Topic: /a1/floor_mapping/map
+      Color Scheme: map
+      Draw Behind: true
+      Alpha: 0.75
+    # 局部代价地图
+    - Class: rviz/Map
+      Name: LocalCostmap
+      Enabled: true
+      Topic: /move_base/local_costmap/costmap
+      Color Scheme: costmap
+      Draw Behind: false
+      Alpha: 0.7
+    # 全局路径（GlobalPlanner 规划出来的）
+    - Class: rviz/Path
+      Name: GlobalPlan
+      Enabled: true
+      Topic: /move_base/GlobalPlanner/plan
+      Color: 0; 255; 0
+      Line Style: Lines
+      Alpha: 1
+    # 局部路径（DWA 每周期选中的那条轨迹）
+    - Class: rviz/Path
+      Name: LocalPlan
+      Enabled: true
+      Topic: /move_base/DWAPlannerROS/local_plan
+      Color: 0; 170; 255
+      Line Style: Lines
+      Alpha: 1
+    # 机器人 footprint，用来直观判断"会不会刮到"
+    - Class: rviz/Polygon
+      Name: Footprint
+      Enabled: true
+      Topic: /move_base/global_costmap/footprint
+      Color: 255; 255; 0
+      Alpha: 1
+    - Class: rviz/MarkerArray
+      Name: ExplorationFrontiers
+      Enabled: true
+      Marker Topic: /a1/exploration/frontiers
+      Queue Size: 2
+    - Class: rviz/MarkerArray
+      Name: UpstreamPerceptionAndLocalization
+      Enabled: true
+      Marker Topic: /a1/diagnostics/upstream_markers
+      Queue Size: 2
+    - Class: rviz/MarkerArray
+      Name: LiveCorridorWallCenterModel
+      Enabled: true
+      Marker Topic: /a1/exploration/corridor_model
+      Queue Size: 2
+    - Class: rviz/MarkerArray
+      Name: MultiFloorElevatorAnchors
+      Enabled: true
+      Marker Topic: /a1/mission_manager/markers
+      Queue Size: 2
+    - Class: rviz/Marker
+      Name: SingleFloorExplorationScope
+      Enabled: true
+      Marker Topic: /a1/exploration/scope
+      Queue Size: 2
+    - Class: rviz/Marker
+      Name: ExplorationTarget
+      Enabled: true
+      Marker Topic: /a1/exploration/selected_target
+      Queue Size: 2
+    - Class: rviz/Marker
+      Name: FailedExplorationTargets
+      Enabled: true
+      Marker Topic: /a1/exploration/failed_targets
+      Queue Size: 2
+    - Class: rviz/Path
+      Name: ActualExplorationTrajectory
+      Enabled: true
+      Topic: /a1/exploration/trajectory
+      Color: 255; 80; 255
+      Line Style: Lines
+      Alpha: 1
+  Tools:
+    - Class: rviz/MoveCamera
+    - Class: rviz/Select
+    - Class: rviz/FocusCamera
+    - Class: rviz/Measure
+    # 这个就是"2D Nav Goal"按钮：点一下往 /move_base_simple/goal 发目标位姿
+    - Class: rviz/SetGoal
+      Topic: /move_base_simple/goal
+  Global Options:
+    Fixed Frame: odom
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Name: Current View
+      Distance: 14
+      Focal Point:
+        X: 0
+        Y: -3
+        Z: 0
+      Pitch: 1.0
+      Yaw: 1.6
+      Target Frame: <Fixed Frame>
+Window Geometry:
+  Height: 900
+  Width: 1400
+  Displays:
+    collapsed: false

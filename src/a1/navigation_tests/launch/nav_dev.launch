@@ -1,0 +1,91 @@
+<launch>
+  <!-- ============================================================
+       里程碑1 联调用 launch（dev-only，不进正式启动链）
+
+       前提：仿真已用 PUBLISH_REFEREE_TF=1 启动，并按 2 → 5 把 junior_ctrl
+             切到官方 move_base 经典步态速度模式
+             （必须在终端看到 "Switched from fixed stand to move_base"）
+
+       这个 launch 干三件 dev 期才需要的事：
+         1. 起 a1_navigation（move_base，输出 /cmd_vel_nav）
+         2. 起 a1_cmd_mux，完成多源仲裁并作为 /cmd_vel 唯一出口。
+         3. 障碍源：默认用假障碍，真实传感器修好后换 obstacle_cloud_topic
+
+       定位说明：本 launch 不起任何定位节点。TF odom→base 由仿真自带的
+       state_from_gazebo 提供（ENABLE_REFEREE_ODOM=1 且 PUBLISH_REFEREE_TF=1）。
+       它派生自 Gazebo 真值，是 **dev-only 替身**，后期换成 a1_localization 的 FAST-LIO2。
+       因为两者都以标准 TF 对外，替换时本模块配置无需改动。
+       ============================================================ -->
+
+  <!-- 障碍源：
+       fake      = 假障碍发布器（默认，不依赖任何传感器）
+       realsense = /real_sense/depth/points（软渲染下可能显著降低实时因子）
+       livox     = /scan 经盲区过滤后的 /a1_nav/obstacle_cloud -->
+  <arg name="obstacle_source" default="fake"/>
+  <arg name="use_rviz" default="true"/>
+
+  <!-- 假墙几何（odom 坐标）。默认放在出生点前方；做绕障测试时改这些参数，
+       把墙摆到狗和目标之间，逼它从缺口绕过去 -->
+  <arg name="wall_y"     default="-1.5"/>
+  <arg name="half_width" default="2.5"/>
+  <arg name="gap_center" default="1.0"/>
+  <arg name="gap_width"  default="0.9"/>
+
+  <!-- 只在外部 bringup 已经启动同一个 cmd_mux 时设为 false，避免重复出口 -->
+  <arg name="use_cmd_mux" default="true"/>
+
+  <!-- ===== 障碍源 ===== -->
+  <group if="$(eval arg('obstacle_source') == 'fake')">
+    <node pkg="a1_navigation_tests" type="fake_obstacle_publisher.py"
+          name="fake_obstacle_publisher" output="screen">
+      <param name="topic" value="/a1_nav/obstacle_cloud"/>
+      <param name="world_frame" value="odom"/>
+      <param name="sensor_frame" value="base"/>
+      <param name="max_range" value="6.0"/>
+      <param name="rate" value="5.0"/>
+      <param name="wall_y"     value="$(arg wall_y)"/>
+      <param name="half_width" value="$(arg half_width)"/>
+      <param name="gap_center" value="$(arg gap_center)"/>
+      <param name="gap_width"  value="$(arg gap_width)"/>
+    </node>
+  </group>
+
+  <!-- Livox 原始 /scan 必须先过盲区过滤再喂 costmap：插件把无回波射线也发成 (0,0,0)，
+       实测一帧 24000 点里有 11463 个是这种空回波，会在机器人脚下糊出一坨跟着走的致命障碍 -->
+  <group if="$(eval arg('obstacle_source') == 'livox')">
+    <node pkg="a1_navigation" type="scan_to_obstacle_cloud.py"
+          name="scan_to_obstacle_cloud" output="screen">
+      <param name="input_topic"  value="/scan"/>
+      <param name="output_topic" value="/a1_nav/obstacle_cloud"/>
+      <param name="min_range"    value="0.6"/>
+      <param name="max_range"    value="20.0"/>
+    </node>
+  </group>
+
+  <!-- ===== 导航 ===== -->
+  <include file="$(find a1_navigation)/launch/navigation.launch">
+    <!-- livox 经 scan_to_obstacle_cloud 过滤后直接落在 /a1_nav/obstacle_cloud，
+         所以这里不用改话题。不走 /livox/Pointcloud2 是因为它在
+         use_ground_truth_odom=1 时用真值 odom 做了坐标变换，比赛不能用 -->
+    <arg name="obstacle_cloud_topic"
+         value="$(eval '/real_sense/depth/points' if arg('obstacle_source') == 'realsense'
+                  else '/a1_nav/obstacle_cloud')"/>
+    <arg name="obstacle_cloud_type" value="PointCloud2"/>
+    <arg name="cmd_vel_topic" value="/cmd_vel_nav"/>
+    <!-- Gazebo 的瞬时 base twist 含摆腿高频角速度（实测可到约 1.5rad/s）。
+         提高 DWA 的动态减速窗口，防止它因“当前速度来不及降到配置上限”
+         而采样出超过 max_vel_theta 的命令；最终输出仍由 guard 限加速度。 -->
+    <arg name="dwa_acc_lim_theta" value="10.0"/>
+  </include>
+
+  <!-- ===== 正式速度出口：a1_cmd_mux ===== -->
+  <!-- move_base 只发 /cmd_vel_nav；twist_mux 仲裁后由 guard 限幅、限加速度，
+       上游全部断开约 0.87s 内归零，并继续以 50Hz 发布零速度。 -->
+  <include if="$(arg use_cmd_mux)" file="$(find a1_cmd_mux)/launch/cmd_mux.launch"/>
+
+  <!-- ===== RViz ===== -->
+  <!-- RViz 的 "2D Nav Goal" 按钮就是本模块天然的测试界面：
+       它往 /move_base_simple/goal 发一个 PoseStamped，move_base 收到后开始规划 -->
+  <node if="$(arg use_rviz)" pkg="rviz" type="rviz" name="rviz"
+        args="-d $(find a1_navigation)/rviz/a1_nav.rviz" output="screen"/>
+</launch>

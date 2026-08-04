@@ -1,0 +1,44 @@
+# obstacle_layer 的参数。
+# 这份文件要被加载到 <costmap>/obstacle_layer 命名空间下（见 navigation.launch），
+# 不是 <costmap> 下面 —— 用了 plugins: 列表之后放错层级会被静默忽略，
+# 表现为"传感器明明在发，costmap 里却一片空白"。这是 costmap_2d 最常见的坑。
+
+# obstacle_range : 多远以内的点才写进 costmap（更远的点噪声大、且没必要）
+# raytrace_range : 沿射线清除障碍的最大距离，必须 >= obstacle_range，
+#                  否则已经离开的障碍清不掉，地图越跑越脏，最后把自己围死
+obstacle_range: 4.0
+raytrace_range: 5.0
+
+# 高度过滤。关键点：costmap_2d 是把点云转到 **全局坐标系(odom)** 之后再按 z 过滤，
+# 不是在传感器坐标系里过滤。当前楼层地面在 odom 下 z≈0，所以：
+#   min 0.08 → 滤掉地面点。必须有，否则 45° 斜装的 Livox 和深度相机大量打到地面，
+#              整片地板被标成障碍，狗一步都走不了。
+#   max 1.50 → 保留墙面/家具，滤掉天花板。
+min_obstacle_height: 0.08
+max_obstacle_height: 1.50
+
+# 是否把"未知"也当障碍。false：只信看到的实体障碍，未知区域交给全局规划器去探
+track_unknown_space: false
+combination_method: 1        # 1 = 与其他层取最大代价
+
+# 障碍输入。本模块对外只认这一个话题名（模块的规范障碍输入），
+# 由 launch 的 obstacle_cloud_topic 参数决定实际订阅哪个：
+#   假障碍(联调) / RealSense / Livox / 未来 floor_mapping 的投影结果。
+# 这样换传感器后端不需要改这份配置。
+# 注意 data_type 要和实际话题类型对上，对不上是静默失效（costmap 收不到任何障碍）：
+#   Livox 插件的 /scan 是 sensor_msgs/PointCloud（不是 LaserScan，也不是 PointCloud2）
+#   RealSense 的 /real_sense/depth/points 和假障碍是 sensor_msgs/PointCloud2
+# 由 navigation.launch 的 obstacle_cloud_type 参数覆盖。
+observation_sources: obstacle_cloud
+obstacle_cloud:
+  data_type: PointCloud2
+  topic: /a1_nav/obstacle_cloud
+  marking: true
+  clearing: true
+  inf_is_valid: false
+  # 设 0 关闭"传感器超时"告警，避免低帧率/间歇性数据源刷屏。
+  # 真机/正式联调时应设成传感器实际频率的下限，让掉线能被发现。
+  expected_update_rate: 0.0
+  observation_persistence: 0.0
+  min_obstacle_height: 0.08
+  max_obstacle_height: 1.50

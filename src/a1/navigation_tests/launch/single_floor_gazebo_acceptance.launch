@@ -1,0 +1,95 @@
+<launch>
+  <!-- DEV-ONLY production-chain acceptance.
+       Gazebo/Livox/building control/junior_ctrl are started separately by
+       auto.sh. Door and entry evidence here use only the public behavior
+       action and the Livox-derived OccupancyGrid. -->
+  <arg name="run_id" default="bounded"/>
+  <arg name="output"/>
+  <arg name="bag_path"/>
+  <arg name="team_scene_info"
+       default="/workspace/SimEnv/generated_building/team_scene_info.json"/>
+  <arg name="roi_depth" default="12.0"/>
+  <arg name="roi_half_width" default="6.0"/>
+  <arg name="minimum_frontier_successes" default="2"/>
+  <arg name="action_timeout_sim" default="600.0"/>
+  <arg name="action_wall_timeout" default="7200.0"/>
+  <arg name="manage_physics_unpause" default="true"/>
+  <arg name="bag_recorder_node" default="/single_floor_acceptance_bag"/>
+  <arg name="entry_motion_only" default="false"/>
+
+  <include file="$(find a1_navigation_tests)/launch/single_floor_exploration_dev.launch">
+    <arg name="use_cmd_mux" value="true"/>
+    <arg name="use_rviz" value="false"/>
+    <arg name="team_scene_info" value="$(arg team_scene_info)"/>
+  </include>
+
+  <node pkg="rosbag" type="record" name="single_floor_acceptance_bag"
+        output="screen"
+        args="--lz4 -O $(arg bag_path)
+          /clock
+          /tf
+          /tf_static
+          /trunk_imu
+          /Odometry_gazebo
+          /visual/FR_foot_contact/the_force
+          /visual/FL_foot_contact/the_force
+          /visual/RR_foot_contact/the_force
+          /visual/RL_foot_contact/the_force
+          /a1/localization/odom
+          /a1/localization/status
+          /a1/localization/supervisor_status
+          /a1/floor_mapping/map
+          /a1/floor_mapping/status
+          /a1/floor_mapping/walls
+          /a1/floor_mapping/doorways
+          /a1/floor_mapping/obstacle_cloud
+          /a1/floor_mapping/clearing_cloud
+          /a1/exploration/status
+          /a1/exploration/frontiers
+          /a1/exploration/selected_target
+          /a1/exploration/failed_targets
+          /a1/exploration/trajectory
+          /a1/exploration/scope
+          /a1/exploration/roi
+          /a1/exploration/corridor_model
+          /a1/exploration/explore_floor/goal
+          /a1/exploration/explore_floor/feedback
+          /a1/exploration/explore_floor/result
+          /a1/building_behavior/special/goal
+          /a1/building_behavior/special/feedback
+          /a1/building_behavior/special/result
+          /move_base/status
+          /move_base/goal
+          /move_base/result
+          /move_base/GlobalPlanner/plan
+          /move_base/DWAPlannerROS/local_plan
+          /cmd_vel_nav
+          /cmd_vel_muxed
+          /cmd_vel
+          /a1/controller_ready
+          /a1/safe_stand_ready
+          /a1_cmd_mux/safety_lock
+          /a1/cmd_mux/status
+          /joy
+          /rosout_agg"/>
+
+  <node pkg="a1_navigation_tests"
+        type="single_floor_gazebo_acceptance.py"
+        name="single_floor_gazebo_acceptance"
+        output="screen"
+        required="true">
+    <param name="run_id" value="$(arg run_id)"/>
+    <param name="output" value="$(arg output)"/>
+    <param name="team_scene_info" value="$(arg team_scene_info)"/>
+    <param name="roi_depth" value="$(arg roi_depth)"/>
+    <param name="roi_half_width" value="$(arg roi_half_width)"/>
+    <param name="minimum_frontier_successes"
+           value="$(arg minimum_frontier_successes)"/>
+    <param name="action_timeout_sim" value="$(arg action_timeout_sim)"/>
+    <param name="action_wall_timeout" value="$(arg action_wall_timeout)"/>
+    <param name="manage_physics_unpause"
+           value="$(arg manage_physics_unpause)"/>
+    <param name="bag_recorder_node" value="$(arg bag_recorder_node)"/>
+    <param name="entry_motion_only" value="$(arg entry_motion_only)"/>
+  </node>
+</launch>

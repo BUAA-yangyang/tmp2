@@ -1,0 +1,45 @@
+# Building-specific behavior handled by a1_building_behavior.
+# Door/elevator low-level services should reuse building_generator_interfaces.
+
+uint8 OPEN_DOOR=1
+uint8 CALL_ELEVATOR=2
+uint8 RIDE_ELEVATOR=3
+uint8 PASS_STAIRS=4
+uint8 ALIGN_TO_PASSAGE=5
+
+uint8 behavior_type
+
+# Door/elevator/stairs identifier from building/floor mapping metadata.
+string target_id
+
+int32 target_floor_id
+
+# Optional poses. Leave frame_id empty if unused.
+geometry_msgs/PoseStamped entry_pose
+geometry_msgs/PoseStamped exit_pose
+
+# Seconds. 0 means module default.
+float32 timeout_s
+---
+uint16 ERROR_NONE=0
+uint16 ERROR_UNSUPPORTED=1
+uint16 ERROR_PUBLIC_SCENE=2
+uint16 ERROR_SERVICE_UNAVAILABLE=3
+uint16 ERROR_SERVICE_REJECTED=4
+uint16 ERROR_CANCELLED=5
+uint16 ERROR_INTERNAL=255
+
+bool success
+uint16 error_code
+string message
+---
+uint8 WAITING=0
+uint8 ALIGNING=1
+uint8 CALLING_SERVICE=2
+uint8 MOVING=3
+uint8 VERIFYING=4
+uint8 RECOVERING=5
+
+uint8 state
+float32 progress
+string message

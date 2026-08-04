@@ -1,0 +1,105 @@
+mission:
+  floors: [0, 1, 2]
+  # Production/full runs must leave this false.  The test launch explicitly
+  # ties it to force_floor_complete_after_ingress for elevator-only testing.
+  special_test_mode: false
+  elevator_id: elevator_main
+  action_timeout_wall: 1800.0
+  navigation_timeout_wall: 180.0
+  service_timeout_wall: 15.0
+  localization_recovery_timeout_wall: 45.0
+  mapping_recovery_timeout_wall: 30.0
+startup:
+  stand_attempt_timeout_wall: 120.0
+  localization_timeout_wall: 300.0
+  mapping_timeout_wall: 180.0
+  fixed_stand_settle_sim_s: 3.0
+entry:
+  floor0_forward_offset: 3.5
+  # Fixed building: after crossing the public entrance, force one localization-
+  # frame transit into the main corridor before frontier completion is valid.
+  floor0_corridor_ingress: 8.0
+elevator:
+  # After fully entering the car, turn on the source floor before calling the
+  # elevator.  The target-floor mapper then starts with a view through the
+  # already-open doorway instead of the rear wall.
+  scan_cmd_vel_topic: /cmd_vel_behavior
+  # Match the proven room-scan angular profile: fast while far from target,
+  # then bounded closed-loop deceleration near the final doorway heading.
+  transfer_turn_max_speed: 1.80
+  transfer_turn_min_speed: 0.55
+  transfer_turn_gain: 1.80
+  transfer_turn_tolerance: 0.20
+  transfer_turn_timeout_sim: 20.0
+  transfer_turn_timeout_wall: 90.0
+  transfer_turn_settle_wall: 0.5
+  doorway_min_width: 1.20
+  # floor_mapping reports the stable wall-edge span for the 1.4 m elevator
+  # opening; repeated runs measure approximately 1.86-1.94 m.
+  doorway_max_width: 2.00
+  lobby_standoff: 0.85
+  # Keep the whole quadruped, including both rear feet, clear of the threshold
+  # before the in-car pre-transfer turn.
+  car_depth: 1.45
+  detection_timeout_wall: 20.0
+  # Generation-local occupancy/wall/door evidence must be recent when it is
+  # frozen into an elevator or corridor landmark.
+  perception_max_age_sim: 1.5
+  align_occupied_threshold: 65
+  # 20 s wall is only about 6 s of sim at the measured RTF ~0.3, i.e. ~6 map
+  # frames after the floor reset -- not enough for the car walls to become
+  # known and the opening to stand out. mf13 floor 2 found nothing in that
+  # window and the blind fixed route then walked the robot off the floor.
+  # This is an observation budget, not a safety margin: the wait exits as
+  # soon as a confident opening appears (floor 1 took under 2 s).
+  align_observation_timeout: 60.0
+  align_max_range: 3.0
+  minimum_height_change: 1.5
+  # Dedicated F0 landmark template, evaluated only during the 2.5 m
+  # post-entrance right-side scan.  It does not create a generic doorway.
+  template_flank_min_length: 0.45
+  # One physical flank can merge with the adjacent wall in RANSAC.  Accept a
+  # long partner, but require at least one member of the pair to remain short.
+  template_flank_max_length: 4.00
+  template_short_flank_max_length: 1.10
+  # The nominal leaf is narrower, but the mapper observes the outer short-wall
+  # edge span at roughly 1.86--1.94 m in this scene.
+  template_gap_min_width: 1.55
+  template_gap_max_width: 2.10
+  # When the far edge merges into the perpendicular shaft side wall, use its
+  # tangent projection; r14 measured this boundary interval at about 1.37 m.
+  template_corner_gap_min_width: 1.15
+  template_corner_gap_max_width: 1.65
+  template_wall_angle_tolerance: 0.26
+  template_plane_tolerance: 0.30
+  template_scan_bearing_tolerance: 0.65
+  template_center_tolerance: 0.18
+  template_width_tolerance: 0.16
+  template_min_observations: 5
+  template_min_age_wall: 0.8
+upper_floor:
+  # These three are the fixed exit route calibrated on this building. They
+  # were literals in the function body (2.0 / 95 deg / 5.0); exit_forward and
+  # corridor_forward existed here all along but were never read, and this file
+  # said 1.0 while the code walked 2.0. Values below are what actually ran.
+  exit_forward: 2.0
+  corridor_forward: 5.0
+  corridor_turn_rad: 1.658063
+  corridor_entry_yaw_tolerance: 0.5
+  # ExploreFloor interprets floor_entry_pose as both an ROI anchor and the
+  # longitudinal/lateral room axis.  MoveBase's broad goal tolerance is not a
+  # sufficient orientation proof, so fit a fresh pair of opposite stable walls
+  # after the fixed route.  Failure is bounded and falls back to the declared
+  # route axis; no simulator/layout truth is used.
+  corridor_axis:
+    wait_wall: 5.0
+    max_age_sim: 1.5
+    maximum_correction: 0.65
+    parallel_tolerance: 0.30
+    minimum_wall_length: 0.70
+    minimum_width: 1.50
+    maximum_width: 3.60
+    maximum_midpoint_distance: 8.0
+diagnostics:
+  status_topic: /a1/mission_manager/status
+  marker_topic: /a1/mission_manager/markers

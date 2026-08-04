@@ -1,0 +1,23 @@
+<launch>
+  <node pkg="a1_localization" type="localization_supervisor.py"
+        name="localization_supervisor_tested" output="screen">
+    <param name="managed_launch" value="$(find a1_localization)/test/supervisor_test_estimator.launch"/>
+    <param name="status_topic" value="/test/localization/status"/>
+    <param name="pointcloud_topic" value="/test/localization/cloud"/>
+    <param name="imu_topic" value="/test/localization/imu"/>
+    <param name="clock_topic" value="/test/localization/clock"/>
+    <param name="reinitialize_service" value="/test/localization/reinitialize"/>
+    <param name="supervisor_status_topic" value="/test/localization/supervisor_status"/>
+    <param name="automatic_reinitialize" value="true"/>
+    <param name="max_automatic_restarts_per_reason" value="1"/>
+    <param name="require_controller_ready" value="false"/>
+    <param name="input_timeout" value="1.0"/>
+    <param name="settle_time" value="0.2"/>
+    <param name="imu_stability_window" value="0.2"/>
+    <param name="imu_min_samples" value="5"/>
+    <param name="shutdown_timeout" value="3.0"/>
+  </node>
+  <test test-name="localization_supervisor_runtime_test"
+        pkg="a1_localization" type="localization_supervisor_runtime_test.py"
+        time-limit="45"/>
+</launch>

@@ -1,0 +1,17 @@
+<launch>
+  <node pkg="a1_localization" type="localization_pose_adapter" name="localization_pose_adapter" output="screen" ns="a1_localization">
+    <rosparam command="load" file="$(find a1_localization)/config/frames.yaml"/>
+    <param name="monitor_clock" value="true"/>
+    <param name="initialization_samples" value="3"/>
+    <param name="sensor_warn_timeout" value="0.3"/>
+    <param name="sensor_lost_timeout" value="0.8"/>
+    <param name="odom_warn_timeout" value="0.3"/>
+    <param name="odom_lost_timeout" value="0.8"/>
+    <param name="stationary_error_requires_reinitialization" value="false"/>
+    <param name="stationary_error_window" value="0.2"/>
+    <param name="stationary_monitor_grace" value="0.0"/>
+    <param name="stationary_translation_limit" value="0.1"/>
+  </node>
+  <test test-name="localization_pose_adapter_runtime" pkg="a1_localization"
+        type="localization_pose_adapter_runtime_test.py" time-limit="30"/>
+</launch>

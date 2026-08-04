@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>a1_building_behavior</name>
+  <version>0.1.0</version>
+  <description>
+    Competition-safe door and elevator behaviors backed only by public scene
+    interfaces.
+  </description>
+
+  <maintainer email="xujc@buaa.edu.cn">A1 Team</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <depend>a1_navigation_interfaces</depend>
+  <depend>actionlib</depend>
+  <depend>building_generator_interfaces</depend>
+  <depend>rospy</depend>
+
+  <test_depend>python3-nose</test_depend>
+
+  <export/>
+</package>

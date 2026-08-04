@@ -1,0 +1,66 @@
+<launch>
+  <!-- Sensor-legal single-floor exploration. Referee odometry may exist for
+       the acceptance oracle, but is not consumed by this launch. -->
+  <arg name="use_cmd_mux" default="true"/>
+  <arg name="use_rviz" default="true"/>
+  <arg name="exploration_config"
+       default="$(find a1_exploration)/config/exploration.yaml"/>
+  <arg name="team_scene_info"
+       default="/workspace/SimEnv/generated_building/team_scene_info.json"/>
+  <arg name="start_building_behavior" default="true"/>
+  <arg name="start_exploration" default="true"/>
+  <arg name="diagnostic_visualization" default="true"/>
+
+  <!-- Production upstream chain: Livox + trunk IMU -> FAST-LIO -> normalized
+       /a1/localization/odom and odom->base TF. -->
+  <include file="$(find a1_localization)/launch/localization.launch"/>
+
+  <include file="$(find a1_floor_mapping)/launch/floor_mapping.launch"/>
+
+  <include file="$(find a1_navigation)/launch/navigation_floor_mapping.launch">
+    <arg name="obstacle_cloud_topic"
+         value="/a1/floor_mapping/obstacle_cloud"/>
+    <arg name="clearing_cloud_topic"
+         value="/a1/floor_mapping/clearing_cloud"/>
+    <arg name="cmd_vel_topic" value="/cmd_vel_nav"/>
+    <arg name="odom_topic" value="/a1/localization/odom"/>
+    <arg name="dwa_acc_lim_theta" value="10.0"/>
+    <!-- State_RL consumes body-speed commands directly.  Commands around
+         0.15 m/s stayed in its near-stationary regime; use a conservative
+         fraction of the approximately 1.25 m/s proven policy envelope. -->
+    <arg name="dwa_max_vel_x" value="1.40"/>
+    <!-- Normal indoor navigation is forward/rotate-first. Allowing negative
+         vx here made DWA follow an entire return path backwards instead of
+         turning as soon as corridor space became available. -->
+    <arg name="dwa_min_vel_x" value="0.0"/>
+    <arg name="dwa_max_vel_y" value="0.0"/>
+    <arg name="dwa_min_vel_y" value="0.0"/>
+    <arg name="dwa_max_vel_trans" value="1.40"/>
+    <arg name="dwa_max_vel_theta" value="1.80"/>
+  </include>
+
+  <include if="$(arg use_cmd_mux)"
+           file="$(find a1_cmd_mux)/launch/cmd_mux.launch">
+    <arg name="max_vx" value="1.40"/>
+  </include>
+
+  <include if="$(arg start_building_behavior)"
+           file="$(find a1_building_behavior)/launch/building_behavior.launch">
+    <arg name="team_scene_info" value="$(arg team_scene_info)"/>
+  </include>
+
+  <include if="$(arg start_exploration)"
+           file="$(find a1_exploration)/launch/exploration.launch">
+    <arg name="config" value="$(arg exploration_config)"/>
+  </include>
+
+  <node if="$(arg diagnostic_visualization)"
+        pkg="a1_navigation_tests"
+        type="exploration_diagnostics_visualizer.py"
+        name="exploration_diagnostics_visualizer"
+        output="screen"/>
+
+  <node if="$(arg use_rviz)" pkg="rviz" type="rviz"
+        name="rviz" args="-d $(find a1_navigation)/rviz/a1_nav.rviz"
+        output="screen"/>
+</launch>

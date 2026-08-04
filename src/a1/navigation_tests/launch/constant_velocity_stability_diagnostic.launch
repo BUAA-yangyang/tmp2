@@ -1,0 +1,93 @@
+<launch>
+  <!--
+    DEV-ONLY lower-layer diagnostic.  This launch intentionally starts neither
+    move_base nor exploration.  The only non-zero command path is:
+      diagnostic -> /cmd_vel_nav -> a1_cmd_mux -> /cmd_vel -> State_move_base
+  -->
+  <arg name="case_id"/>
+  <arg name="surface"/>
+  <arg name="livox_enabled" default="true"/>
+  <arg name="duration_sim_s" default="200.0"/>
+  <arg name="vx" default="0.15"/>
+  <arg name="vy" default="0.0"/>
+  <arg name="wz" default="0.0"/>
+  <arg name="tilt_limit_deg" default="35.0"/>
+  <arg name="expected_x"/>
+  <arg name="expected_y"/>
+  <arg name="expected_yaw_deg"/>
+  <arg name="output"/>
+  <arg name="bag_path"/>
+
+  <include file="$(find a1_cmd_mux)/launch/cmd_mux.launch">
+    <arg name="require_ready" value="true"/>
+    <arg name="respawn" value="false"/>
+  </include>
+
+  <node pkg="rosbag" type="record" name="stability_bag" output="screen"
+        args="--lz4 -O $(arg bag_path)
+          /clock
+          /rosout_agg
+          /trunk_imu
+          /Odometry_gazebo
+          /ground_truth/base_w
+          /ground_truth/base_trunk
+          /ground_truth/FL_foot
+          /ground_truth/FR_foot
+          /ground_truth/RL_foot
+          /ground_truth/RR_foot
+          /visual/FR_foot_contact/the_force
+          /visual/FL_foot_contact/the_force
+          /visual/RR_foot_contact/the_force
+          /visual/RL_foot_contact/the_force
+          /a1_gazebo/joint_states
+          /a1_gazebo/FR_hip_controller/command
+          /a1_gazebo/FR_thigh_controller/command
+          /a1_gazebo/FR_calf_controller/command
+          /a1_gazebo/FL_hip_controller/command
+          /a1_gazebo/FL_thigh_controller/command
+          /a1_gazebo/FL_calf_controller/command
+          /a1_gazebo/RR_hip_controller/command
+          /a1_gazebo/RR_thigh_controller/command
+          /a1_gazebo/RR_calf_controller/command
+          /a1_gazebo/RL_hip_controller/command
+          /a1_gazebo/RL_thigh_controller/command
+          /a1_gazebo/RL_calf_controller/command
+          /a1_gazebo/FR_hip_controller/state
+          /a1_gazebo/FR_thigh_controller/state
+          /a1_gazebo/FR_calf_controller/state
+          /a1_gazebo/FL_hip_controller/state
+          /a1_gazebo/FL_thigh_controller/state
+          /a1_gazebo/FL_calf_controller/state
+          /a1_gazebo/RR_hip_controller/state
+          /a1_gazebo/RR_thigh_controller/state
+          /a1_gazebo/RR_calf_controller/state
+          /a1_gazebo/RL_hip_controller/state
+          /a1_gazebo/RL_thigh_controller/state
+          /a1_gazebo/RL_calf_controller/state
+          /cmd_vel_nav
+          /cmd_vel_muxed
+          /cmd_vel
+          /a1/controller_ready
+          /a1_cmd_mux/safety_lock
+          /a1/cmd_mux/status
+          /a1/navigation_tests/stability_diagnostic"/>
+
+  <node pkg="a1_navigation_tests"
+        type="constant_velocity_stability_diagnostic.py"
+        name="constant_velocity_stability_diagnostic"
+        output="screen"
+        required="true">
+    <param name="case_id" value="$(arg case_id)"/>
+    <param name="surface" value="$(arg surface)"/>
+    <param name="livox_enabled" value="$(arg livox_enabled)"/>
+    <param name="duration_sim_s" value="$(arg duration_sim_s)"/>
+    <param name="vx" value="$(arg vx)"/>
+    <param name="vy" value="$(arg vy)"/>
+    <param name="wz" value="$(arg wz)"/>
+    <param name="tilt_limit_deg" value="$(arg tilt_limit_deg)"/>
+    <param name="expected_x" value="$(arg expected_x)"/>
+    <param name="expected_y" value="$(arg expected_y)"/>
+    <param name="expected_yaw_deg" value="$(arg expected_yaw_deg)"/>
+    <param name="output" value="$(arg output)"/>
+  </node>
+</launch>

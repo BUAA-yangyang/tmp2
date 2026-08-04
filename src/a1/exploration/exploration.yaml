@@ -1,0 +1,429 @@
+frames:
+  base: base
+
+topics:
+  map: /a1/floor_mapping/map
+  doorways: /a1/floor_mapping/doorways
+  mapping_status: /a1/floor_mapping/status
+  final_cmd_vel: /cmd_vel
+  safety_lock: /a1_cmd_mux/safety_lock
+  controller_ready: /a1/controller_ready
+  status: /a1/exploration/status
+  frontiers: /a1/exploration/frontiers
+  selected_target: /a1/exploration/selected_target
+  failed_targets: /a1/exploration/failed_targets
+  trajectory: /a1/exploration/trajectory
+  scope: /a1/exploration/scope
+  roi: /a1/exploration/roi
+
+actions:
+  explore_floor: /a1/exploration/explore_floor
+  move_base: /move_base
+  building_behavior: /a1/building_behavior/special
+
+services:
+  make_plan: /move_base/make_plan
+  # Standard DWAPlannerROS dynamic_reconfigure service. The entry state queries
+  # the live config, applies a lower profile, verifies it, and restores the
+  # exact snapshot before any indoor frontier is selected.
+  dwa_reconfigure: /move_base/DWAPlannerROS/set_parameters
+
+planning:
+  # A single empty TCPROS response can occur while move_base cancels a timed
+  # out goal and updates both costmaps. Retry it as a transport fault; only a
+  # sustained outage is a mission-level navigation failure.
+  make_plan_retry_attempts: 3
+  make_plan_retry_delay_wall: 0.15
+  # move_base is launched with respawn:=true because it segfaulted once in
+  # integration_fix19. A restarted move_base needs to rebuild both costmaps
+  # before it advertises make_plan again, which takes longer than the previous
+  # 10 s budget; this must outlast a restart but still fail a genuine outage.
+  make_plan_unavailable_timeout_wall: 30.0
+
+# RECORD_START is the outdoor return pose. floor_entry_pose is a distinct pose
+# just inside the public main entrance, with +X pointing into the floor.
+entry:
+  # The public entrance transit already has a mission-provided, localization-
+  # relative axis and independent map/plan safety checks. Do not make it depend
+  # on reacquiring a generic Doorway after opening and resetting the floor map;
+  # generic doorway perception remains enabled for the four room transactions,
+  # while the elevator continues to use its independent L-shaped wall template.
+  door_centerline:
+    enabled: false
+    required: false
+    timeout_wall: 5.0
+    minimum_width: 1.20
+    maximum_width: 2.40
+    maximum_lateral: 1.20
+    minimum_forward: 0.40
+    target_forward_margin: 0.60
+    minimum_inside_depth: 0.80
+    maximum_inside_depth: 2.50
+  # Dedicated short-horizon entrance transit. State_RL consumes this body
+  # velocity; the explorer never writes leg joint targets.
+  transit_speed: 0.80
+  near_field_distance: 0.70
+  near_field_half_width: 0.30
+  # This is simulation time. With the 0.5 Hz map publisher, four seconds
+  # permits two fresh grids after a transient door/step return.
+  obstacle_hold_timeout: 4.0
+  # The explorer must not consume a simulator-/scene-derived entry pose.
+  # RECORD_START localization plus the robot's initial forward heading defines
+  # the public entrance transit axis; the numeric offset is a mission standoff,
+  # not a world-coordinate truth pose.
+  require_explicit_pose: false
+  # move_base accepts the threshold pose at 0.35 m. Leave 0.10 m for mapping
+  # and TF sampling skew so a valid, strongly observed entry is not rejected.
+  position_tolerance: 0.45
+  yaw_tolerance: 0.65
+  # The upper-floor anchor is reached by a plain move_base goal, and DWA's
+  # xy_goal_tolerance is 0.45 m -- the same number. Gating the elevator exit on
+  # 0.45 m rejects arrivals move_base is entitled to call successful (mf08
+  # landed at 0.34 m and passed on luck). A failed exit misses by metres.
+  elevator_anchor_tolerance: 0.75
+  # An elevator-delivered entry axis is dead-reckoned through the car pose at
+  # relocalization, the opening alignment and the fixed 95 deg turn, the last
+  # of which DWA may finish 0.80 rad (46 deg) short. Room and ROI decisions are
+  # all taken in entry-frame coordinates, so the axis must be re-measured from
+  # stable walls before exploring. Floor 0 does not need it: its axis is exact.
+  #
+  # OFF by design, not because it is unproven. The mission manager solves the
+  # same problem upstream (corridor_axis.estimate_corridor_axis), and per the
+  # 2026-08-03 team split the elevator/transfer chain is owned there. Running
+  # both would put one safety rule in two nodes: this one is bounded and
+  # fail-open, so it would simply measure ~0 after the mission's correction,
+  # but a future reader would not know which one was acting. Turn this on only
+  # if the mission-side estimate is withdrawn.
+  axis_alignment:
+    enabled: false
+    # Beyond this the candidate belongs to a different wall family (a cross
+    # wall, a room's far side) and must not be allowed to rotate the ROI.
+    maximum_correction_rad: 0.61
+    minimum_wall_length: 1.00
+    radius: 12.0
+    # Metres of length-times-confidence evidence required before overriding
+    # the declared axis; roughly two solid corridor walls.
+    minimum_weight: 2.50
+    minimum_walls: 2
+    timeout_wall: 8.0
+  # OccupancyGrid must show a known-free path this far beyond floor_entry_pose.
+  inside_probe_distance: 0.75
+  # Livox cannot observe the cell under the robot body. Anchor connectivity at
+  # the nearest known-free cell within this finite self-clear neighborhood;
+  # unknown cells remain non-traversable.
+  anchor_search_radius: 0.60
+  # Moving from the threshold into the floor must reveal genuinely new cells in
+  # the indoor ROI; a service success alone is not entry evidence.
+  minimum_new_known_cells: 20
+  # Both the public OccupancyGrid connectivity proof and the pre-motion
+  # /move_base/make_plan result must stay inside this entry-local corridor.
+  corridor_half_width: 0.75
+  plan_endpoint_tolerance: 0.60
+  plan_maximum_length_ratio: 1.50
+  plan_maximum_length_slack: 0.75
+  # Livox evidence shows a floor-height transition across the full entrance
+  # The entrance apron has an 8 cm vertical edge.  State_RL needs enough
+  # forward momentum for the rear legs to follow the front legs onto it.
+  # suppress yaw while crossing the sensor-confirmed straight local corridor.
+  # These are temporary DWA maxima, not direct velocity commands; cmd_mux
+  # remains the sole /cmd_vel publisher.
+  speed_limit:
+    enabled: true
+    service_wait_wall: 3.0
+    max_vel_x: 1.40
+    max_vel_y: 0.0
+    max_vel_trans: 1.40
+    max_vel_theta: 0.01
+    # DWA rejects every non-zero trajectory when its live minimum speeds remain
+    # above the temporary maxima. Lower the paired minima in the same verified
+    # transaction and restore them from the same live snapshot.
+    min_vel_trans: 1.25
+    min_vel_x: 1.25
+    min_vel_theta: 0.0
+    sim_time: 0.5
+
+# The ROI is floor-entry-local and covers only the indoor body. The entrance
+# channel is a transit region, so it is excluded from frontier extraction,
+# coverage denominator, and the no-frontier completion decision.
+roi:
+  enabled: true
+  default_entry_forward_offset: 3.5
+  # Floor 0: the anchor stands just inside the public entrance, so the whole
+  # floor lies ahead of it. Measured floor extent (run23/run27_04, seed
+  # 382835531): 38.3 m of corridor and 16.2 m across.
+  default_local_polygon: [0.0, -8.65, 40.0, -8.65,
+                          40.0, 8.65, 0.0, 8.65]
+  # Floors 1/2: the anchor is 5 m out of the elevator, part-way down the same
+  # floor, so roughly 10 m of building sits *behind* it -- including the
+  # elevator lobby. Reusing the floor-0 rectangle silently excluded that
+  # region from frontier extraction, the coverage denominator and the
+  # no-frontier completion decision. Measured from the mf08 F1 anchor: the
+  # floor occupies entry-local x in [-10.1, 28.2], y in [-9.1, 7.2].
+  elevator_entry_local_polygon: [-13.0, -10.5, 32.0, -10.5,
+                                 32.0, 10.5, -13.0, 10.5]
+  boundary_margin: 0.35
+  map_boundary_margin: 8.0
+
+controller:
+  ready_freshness: 0.35
+
+# The three competition floors share the same four-room layout. A room counts
+# only after the complete door -> interior -> 360 scan -> corridor exit
+# transaction has succeeded. Set to 0 to restore open-ended frontier/no-goal
+# completion for buildings whose room count is unknown.
+floor_completion:
+  completed_room_count: 4
+
+frontier:
+
+  # --- room transaction (ported 2026-08-04) ---
+  # A corridor frontier must clear this before it competes with room work.
+  corridor_minimum_score: 1.5
+  # Corridor band used by the relaxed selection pass only; must exceed the
+  # measured 1.27 m centreline/spawn-line offset so a corridor frontier is
+  # never mistaken for an unmatched room mouth.
+  relaxed_lateral_threshold: 1.6
+  # Settle window gating the NEXT goal after a non-success navigation outcome.
+  interstitial_zero_settle_s: 0.5
+  # The public entrance is a transit edge, not unexplored indoor space.
+  # Once crossed, suppress the narrow doorway band from frontier selection.
+  entry_exclusion:
+    depth: 1.0
+    half_width: 1.25
+  min_length: 0.35
+  obstacle_clearance: 0.30
+  goal_standoff: 0.35
+  goal_search_radius: 0.60
+  min_goal_distance: 0.45
+  max_goal_distance: 9.0
+  free_threshold: 20
+  occupied_threshold: 65
+  information_gain_weight: 1.0
+  distance_weight: 0.25
+  # Reject tiny local fragments whose information gain is lower than their
+  # travel cost. They commonly appear at a just-exited room mouth and cause an
+  # unnecessary turn/backout cycle instead of axial corridor progress.
+  minimum_score: 0.0
+  # A room scan may make the visible main corridor known-free without leaving
+  # a frontier component. Continue through that observed free space before
+  # accepting no-frontier completion; every probe is checked against the map,
+  # ROI and move_base plan and uses no simulator truth.
+  corridor_probe:
+    enabled: true
+    step: 3.0
+    clearance: 0.24
+    minimum_completed_rooms: 2
+    # The probe steps a fixed distance beyond the deepest point reached and
+    # always succeeds, so it never enters the failed-goal history and has no
+    # natural stopping point -- it walks to the end of the corridor and keeps
+    # asking for more. Require it to earn its travel: a probe that reveals
+    # fewer than this many new ROI cells is barren, and after this many barren
+    # probes in a row probing is retired for the rest of the mission.
+    minimum_new_cells: 40
+    maximum_barren: 2
+  # In a corridor, do not let a long axial frontier dominate open rooms.
+  # Treat sufficiently lateral frontiers near the current door station as
+  # rooms; visit robot-left first, then robot-right, then continue forward.
+  room_priority:
+    # --- room transaction (ported 2026-08-04) ---
+    # A room is finished when no reachable frontier remains inside it. These
+    # bound that search so one awkward room cannot consume the floor budget --
+    # the failure mode mf11 measured with the old 360-degree scan (486 s of sim
+    # time, 1.1 m travelled, 628 retries at one door mouth).
+    transaction_max_goals: 8
+    transaction_timeout: 90.0
+    goal_timeout: 25.0
+    frontier_min_distance: 0.55
+    frontier_minimum_score: -0.5
+    door_plane_margin: 0.25
+    enabled: true
+    lateral_threshold: 1.0
+    # The broad left/right openings beside the public entrance belong to the
+    # entrance junction. In this observation mode only side openings farther
+    # down the main corridor are classified as actual room doors.
+    minimum_door_longitudinal: 7.0
+    # The generator's standard room opening is 1.20 m. Require matching
+    # stable/traversable LiDAR doorway evidence instead of treating every
+    # lateral frontier as a room.
+    door_minimum_width: 1.0
+    door_maximum_width: 1.6
+    door_station_tolerance: 1.25
+    # Valid room doors lie in the wall band beside the main corridor. Openings
+    # detected deep inside a room during its 360-degree scan are not doors on
+    # the corridor mission graph.
+    door_maximum_lateral: 2.2
+    lookahead: 5.0
+    backtrack: 2.0
+    # A branch is explored from its deepest reachable frontier. Once a goal
+    # at this depth succeeds, suppress the whole branch rather than only a
+    # 0.7 m circle around one goal.
+    station_width: 1.5
+    # Associate noisy door centers geometrically before station quantization.
+    identity_longitudinal_tolerance: 1.0
+    # Two doors on the same side of the corridor are separated ALONG it, never
+    # across it, so the lateral term is not what distinguishes them -- it only
+    # has to absorb how far one opening's perceived centre wanders between
+    # detections. Measured in integration_fix22: the same opening came back as
+    # id=12 then id=15 with centres 1.25 m apart laterally, which exceeded the
+    # old 0.75 m and split one room into two branches, so the robot entered it
+    # twice. The longitudinal term keeps distinct doors distinct.
+    identity_lateral_tolerance: 1.50
+    completion_depth: 2.0
+    # Frontier goals normally stop before unknown space. A side branch needs
+    # an explicit room-interior observation point beyond the corridor mouth.
+    goal_extension: 0.5
+    # The push into the room is shortened until the goal has this much
+    # known-free space around it. Without the check the goal lands inside
+    # furniture standing just inside the door and move_base burns tens of
+    # seconds per attempt in abort/backout cycles.
+    goal_clearance: 0.40
+    scan_angular_speed: 1.80
+    exit_align_tolerance: 0.12
+    exit_align_timeout: 10.0
+    exit_reobserve_time: 1.0
+    # Before rotating, require a fully known-free disc around the robot. If
+    # the initial room point hugs a wall, search farther into the open area.
+    scan_clearance: 0.78
+    scan_search_distance: 2.5
+  visited_radius: 0.70
+  failed_radius: 0.75
+  failure_cooldown: 4.0
+  maximum_failures: 2
+  empty_confirmations: 3
+  # An unchanged persistent map is also valid evidence. This is a dwell on a
+  # content fingerprint, not a fixed exploration runtime.
+  stable_no_frontier_duration: 2.0
+  minimum_free_cells: 100
+
+navigation:
+  # navigate()'s no-progress watchdog (ported 2026-08-04). move_base can sit on
+  # an unreachable goal publishing nothing until the goal timeout expires;
+  # measured 2026-08-01, the robot stood still for 24 s while the status still
+  # read NAVIGATING. Rotating on the spot counts as progress.
+  no_progress:
+    timeout: 20.0
+    distance: 0.20
+    yaw: 0.35
+  # Keep frontier targets outside the combined standoff + move_base acceptance
+  # radius. This prevents near-goal turn-in-place oscillation at the entrance.
+  xy_goal_tolerance: 0.35
+  # Turn-first recovery: DWA normally has min_vel_x=0. If an in-place turn
+  # is collision-invalid, back out one bounded step through the behavior mux,
+  # stop, and retry the same goal. Never reverse continuously through a hall.
+  backout:
+    speed: 0.45
+    step_distance: 0.35
+    max_sim_time: 2.0
+    # Retrying the same goal after a backout only pays off when the obstacle
+    # was transient. Three retries turned every genuinely awkward goal into a
+    # 40 s stall (integration_fix21). One retry keeps the transient case and
+    # hands the rest back to frontier selection, which has other candidates.
+    max_steps: 1
+
+timeouts:
+  prerequisites: 30.0
+  navigation_goal: 75.0
+  entry_door_wall: 10.0
+  entry_transit: 90.0
+  # Raised from 15.0: RTF ~0.25 plus FAST-LIO re-convergence (brief LOST/STATIONARY_TRANSLATION_DRIFT flap) needs a longer wait budget for a fresh healthy map generation after entry-door reset.
+  entry_map: 45.0
+  entry_plan: 15.0
+  # At the conservative 0.20 m/s unattended-dev speed, the 40 x 40 m grid
+  # diagonal alone needs about 283 s before turns and obstacle detours. This
+  # is a fault bound, not an exploration-completion rule.
+  return_goal: 480.0
+  map_update_wait: 2.0
+  # Keep this just above floor_mapping's 3 s input-lost threshold so a
+  # one-second PointCloud/TF scheduling blip does not abort a long return.
+  mapping_health_grace: 3.5
+  # move_base publishes zero at goal completion and cmd_mux then applies its
+  # own deceleration/timeout rules. Keep enough wall time for that stop
+  # handshake while still requiring a fresh, continuously-zero final output.
+  final_zero: 8.0
+  # Current Gazebo real-time factor is about 0.3.  A factor of five leaves
+  # useful scheduling margin without turning stalled-simulation fallbacks
+  # into multi-minute waits.
+  wall_factor: 5.0
+
+return:
+  position_tolerance: 0.40
+  yaw_tolerance: 0.65
+  maximum_attempts: 2
+  zero_velocity_epsilon: 0.01
+  zero_settle_time: 0.50
+  command_freshness: 0.25
+  # RECORD_START's own cell is never observed. floor_mapping is reset the
+  # moment the public door opens, the Livox cannot see the ground under the
+  # body, and the mission only ever moves forward from the spawn, so that cell
+  # stays unknown for the whole run. GlobalPlanner runs with
+  # allow_unknown:false, so no plan to it can exist -- measured in
+  # integration_fix16: the RECORD_START cell is -1 and everything at x < 0.2 m
+  # is unknown, giving "Failed to get a plan" x9. Aim the last MoveBaseAction
+  # leg at the nearest known-free cell instead. verify_return_pose() still
+  # measures the true RECORD_START, so this cannot relax the return criterion.
+  # The anchor is frozen once, at RECORD_START. If the map offers no observed
+  # cell close enough, fall back to stepping this far forward along the start
+  # heading -- roughly half a body length -- so the anchor sits in ground the
+  # robot itself crossed on the way in.
+  anchor_search_radius: 0.60
+  anchor_margin: 0.10
+  anchor_body_setback: 0.30
+  # The entry DWA profile pins theta to [0.0, 0.01] and vx to [1.25, 1.40].
+  # The outdoor leg needs an in-place turn of about pi plus a low-speed
+  # approach, so applying it there makes the leg unexecutable even with a
+  # valid plan. The mechanism is kept for its original entrance use.
+  use_entry_speed_profile: false
+  # The outdoor leg is crossed BACKWARDS on body velocity instead of by
+  # MoveBaseAction. Measured in integration_fix18: an in-place turn just
+  # outside the doorway injected 2.5 m of phantom lateral translation into the
+  # FAST-LIO estimate (yaw and along-axis position stayed accurate), a second
+  # turn added 0.9 m, the estimator then re-initialized and re-origined odom,
+  # and the action reported "returned within 0.374 m" while the robot stood
+  # 17 m from its spawn. Outdoors the only Livox structure is distant ground,
+  # a plane that leaves lateral translation unconstrained. Ending the indoor
+  # leg on the RECORD_START heading lets the whole crossing happen with no
+  # outdoor rotation: bounded reverse vx, bounded lateral vy, and a gentle
+  # heading hold, all inside the learned policy's command envelope.
+  # Where the indoor leg stops, measured forward from floor_entry_pose into
+  # the building. The about-turn is unavoidable (the corridor is walked
+  # outward, RECORD_START faces inward); this decides whether it happens
+  # somewhere observable. At floor_entry_pose it happened in the doorway,
+  # where the 45-degree down-pitched Livox already sees mostly open ground --
+  # integration_fix22 drifted 7.6 m from there. Three metres in, the turn is
+  # between walls and the whole rest of the return is a straight reverse.
+  indoor_anchor_setback: 3.0
+  reverse_transit:
+    speed: 0.45
+    lateral_speed: 0.20
+    yaw_speed: 0.35
+    align_tolerance: 0.15
+    # Now covers roughly 6.5 m of reverse crossing rather than 3.5 m.
+    timeout: 90.0
+  # Disabled: when the reverse crossing failed in integration_fix22 this
+  # fallback let move_base turn in place outdoors, which re-diverged the
+  # estimator (7.6 m) and produced a physically wrong "returned" report. A
+  # failed return must fail, not flail.
+  move_base_outdoor_fallback: false
+
+trajectory:
+  sample_period: 0.20
+  minimum_step: 0.05
+  maximum_poses: 10000
+
+# --- room transaction, ported from the single-floor tree (2026-08-04) ---
+# These belong to explore_room_transaction and its helpers, which replace the
+# debug scan_room_and_exit. Values are the ones the single-floor tree carried
+# through 27 measured rounds; they are not new tuning.
+room:
+  # Two doorways closer than this along the corridor axis are one door station,
+  # not two rooms to cut between.
+  station_separation: 3.0
+  camera_coverage:
+    # Explicitly OFF for now, as in the single-floor tree: an explicit flag
+    # rather than required_fraction=0, because 0 would read as "requirement
+    # satisfied" and silently look like a pass. Turn on only after multi-floor
+    # is reproducible.
+    enabled: false
+    candidates: 12
+    radius: 4.5
+    required_fraction: 0.90
