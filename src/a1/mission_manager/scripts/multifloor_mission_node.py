@@ -280,6 +280,23 @@ class MultiFloorMission:
             rospy.get_param("~upper_floor/corridor_forward", 5.0)))
         # Must exceed DWA's xy_goal_tolerance (0.45) so the final in-place yaw
         # settle is never mistaken for a stall.
+        # Recentring inside the car. Tolerance is well under the margin a
+        # 0.30 m body needs in a ~1.54 m car; the probe range only has to see
+        # past the walls.
+        self.recenter_tolerance = float(rospy.get_param(
+            "~elevator/recenter_tolerance", 0.12))
+        self.recenter_probe_range = float(rospy.get_param(
+            "~elevator/recenter_probe_range", 2.00))
+        self.recenter_speed = float(rospy.get_param(
+            "~elevator/recenter_speed", 0.18))
+        self.recenter_step_wall = float(rospy.get_param(
+            "~elevator/recenter_step_wall", 0.8))
+        self.recenter_max_attempts = int(rospy.get_param(
+            "~elevator/recenter_max_attempts", 6))
+        self.recenter_timeout = float(rospy.get_param(
+            "~elevator/recenter_timeout_wall", 40.0))
+        self.recenter_minimum_displacement = float(rospy.get_param(
+            "~elevator/recenter_minimum_displacement", 0.02))
         self.nav_arrival_band = float(rospy.get_param(
             "~mission/no_progress_arrival_band", 0.70))
         self.nav_progress_timeout = float(rospy.get_param(
@@ -1117,6 +1134,7 @@ class MultiFloorMission:
                 rospy.logwarn("clear_costmaps before car retry failed: %s", error)
             self.navigate(threshold, "elevator threshold retry anchor")
             self.navigate(car, "elevator car interior retry")
+        self.recenter_in_car("floor %d car entry" % floor)
         self.emit("INSIDE_ELEVATOR", "car interior pose reached")
 
     def transfer(self, source, target):
@@ -1389,6 +1407,93 @@ class MultiFloorMission:
             return None
         return grid
 
+    def car_lateral_clearances(self, pose=None):
+        """Free distance to left and right of the body, from the published grid.
+
+        Measured against the car walls, not against a goal. The distinction
+        matters: mf25 sat 0.015 m from its move_base goal and 0.41 m from the
+        right-hand wall with 1.13 m on the left, because the goal is derived
+        from the floor-0 door centre and that centre was itself off. Comparing
+        the robot with its own goal proves it arrived; it says nothing about
+        where it arrived inside the car.
+        """
+        here = pose or self.current_pose()
+        heading = yaw_of(here.pose.orientation)
+        left = self.known_free_run(
+            here.pose.position.x, here.pose.position.y,
+            heading + 0.5 * math.pi, self.recenter_probe_range, here)
+        right = self.known_free_run(
+            here.pose.position.x, here.pose.position.y,
+            heading - 0.5 * math.pi, self.recenter_probe_range, here)
+        return left, right
+
+    def recenter_in_car(self, label):
+        """Equalise the side clearances before trusting a forward probe.
+
+        A 0.30 m body in a car measured at 1.54 m of interior width has very
+        little to give. mf25 arrived 0.71 m off centre; the centre ray then
+        showed 1.95 m of free space ahead while the footprint-width strip was
+        blocked at 0.19 m by the robot's own right edge, so the exit never took
+        its first step. Centring is what makes a footprint-width strip mean
+        anything.
+
+        This needs no knowledge of the real car geometry -- only that the two
+        sides should measure the same. Fails OPEN: an off-centre robot is not
+        itself dangerous, and the exit's own map proof stops it safely if this
+        does not converge. It does report whether a commanded lateral velocity
+        produced any displacement, which is the open question the single-floor
+        notes raised about a lateral dead zone.
+        """
+        deadline = time.monotonic() + self.recenter_timeout
+        attempts = 0
+        while not rospy.is_shutdown() and time.monotonic() < deadline:
+            left, right = self.car_lateral_clearances()
+            offset = 0.5 * (left - right)
+            if abs(offset) <= self.recenter_tolerance:
+                self.emit("CAR_RECENTERED",
+                          "%s centred: left %.2f m right %.2f m (offset %+.2f m)"
+                          % (label, left, right, offset),
+                          left=left, right=right, offset=offset,
+                          attempts=attempts)
+                return True
+            if attempts >= self.recenter_max_attempts:
+                break
+            before = self.current_pose()
+            heading = yaw_of(before.pose.orientation)
+            command = Twist()
+            command.linear.y = math.copysign(self.recenter_speed, offset)
+            step_deadline = time.monotonic() + self.recenter_step_wall
+            while not rospy.is_shutdown() and time.monotonic() < step_deadline:
+                self.behavior_cmd_pub.publish(command)
+                time.sleep(0.02)
+            self.behavior_cmd_pub.publish(Twist())
+            time.sleep(0.3)
+            after = self.current_pose()
+            dx = after.pose.position.x - before.pose.position.x
+            dy = after.pose.position.y - before.pose.position.y
+            moved = -dx * math.sin(heading) + dy * math.cos(heading)
+            attempts += 1
+            rospy.loginfo(
+                "%s recentre attempt %d: offset %+.2f m, commanded vy %+.2f "
+                "for %.1f s, lateral displacement %+.3f m",
+                label, attempts, offset, command.linear.y,
+                self.recenter_step_wall, moved)
+            if abs(moved) < self.recenter_minimum_displacement:
+                self.emit("CAR_RECENTER_NO_LATERAL_MOTION",
+                          "%s commanded vy %+.2f m/s for %.1f s and moved "
+                          "%+.3f m sideways; lateral control is not answering"
+                          % (label, command.linear.y, self.recenter_step_wall,
+                             moved),
+                          commanded=command.linear.y, moved=moved)
+                return False
+        left, right = self.car_lateral_clearances()
+        self.emit("CAR_RECENTER_INCOMPLETE",
+                  "%s still %+.2f m off centre after %d attempts "
+                  "(left %.2f m right %.2f m)"
+                  % (label, 0.5 * (left - right), attempts, left, right),
+                  left=left, right=right, attempts=attempts)
+        return False
+
     def known_free_run(self, x, y, bearing, max_range, pose=None):
         """How far the published grid is known-free along a bearing.
 
@@ -1525,6 +1630,9 @@ class MultiFloorMission:
                   x=point_a.pose.position.x, y=point_a.pose.position.y,
                   exit_yaw=yaw_out)
 
+        # Centre before probing: a footprint-width strip measured from against
+        # a wall reports the wall, not the way out.
+        self.recenter_in_car("floor %d pre-exit" % floor)
         required_clearance = self.car_depth + self.lobby_standoff
         origin_x = start.pose.position.x
         origin_y = start.pose.position.y
