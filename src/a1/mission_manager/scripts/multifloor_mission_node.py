@@ -1063,17 +1063,22 @@ class MultiFloorMission:
             if improved:
                 improved_wall = time.monotonic()
             elif time.monotonic() - improved_wall >= self.nav_progress_timeout:
-                self.move.cancel_goal()
+                # Report only. This watchdog has never earned a cancellation:
+                # it killed two healthy car entries (mf24 at 0.46 m from the
+                # goal, one centimetre outside DWA's tolerance; mf26 after the
+                # robot had covered 1.74 m of path, MORE than the successful
+                # mf25) and it prevented neither fall -- mf17 had 3.6 s between
+                # stall and topple, and on mf22 it fired after the robot was
+                # already on the floor below. A goal that is genuinely
+                # unreachable is still bounded by nav_timeout.
+                improved_wall = time.monotonic()
                 self.emit("NAVIGATION_NO_PROGRESS",
-                          "%s stopped closing on its goal for %.0f s "
-                          "(distance %.2f m, yaw error %.2f rad); abandoning it"
+                          "%s has not closed on its goal for %.0f s "
+                          "(distance %.2f m, yaw error %.2f rad); continuing "
+                          "until nav_timeout"
                           % (label, self.nav_progress_timeout, distance,
                              yaw_error),
                           x=now.pose.position.x, y=now.pose.position.y)
-                raise MissionFailure(
-                    "navigation %s stopped closing on its goal for %.0f wall "
-                    "seconds (distance %.2f m, yaw error %.2f rad)"
-                    % (label, self.nav_progress_timeout, distance, yaw_error))
         state = self.move.get_state()
         self.move.cancel_goal()
         raise MissionFailure("navigation %s failed state=%d" % (label, state))
@@ -1120,7 +1125,7 @@ class MultiFloorMission:
         self.navigate(lobby, "elevator lobby approach")
         self.navigate(threshold, "elevator threshold")
         try:
-            self.navigate(car, "elevator car interior")
+            self.drive_straight_into_car(floor)
         except MissionFailure as first_error:
             # The narrow doorway can leave DWA oscillating between equivalent
             # trajectories after the threshold goal.  Recover once from the
@@ -1133,8 +1138,7 @@ class MultiFloorMission:
             except rospy.ServiceException as error:
                 rospy.logwarn("clear_costmaps before car retry failed: %s", error)
             self.navigate(threshold, "elevator threshold retry anchor")
-            self.navigate(car, "elevator car interior retry")
-        self.recenter_in_car("floor %d car entry" % floor)
+            self.drive_straight_into_car(floor)
         self.emit("INSIDE_ELEVATOR", "car interior pose reached")
 
     def transfer(self, source, target):
@@ -1427,72 +1431,40 @@ class MultiFloorMission:
             heading - 0.5 * math.pi, self.recenter_probe_range, here)
         return left, right
 
-    def recenter_in_car(self, label):
-        """Equalise the side clearances before trusting a forward probe.
+    def drive_straight_into_car(self, floor):
+        """Enter the car by going straight in from the threshold.
 
-        A 0.30 m body in a car measured at 1.54 m of interior width has very
-        little to give. mf25 arrived 0.71 m off centre; the centre ray then
-        showed 1.95 m of free space ahead while the footprint-width strip was
-        blocked at 0.19 m by the robot's own right edge, so the exit never took
-        its first step. Centring is what makes a footprint-width strip mean
-        anything.
+        Two measurements decide this.
 
-        This needs no knowledge of the real car geometry -- only that the two
-        sides should measure the same. Fails OPEN: an off-centre robot is not
-        itself dangerous, and the exit's own map proof stops it safely if this
-        does not converge. It does report whether a commanded lateral velocity
-        produced any displacement, which is the open question the single-floor
-        notes raised about a lateral dead zone.
+        First, the robot cannot strafe. mf27 commanded vy = -0.18 m/s for 0.8 s
+        against a measured 0.36 m offset and moved 0.000 m sideways; the
+        controller does not answer a pure lateral command. Any scheme that
+        corrects lateral error by translating sideways is therefore dead, which
+        is what the previous recentring attempt was.
+
+        Second, the alignment is good at the threshold and only goes wrong
+        afterwards. The old car pose was door_centre - outward * car_depth, so
+        an angular error in the measured wall normal is multiplied by 1.45 m of
+        depth: 12-16 degrees becomes the 0.30-0.40 m of lateral offset seen in
+        mf25 and mf27, and its sign follows whichever way the normal leans,
+        which is why the robot has been seen against both walls.
+
+        Driving straight along the heading the robot already holds at the
+        threshold introduces no lateral term at all. Distance comes from the
+        map, through the same bounded stepping the exit uses.
         """
-        deadline = time.monotonic() + self.recenter_timeout
-        attempts = 0
-        while not rospy.is_shutdown() and time.monotonic() < deadline:
-            left, right = self.car_lateral_clearances()
-            offset = 0.5 * (left - right)
-            if abs(offset) <= self.recenter_tolerance:
-                self.emit("CAR_RECENTERED",
-                          "%s centred: left %.2f m right %.2f m (offset %+.2f m)"
-                          % (label, left, right, offset),
-                          left=left, right=right, offset=offset,
-                          attempts=attempts)
-                return True
-            if attempts >= self.recenter_max_attempts:
-                break
-            before = self.current_pose()
-            heading = yaw_of(before.pose.orientation)
-            command = Twist()
-            command.linear.y = math.copysign(self.recenter_speed, offset)
-            step_deadline = time.monotonic() + self.recenter_step_wall
-            while not rospy.is_shutdown() and time.monotonic() < step_deadline:
-                self.behavior_cmd_pub.publish(command)
-                time.sleep(0.02)
-            self.behavior_cmd_pub.publish(Twist())
-            time.sleep(0.3)
-            after = self.current_pose()
-            dx = after.pose.position.x - before.pose.position.x
-            dy = after.pose.position.y - before.pose.position.y
-            moved = -dx * math.sin(heading) + dy * math.cos(heading)
-            attempts += 1
-            rospy.loginfo(
-                "%s recentre attempt %d: offset %+.2f m, commanded vy %+.2f "
-                "for %.1f s, lateral displacement %+.3f m",
-                label, attempts, offset, command.linear.y,
-                self.recenter_step_wall, moved)
-            if abs(moved) < self.recenter_minimum_displacement:
-                self.emit("CAR_RECENTER_NO_LATERAL_MOTION",
-                          "%s commanded vy %+.2f m/s for %.1f s and moved "
-                          "%+.3f m sideways; lateral control is not answering"
-                          % (label, command.linear.y, self.recenter_step_wall,
-                             moved),
-                          commanded=command.linear.y, moved=moved)
-                return False
+        here = self.current_pose()
+        heading = yaw_of(here.pose.orientation)
+        advanced = self.advance_map_checked(
+            heading, self.car_depth,
+            "floor %d straight car entry" % floor, floor)
         left, right = self.car_lateral_clearances()
-        self.emit("CAR_RECENTER_INCOMPLETE",
-                  "%s still %+.2f m off centre after %d attempts "
-                  "(left %.2f m right %.2f m)"
-                  % (label, 0.5 * (left - right), attempts, left, right),
-                  left=left, right=right, attempts=attempts)
-        return False
+        self.emit("CAR_ENTRY_STRAIGHT",
+                  "entered %.2f m of %.2f m straight along the threshold "
+                  "heading; side clearances left %.2f m right %.2f m"
+                  % (advanced, self.car_depth, left, right),
+                  advanced=advanced, left=left, right=right)
+        return advanced
 
     def known_free_run(self, x, y, bearing, max_range, pose=None):
         """How far the published grid is known-free along a bearing.
@@ -1630,9 +1602,6 @@ class MultiFloorMission:
                   x=point_a.pose.position.x, y=point_a.pose.position.y,
                   exit_yaw=yaw_out)
 
-        # Centre before probing: a footprint-width strip measured from against
-        # a wall reports the wall, not the way out.
-        self.recenter_in_car("floor %d pre-exit" % floor)
         required_clearance = self.car_depth + self.lobby_standoff
         origin_x = start.pose.position.x
         origin_y = start.pose.position.y
