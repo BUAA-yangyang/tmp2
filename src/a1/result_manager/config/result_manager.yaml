@@ -1,8 +1,26 @@
 # Confirmed danger detections from a1_danger_perception.
 detections_topic: /danger_perception/detections
 
-# Competition output file.
+# Mission lifecycle.  The exploration clock is bounded by these events, not by
+# this node's own process lifetime.
+mission_status_topic: /a1/mission_manager/status
+timing_start_states: [MISSION_TIMING_START]
+timing_stop_states: [MISSION_COMPLETE]
+timing_abort_states: [MISSION_FAILED]
+anchor_states: [MISSION_TIMING_START, WORLD_ANCHOR]
+
+# Competition output file (docs/evaluation.md), plus the provenance sidecar.
+# The submitted file carries exactly the two documented fields; everything we
+# need in order to defend the number lives in the audit file.
 result_file: /workspace/SimEnv/results/detected_danger.json
+audit_file: /workspace/SimEnv/results/detected_danger.audit.json
+
+# The one scene file docs/competition-rules.md permits reading.  Its
+# robot_start is the only legal bridge from our map frame to the Gazebo world
+# frame the result file is specified in.
+team_scene_info_file: /workspace/SimEnv/generated_building/team_scene_info.json
+require_world_anchor: true
+world_z_mode: from_robot_start
 
 # Final result aggregation.
 merge_distance_m: 1.0
@@ -10,11 +28,11 @@ track_id_match_distance_m: 1.0
 position_alpha: 0.35
 min_confidence: 0.45
 require_confirmed_status: true
-accepted_frames: [world, map]
+# a1_danger_perception publishes in its target_frame, which is `map`.  There is
+# no `world` frame in TF, so accepting one here never meant the coordinates
+# were in world -- it only meant nobody converted them.
+accepted_frames: [map]
 
-# Keep already written results if this node restarts during a run.
-load_existing_results: true
-write_empty_on_start: true
 write_rate_hz: 1.0
 output_precision: 3
 

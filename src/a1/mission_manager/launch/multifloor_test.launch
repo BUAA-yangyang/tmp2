@@ -9,6 +9,11 @@
     <arg name="use_rviz" value="$(arg use_rviz)"/>
   </include>
   <include file="$(find a1_mission_manager)/launch/multifloor_mission.launch"/>
+  <!-- Nothing used to start this, so results/detected_danger.json was never
+       written and every objective point was unreachable regardless of how the
+       robot performed. It is the node that produces the scored artefact, so it
+       belongs in the same launch as the mission that drives it. -->
+  <include file="$(find a1_result_manager)/launch/result_manager.launch"/>
   <!-- These are intentional final overrides.  multifloor_mission.launch loads
        multifloor.yaml, whose default special_test_mode would otherwise replace
        the caller-selected test value. -->

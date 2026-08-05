@@ -798,8 +798,18 @@ class MultiFloorMission:
     def emit(self, state, detail, **extra):
         self.state = state
         self.event += 1
+        generation, session = self.current_mapping_identity()
+        # a1_result_manager scores on the sim clock and keys its map->world
+        # anchors by localization generation, so both have to ride along with
+        # every event -- a subscriber must never have to guess which frame or
+        # which clock a number in here belongs to.  The mission's own
+        # generation gets a distinct key because several events already pass a
+        # landmark's generation through **extra under the plain name.
         body = {"event": self.event, "state": state, "floor": self.floor,
-                "detail": detail, "wall_time": time.time()}
+                "detail": detail, "wall_time": time.time(),
+                "sim_time": rospy.Time.now().to_sec(),
+                "mission_generation": generation,
+                "floor_session_id": session}
         body.update(extra)
         self.status_pub.publish(String(data=json.dumps(body, sort_keys=True)))
         rospy.loginfo("MULTIFLOOR[%s] floor=%d %s", state, self.floor, detail)
@@ -2698,6 +2708,23 @@ class MultiFloorMission:
                                 spawn.header.frame_id)
         with self.lock:
             self.floor_entry = copy.deepcopy(entry0)
+        # The exploration clock starts here, not when the result manager
+        # process started.  Everything above this line is the controller and
+        # localization handshake -- auto.sh alone allows 240 s for it -- and
+        # the PDF measures "从指定起点出发...返回起点", which begins when the
+        # robot begins moving on its own.
+        #
+        # The same event carries the map-frame pose while the robot is still
+        # standing on the published start pose.  team_scene_info.json gives
+        # that pose in the Gazebo world frame, and pairing the two is the only
+        # permitted way to put detections into the world frame the result file
+        # is specified in; there is no world frame in TF.
+        self.emit("MISSION_TIMING_START",
+                  "exploration clock started at the published start pose",
+                  anchor_x=spawn.pose.position.x,
+                  anchor_y=spawn.pose.position.y,
+                  anchor_z=spawn.pose.position.z,
+                  anchor_yaw=yaw)
         self.explore_floor(0, entry0, True)
         self.enter_elevator(0)
         self.transfer(0, 1)
@@ -2735,7 +2762,29 @@ class MultiFloorMission:
                                entrance_inside.pose.position.y - 3.5 * fy,
                                math.atan2(-fy, -fx))
         self.navigate(final, "exit building and return to spawn-relative pose")
-        self.emit("MISSION_COMPLETE", "three floors explored; returned outside")
+        # The PDF scores "完成全覆盖探索并返回出发点所需的时间", so the clock has
+        # to stop against a measured return, not against the mission simply
+        # running out of statements.  What is measured here is the residual to
+        # `final`, and `final` is rebuilt in the *new* floor-zero generation
+        # from elevator geometry plus two fixed offsets -- so this proves we
+        # reached the reconstructed anchor, not that we reached the true world
+        # start pose.  The audit file records both poses so the difference
+        # stays visible instead of being asserted away.
+        achieved = self.current_pose()
+        residual = math.hypot(
+            achieved.pose.position.x - final.pose.position.x,
+            achieved.pose.position.y - final.pose.position.y)
+        tolerance = float(rospy.get_param("~mission/return_tolerance_m", 1.0))
+        self.emit("MISSION_COMPLETE",
+                  "three floors explored; returned to the reconstructed start "
+                  "anchor with a %.2f m residual (tolerance %.2f m)"
+                  % (residual, tolerance),
+                  return_residual_m=residual,
+                  return_tolerance_m=tolerance,
+                  final_x=achieved.pose.position.x,
+                  final_y=achieved.pose.position.y,
+                  target_x=final.pose.position.x,
+                  target_y=final.pose.position.y)
 
 
 if __name__ == "__main__":
