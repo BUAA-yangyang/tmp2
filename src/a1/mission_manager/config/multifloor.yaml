@@ -3,6 +3,9 @@ mission:
   # Production/full runs must leave this false.  The test launch explicitly
   # ties it to force_floor_complete_after_ingress for elevator-only testing.
   special_test_mode: false
+  # Keep the historical SPECIAL_TEST_COMPLETE endpoint unless a focused
+  # integration test explicitly asks to exercise the remembered-map return.
+  home_return_after_special_test: false
   elevator_id: elevator_main
   action_timeout_wall: 1800.0
   navigation_timeout_wall: 180.0
@@ -24,6 +27,23 @@ entry:
   # Fixed building: after crossing the public entrance, force one localization-
   # frame transit into the main corridor before frontier completion is valid.
   floor0_corridor_ingress: 8.0
+home_return:
+  enabled: true
+  # The multi-floor launch points move_base's StaticLayer at this latched map.
+  # During ordinary floor sessions mission_manager relays the current online
+  # grid; after the final transfer it publishes the remembered floor-zero grid
+  # resampled into the new generation-local odom frame.
+  active_map_topic: /a1/navigation/active_map
+  position_tolerance: 0.60
+  yaw_tolerance: 0.85
+  anchor_search_radius: 0.80
+  anchor_margin: 0.10
+  free_threshold: 20
+  map_settle_wall: 2.0
+  zero_velocity_epsilon: 0.01
+  zero_settle_wall: 0.50
+  zero_timeout_wall: 8.0
+  command_freshness_wall: 0.50
 elevator:
   # After fully entering the car, turn on the source floor before calling the
   # elevator.  The target-floor mapper then starts with a view through the

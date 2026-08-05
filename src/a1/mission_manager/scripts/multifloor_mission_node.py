@@ -38,10 +38,17 @@ from elevator_exit import (
     choose_corridor_side,
     known_free_run_in_grid,
 )
+from home_return import (
+    inverse as inverse_se2,
+    nearest_known_free_anchor,
+    propagate_home_transform,
+    transform_pose as transform_se2_pose,
+    warp_occupancy_grid,
+)
 from nav_msgs.msg import OccupancyGrid
 from a1_navigation_interfaces.msg import (DoorwayArray, ExploreFloorAction,
                                           ExploreFloorGoal, WallSegmentArray)
-from building_generator_interfaces.srv import CallElevator
+from building_generator_interfaces.srv import CallElevator, SetDoorState
 from diagnostic_msgs.msg import DiagnosticStatus
 from geometry_msgs.msg import Point, PoseStamped, Twist
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
@@ -83,6 +90,10 @@ class MultiFloorMission:
         self.wall_message = None
         self.floor_grid = None
         self.floor_grid_identity = None
+        self.home_snapshot = None
+        self.home_from_current = (0.0, 0.0, 0.0)
+        self.home_map_restored = False
+        self.home_targets_current = None
         # OccupancyGrid has no generation/session fields.  This ROS-time
         # barrier prevents a delayed latched map from a previous floor from
         # being relabelled with the identity visible when its callback runs.
@@ -123,6 +134,8 @@ class MultiFloorMission:
         self.controller_ready = False
         self.controller_ready_stamp = None
         self.controller_state = ""
+        self.final_cmd_vel = None
+        self.final_cmd_vel_stamp = 0.0
         self.localization_state = ""
         self.localization_values = {}
         self.localization_stamp = 0.0
@@ -147,6 +160,10 @@ class MultiFloorMission:
         self.marker_pub = rospy.Publisher(
             rospy.get_param("~diagnostics/marker_topic"), MarkerArray,
             queue_size=2, latch=True)
+        self.active_map_pub = rospy.Publisher(
+            rospy.get_param(
+                "~home_return/active_map_topic", "/a1/navigation/active_map"),
+            OccupancyGrid, queue_size=1, latch=True)
         rospy.Subscriber("/a1/localization/odom", Odometry,
                          self.pose_cb, queue_size=10)
         rospy.Subscriber("/a1/floor_mapping/status", DiagnosticStatus,
@@ -165,11 +182,15 @@ class MultiFloorMission:
                          self.supervisor_cb, queue_size=5)
         rospy.Subscriber("/cmd_vel_nav", Twist,
                          self.nav_cmd_cb, queue_size=1)
+        rospy.Subscriber("/cmd_vel", Twist,
+                         self.final_cmd_vel_cb, queue_size=5)
         self.explore = actionlib.SimpleActionClient(
             "/a1/exploration/explore_floor", ExploreFloorAction)
         self.move = actionlib.SimpleActionClient("/move_base", MoveBaseAction)
         self.call_elevator = rospy.ServiceProxy(
             "/call_elevator", CallElevator)
+        self.set_door = rospy.ServiceProxy(
+            "/set_door_state", SetDoorState)
         self.reset_mapping = rospy.ServiceProxy(
             "/a1/floor_mapping/reset", Trigger)
         self.reinitialize = rospy.ServiceProxy(
@@ -254,6 +275,8 @@ class MultiFloorMission:
             "~startup/fixed_stand_settle_sim_s", 3.0))
         self.special_test_mode = bool(rospy.get_param(
             "~mission/special_test_mode", False))
+        self.home_return_after_special_test = bool(rospy.get_param(
+            "~mission/home_return_after_special_test", False))
         self.transfer_turn_max_speed = float(rospy.get_param(
             "~elevator/transfer_turn_max_speed", 1.80))
         self.transfer_turn_min_speed = float(rospy.get_param(
@@ -467,6 +490,39 @@ class MultiFloorMission:
             "~upper_floor/corridor_axis/maximum_width", 3.60))
         self.upper_axis_maximum_midpoint_distance = float(rospy.get_param(
             "~upper_floor/corridor_axis/maximum_midpoint_distance", 8.0))
+        self.home_return_enabled = bool(rospy.get_param(
+            "~home_return/enabled", True))
+        self.home_return_position_tolerance = float(rospy.get_param(
+            "~home_return/position_tolerance", 0.60))
+        self.home_return_yaw_tolerance = float(rospy.get_param(
+            "~home_return/yaw_tolerance", 0.85))
+        self.home_anchor_search_radius = float(rospy.get_param(
+            "~home_return/anchor_search_radius", 0.80))
+        self.home_anchor_margin = float(rospy.get_param(
+            "~home_return/anchor_margin", 0.10))
+        self.home_free_threshold = int(rospy.get_param(
+            "~home_return/free_threshold", 20))
+        self.home_map_settle_wall = float(rospy.get_param(
+            "~home_return/map_settle_wall", 2.0))
+        self.home_zero_epsilon = float(rospy.get_param(
+            "~home_return/zero_velocity_epsilon", 0.01))
+        self.home_zero_settle_wall = float(rospy.get_param(
+            "~home_return/zero_settle_wall", 0.50))
+        self.home_zero_timeout_wall = float(rospy.get_param(
+            "~home_return/zero_timeout_wall", 8.0))
+        self.home_cmd_freshness_wall = float(rospy.get_param(
+            "~home_return/command_freshness_wall", 0.50))
+        if (self.home_return_position_tolerance <= 0.0 or
+                self.home_return_yaw_tolerance <= 0.0 or
+                self.home_anchor_search_radius <= 0.0 or
+                self.home_anchor_margin < 0.0 or
+                self.home_anchor_margin >= self.home_return_position_tolerance or
+                self.home_map_settle_wall < 0.0 or
+                self.home_zero_epsilon < 0.0 or
+                self.home_zero_settle_wall <= 0.0 or
+                self.home_zero_timeout_wall <= 0.0 or
+                self.home_cmd_freshness_wall <= 0.0):
+            raise ValueError("invalid home-return map or final-pose parameters")
         # 订阅必须排在 floor_grid / lock 初始化之后。放在构造函数前部时,
         # 第一帧地图可能在这两个属性存在之前就到达,回调直接 AttributeError。
         rospy.Subscriber("/a1/floor_mapping/map", OccupancyGrid,
@@ -513,6 +569,11 @@ class MultiFloorMission:
             # non-zero behavior command after drive_straight_into_car publishes
             # its shutdown zero.
             self.behavior_cmd_pub.publish(command)
+
+    def final_cmd_vel_cb(self, message):
+        with self.lock:
+            self.final_cmd_vel = copy.deepcopy(message)
+            self.final_cmd_vel_stamp = time.monotonic()
 
     def localization_cb(self, message):
         values = {item.key: item.value for item in message.values}
@@ -1165,6 +1226,200 @@ class MultiFloorMission:
         set_yaw(result.pose.orientation, yaw)
         return result
 
+    @staticmethod
+    def pose_se2(pose):
+        return (
+            float(pose.pose.position.x),
+            float(pose.pose.position.y),
+            yaw_of(pose.pose.orientation),
+        )
+
+    def transform_pose_stamped(self, transform, source, target_frame):
+        x, y, yaw = transform_se2_pose(transform, self.pose_se2(source))
+        result = self.make_pose(x, y, yaw, target_frame)
+        result.pose.position.z = source.pose.position.z
+        return result
+
+    def capture_home_snapshot(self, spawn, entry):
+        """Freeze the navigable floor-zero map and its return anchors."""
+        if not self.home_return_enabled:
+            return
+        if self.floor != 0 or self.home_from_current != (0.0, 0.0, 0.0):
+            raise MissionFailure("home snapshot must be captured in initial floor-zero odom")
+        grid = self.fresh_floor_grid()
+        if grid is None:
+            raise MissionFailure("no fresh floor-zero OccupancyGrid for home snapshot")
+        if (grid.header.frame_id != spawn.header.frame_id or
+                grid.header.frame_id != entry.header.frame_id):
+            raise MissionFailure("home snapshot pose and map frames do not match")
+        map_yaw = yaw_of(grid.info.origin.orientation)
+        if abs(self.angle_error(map_yaw, 0.0)) > 1.0e-6:
+            raise MissionFailure("home snapshot requires an axis-aligned OccupancyGrid")
+
+        anchor_xy = nearest_known_free_anchor(
+            grid.data,
+            int(grid.info.width),
+            int(grid.info.height),
+            float(grid.info.resolution),
+            float(grid.info.origin.position.x),
+            float(grid.info.origin.position.y),
+            float(spawn.pose.position.x),
+            float(spawn.pose.position.y),
+            self.home_anchor_search_radius,
+            self.home_free_threshold,
+        )
+        if anchor_xy is None:
+            raise MissionFailure("floor-zero map has no known-free return anchor near spawn")
+        anchor_offset = math.hypot(
+            anchor_xy[0] - spawn.pose.position.x,
+            anchor_xy[1] - spawn.pose.position.y)
+        admissible = self.home_return_position_tolerance - self.home_anchor_margin
+        if anchor_offset > admissible:
+            raise MissionFailure(
+                "nearest floor-zero return anchor is %.2f m from spawn; limit %.2f m"
+                % (anchor_offset, admissible))
+        anchor = self.make_pose(
+            anchor_xy[0], anchor_xy[1], yaw_of(spawn.pose.orientation),
+            spawn.header.frame_id)
+        with self.lock:
+            self.home_snapshot = {
+                "map": copy.deepcopy(grid),
+                "identity": tuple(self.floor_grid_identity),
+                "spawn": copy.deepcopy(spawn),
+                "entry": copy.deepcopy(entry),
+                "return_anchor": anchor,
+                "anchor_offset": anchor_offset,
+            }
+        known_cells = sum(1 for value in grid.data if value >= 0)
+        self.emit(
+            "FLOOR0_SNAPSHOT_READY",
+            "remembered floor-zero navigation map and verified spawn anchor",
+            generation=int(self.floor_grid_identity[0]),
+            session=int(self.floor_grid_identity[1]),
+            known_cells=known_cells,
+            anchor_offset=anchor_offset,
+        )
+
+    def restore_home_map(self):
+        """Resample the remembered floor-zero map into the current odom frame."""
+        if not self.home_return_enabled:
+            raise MissionFailure("home return is disabled")
+        with self.lock:
+            snapshot = self.home_snapshot
+            home_from_current = tuple(self.home_from_current)
+        if snapshot is None:
+            raise MissionFailure("floor-zero home snapshot is unavailable")
+        current = self.current_pose()
+        remembered = snapshot["map"]
+        started = time.monotonic()
+        transformed_data = warp_occupancy_grid(
+            remembered.data,
+            int(remembered.info.width),
+            int(remembered.info.height),
+            float(remembered.info.resolution),
+            float(remembered.info.origin.position.x),
+            float(remembered.info.origin.position.y),
+            home_from_current,
+        )
+        restored = OccupancyGrid()
+        restored.header.stamp = rospy.Time.now()
+        restored.header.frame_id = current.header.frame_id
+        restored.info = copy.deepcopy(remembered.info)
+        restored.info.map_load_time = restored.header.stamp
+        restored.data = transformed_data
+
+        current_from_home = inverse_se2(home_from_current)
+        targets = {
+            "spawn": self.transform_pose_stamped(
+                current_from_home, snapshot["spawn"], current.header.frame_id),
+            "entry": self.transform_pose_stamped(
+                current_from_home, snapshot["entry"], current.header.frame_id),
+            "return_anchor": self.transform_pose_stamped(
+                current_from_home, snapshot["return_anchor"], current.header.frame_id),
+        }
+        with self.lock:
+            self.home_map_restored = True
+            self.home_targets_current = targets
+        self.active_map_pub.publish(restored)
+        self.emit(
+            "FLOOR0_MAP_RESTORED",
+            "restored the remembered floor-zero grid in the current odom frame",
+            transform_x=home_from_current[0],
+            transform_y=home_from_current[1],
+            transform_yaw=home_from_current[2],
+            elapsed_wall=time.monotonic() - started,
+        )
+        if self.home_map_settle_wall > 0.0:
+            time.sleep(self.home_map_settle_wall)
+        try:
+            self.clear_costmaps()
+        except rospy.ServiceException as error:
+            raise MissionFailure("cannot clear costmaps after home-map restore: %s" % error)
+        return targets
+
+    def ensure_main_entrance_open(self):
+        self.emit("HOME_ENTRANCE_OPENING", "requesting the public main entrance open")
+        try:
+            rospy.wait_for_service("/set_door_state", timeout=15.0)
+            response = self.set_door("main_entrance", True)
+        except (rospy.ROSException, rospy.ServiceException) as error:
+            raise MissionFailure("cannot open main entrance for home return: %s" % error)
+        if not response.accepted or str(response.state).lower() != "open":
+            raise MissionFailure(
+                "main entrance rejected home-return open request: %s" % response.message)
+        self.emit("HOME_ENTRANCE_OPEN", "public main entrance is open")
+
+    def wait_for_final_zero(self):
+        deadline = time.monotonic() + self.home_zero_timeout_wall
+        zero_since = None
+        while not rospy.is_shutdown() and time.monotonic() < deadline:
+            with self.lock:
+                command = copy.deepcopy(self.final_cmd_vel)
+                stamp = self.final_cmd_vel_stamp
+            now = time.monotonic()
+            fresh = command is not None and now - stamp <= self.home_cmd_freshness_wall
+            zero = fresh and all(abs(value) <= self.home_zero_epsilon for value in (
+                command.linear.x, command.linear.y, command.linear.z,
+                command.angular.x, command.angular.y, command.angular.z))
+            if zero:
+                zero_since = now if zero_since is None else zero_since
+                if now - zero_since >= self.home_zero_settle_wall:
+                    return True
+            else:
+                zero_since = None
+            time.sleep(0.02)
+        return False
+
+    def return_to_home(self, targets):
+        """Follow remembered topology and verify the actual spawn pose."""
+        self.navigate(targets["entry"], "remembered floor-zero entrance anchor")
+        self.emit("HOME_ENTRY_REACHED", "reached remembered entrance anchor")
+        self.ensure_main_entrance_open()
+        self.navigate(targets["return_anchor"], "known-free anchor beside spawn")
+        achieved = self.current_pose()
+        expected = targets["spawn"]
+        position_error = math.hypot(
+            achieved.pose.position.x - expected.pose.position.x,
+            achieved.pose.position.y - expected.pose.position.y)
+        yaw_error = abs(self.angle_error(
+            yaw_of(expected.pose.orientation), yaw_of(achieved.pose.orientation)))
+        if (position_error > self.home_return_position_tolerance or
+                yaw_error > self.home_return_yaw_tolerance):
+            raise MissionFailure(
+                "home return finished %.2f m / %.2f rad from spawn; limits "
+                "%.2f m / %.2f rad" % (
+                    position_error, yaw_error,
+                    self.home_return_position_tolerance,
+                    self.home_return_yaw_tolerance))
+        if not self.wait_for_final_zero():
+            raise MissionFailure("home return reached spawn but /cmd_vel did not settle to zero")
+        self.emit(
+            "HOME_REACHED",
+            "returned to the remembered spawn pose and final velocity is zero",
+            position_error=position_error,
+            yaw_error=yaw_error,
+        )
+
     def elevator_poses(self, floor):
         item = self.elevator[floor]
         center = item["door"].center
@@ -1347,6 +1602,9 @@ class MultiFloorMission:
         # still stable.  The elevator preserves body yaw during teleport, so
         # the robot arrives already looking through the target-floor doorway.
         self.turn_inside_elevator_before_transfer()
+        departure = self.current_pose()
+        with self.lock:
+            home_from_source = tuple(self.home_from_current)
         self.emit("ELEVATOR_CALL", "calling target floor while facing the door",
                   target_floor=target, z_before=before)
         rospy.wait_for_service("/call_elevator", timeout=15.0)
@@ -1414,6 +1672,13 @@ class MultiFloorMission:
             self.floor_grid_accept_after_ros = rospy.Time.now()
         arrival = self.current_pose()
         arrival_yaw = yaw_of(arrival.pose.orientation)
+        home_from_target = propagate_home_transform(
+            home_from_source,
+            self.pose_se2(departure),
+            self.pose_se2(arrival),
+        )
+        with self.lock:
+            self.home_from_current = home_from_target
         # Do not call this the exit direction. mf32 arrived on floor 1 with the
         # body 37.7 degrees away from the physical opening; storing this yaw and
         # immediately comparing it with itself made the old exit check a
@@ -1425,7 +1690,10 @@ class MultiFloorMission:
                   "localization and mapping restarted after elevator discontinuity",
                   source_floor=old_floor, target_floor=target,
                   z_before=before, z_after=after,
-                  provisional_arrival_yaw=arrival_yaw)
+                  provisional_arrival_yaw=arrival_yaw,
+                  home_from_current_x=home_from_target[0],
+                  home_from_current_y=home_from_target[1],
+                  home_from_current_yaw=home_from_target[2])
 
     def supervisor_running_after(self, restart_stamp, previous_generation):
         """Observe completion of the supervisor's asynchronous restart."""
@@ -1574,6 +1842,7 @@ class MultiFloorMission:
 
     def on_floor_grid(self, message):
         """Bind an unlabelled grid only to a proven current mapping epoch."""
+        publish_active = False
         with self.lock:
             if self.mapping is None:
                 return
@@ -1594,6 +1863,9 @@ class MultiFloorMission:
                 return
             self.floor_grid = copy.deepcopy(message)
             self.floor_grid_identity = identity
+            publish_active = not self.home_map_restored
+        if publish_active:
+            self.active_map_pub.publish(message)
 
     def fresh_floor_grid(self, pose=None):
         """Return a fresh grid from the current mapping identity, or ``None``."""
@@ -2290,7 +2562,7 @@ class MultiFloorMission:
             steps += 1
         return advanced
 
-    def exit_upper_floor_without_doorway(self, floor):
+    def exit_upper_floor_without_doorway(self, floor, stop_at_lobby=False):
         """Execute option A: measured-opening exit, then map-probed corridor.
 
         No upper-floor semantic doorway or building coordinate is required.
@@ -2434,6 +2706,11 @@ class MultiFloorMission:
                   x=point_b.pose.position.x, y=point_b.pose.position.y,
                   entry_yaw=yaw_out + math.pi)
         self.publish_markers()
+
+        if stop_at_lobby:
+            self.emit("FLOOR0_ELEVATOR_LOBBY_READY",
+                      "cleared the returned floor-zero elevator and stopped at lobby B")
+            return None, point_a, point_b
 
         # Probe both perpendicular directions repeatedly while the lobby map
         # fills.  If both look equally open, direction is not proven and the
@@ -2700,42 +2977,23 @@ class MultiFloorMission:
             self.floor_entry = copy.deepcopy(entry0)
         self.explore_floor(0, entry0, True)
         self.enter_elevator(0)
+        self.capture_home_snapshot(spawn, entry0)
         self.transfer(0, 1)
         special_test = self.special_test_mode
         self.complete_upper_floor_and_return_to_a(1, special_test)
         self.transfer(1, 2)
         self.complete_upper_floor_and_return_to_a(2, special_test)
         self.transfer(2, 0)
-        if special_test:
+        if special_test and not self.home_return_after_special_test:
             self.emit("SPECIAL_TEST_COMPLETE",
                       "floors 1 and 2 fixed exits, point-A returns, and "
                       "transfer back to floor 0 verified")
             return
-        self.wait_until(lambda: 0 in self.elevator, 20.0,
-                        "floor-zero elevator after relocalization")
-        lobby, threshold, _car = self.elevator_poses(0)
-        ox, oy = self.elevator[0]["outward"]
-        yaw_out = math.atan2(oy, ox)
-        current = self.current_pose()
-        turn_out = self.make_pose(current.pose.position.x,
-                                  current.pose.position.y, yaw_out)
-        self.navigate(turn_out, "turn inside elevator to face final exit")
-        threshold.pose.orientation = copy.deepcopy(turn_out.pose.orientation)
-        lobby.pose.orientation = copy.deepcopy(turn_out.pose.orientation)
-        self.navigate(threshold, "final elevator exit threshold")
-        self.navigate(lobby, "final elevator lobby")
-        # Recreate the entrance anchor in the new floor-0 localization session
-        # from the invariant building geometry: elevator outward then left.
-        fx, fy = -oy, ox
-        entrance_inside = self.make_pose(lobby.pose.position.x + 2.3 * fx,
-                                         lobby.pose.position.y + 2.3 * fy,
-                                         math.atan2(-fy, -fx))
-        self.navigate(entrance_inside, "floor-zero main entrance inside")
-        final = self.make_pose(entrance_inside.pose.position.x - 3.5 * fx,
-                               entrance_inside.pose.position.y - 3.5 * fy,
-                               math.atan2(-fy, -fx))
-        self.navigate(final, "exit building and return to spawn-relative pose")
-        self.emit("MISSION_COMPLETE", "three floors explored; returned outside")
+        targets = self.restore_home_map()
+        self.exit_upper_floor_without_doorway(0, stop_at_lobby=True)
+        self.return_to_home(targets)
+        self.emit("MISSION_COMPLETE",
+                  "three floors explored; map-localized return to spawn verified")
 
 
 if __name__ == "__main__":

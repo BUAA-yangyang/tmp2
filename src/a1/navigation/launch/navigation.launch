@@ -50,6 +50,7 @@
        default="$(find a1_navigation)/config/local_costmap_params.yaml"/>
   <arg name="obstacle_layer_config"
        default="$(find a1_navigation)/config/obstacle_layer_params.yaml"/>
+  <arg name="static_map_topic" default="/a1/floor_mapping/map"/>
 
   <node pkg="move_base" type="move_base" name="move_base"
         respawn="false" output="screen" clear_params="true">
@@ -93,6 +94,8 @@
     <!-- 两个 costmap 各自的坐标系/尺寸/分层配置（文件内自带顶层 key） -->
     <rosparam file="$(arg global_costmap_config)" command="load"/>
     <rosparam file="$(arg local_costmap_config)" command="load"/>
+    <param name="global_costmap/static_layer/map_topic"
+           value="$(arg static_map_topic)"/>
     <param name="global_costmap/inflation_layer/inflation_radius"
            value="$(arg inflation_radius)"/>
     <param name="global_costmap/inflation_layer/cost_scaling_factor"

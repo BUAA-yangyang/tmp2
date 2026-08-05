@@ -11,6 +11,7 @@
 /artifacts/localization_maps/
 /artifacts/localization_validation/
 /artifacts/
+/.local_docs/
 
 # Generated assets and runtime artifacts under source trees
 /src/generated_building/

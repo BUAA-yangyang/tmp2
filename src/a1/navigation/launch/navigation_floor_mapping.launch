@@ -16,6 +16,7 @@
   <arg name="dwa_max_vel_theta" default="0.60"/>
   <arg name="inflation_radius" default="0.25"/>
   <arg name="inflation_cost_scaling_factor" default="5.0"/>
+  <arg name="static_map_topic" default="/a1/floor_mapping/map"/>
 
   <include file="$(find a1_navigation)/launch/navigation.launch">
     <arg name="obstacle_cloud_topic" value="$(arg obstacle_cloud_topic)"/>
@@ -40,6 +41,7 @@
          value="$(find a1_navigation)/config/local_costmap_floor_mapping_params.yaml"/>
     <arg name="obstacle_layer_config"
          value="$(find a1_navigation)/config/obstacle_layer_floor_mapping_params.yaml"/>
+    <arg name="static_map_topic" value="$(arg static_map_topic)"/>
   </include>
 
   <!-- The standard navigation include relays the obstacle-only marking cloud

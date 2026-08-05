@@ -9,6 +9,7 @@
        default="/workspace/SimEnv/generated_building/team_scene_info.json"/>
   <arg name="start_building_behavior" default="true"/>
   <arg name="start_exploration" default="true"/>
+  <arg name="static_map_topic" default="/a1/floor_mapping/map"/>
 
   <!-- Production upstream chain: Livox + trunk IMU -> FAST-LIO -> normalized
        /a1/localization/odom and odom->base TF. -->
@@ -36,6 +37,7 @@
     <arg name="dwa_min_vel_y" value="0.0"/>
     <arg name="dwa_max_vel_trans" value="1.40"/>
     <arg name="dwa_max_vel_theta" value="1.80"/>
+    <arg name="static_map_topic" value="$(arg static_map_topic)"/>
   </include>
 
   <include if="$(arg use_cmd_mux)"

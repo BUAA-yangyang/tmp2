@@ -9,6 +9,7 @@ catkin_install_python(PROGRAMS
   scripts/align_to_opening.py
   scripts/corridor_axis.py
   scripts/elevator_exit.py
+  scripts/home_return.py
   scripts/multifloor_mission_node.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 install(DIRECTORY config launch DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
@@ -17,5 +18,7 @@ if(CATKIN_ENABLE_TESTING)
   catkin_add_nosetests(test/test_corridor_axis.py)
   catkin_add_nosetests(test/test_elevator_exit.py)
   catkin_add_nosetests(test/test_align_to_opening.py)
+  catkin_add_nosetests(test/test_home_return.py)
+  catkin_add_nosetests(test/test_home_return_contract.py)
   catkin_add_nosetests(test/test_option_a_contract.py)
 endif()
