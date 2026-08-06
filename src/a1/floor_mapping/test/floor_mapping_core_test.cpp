@@ -34,6 +34,14 @@ std::vector<a1_floor_mapping::HeightPoint> closedDoorwayScan() {
   result.insert(result.end(), panel.begin(), panel.end());
   return result;
 }
+
+int cellValue(OccupancyIntegrator& grid, double x, double y) {
+  int cell_x = 0, cell_y = 0;
+  if (!grid.worldToCell(x, y, cell_x, cell_y)) return -128;
+  std::size_t occupied = 0, free = 0, unknown = 0;
+  const auto data = grid.data(occupied, free, unknown);
+  return data[static_cast<std::size_t>(cell_y) * grid.width() + cell_x];
+}
 }  // namespace
 
 TEST(GroundSelection, SupportsIndoorColdStartAndAnchoredTracking) {
@@ -67,8 +75,10 @@ TEST(GroundEstimator, RequiresStableInitializationAndPersistentFloorChange) {
 
 TEST(OccupancyIntegrator, IntegratesAndClipsRays) {
   OccupancyIntegrator grid(0.1, 4.0, 4.0, 0.35, 0.80, 1);
+  grid.beginFrame();
   EXPECT_TRUE(grid.raytrace(-3.0, 0.0, 3.0, 0.0, false));
   EXPECT_TRUE(grid.raytrace(0.0, 0.0, 1.0, 0.0, true));
+  grid.endFrame();
   std::size_t occupied, free, unknown;
   const auto data = grid.data(occupied, free, unknown);
   EXPECT_EQ(data.size(), 1600u);
@@ -80,6 +90,74 @@ TEST(OccupancyIntegrator, IntegratesAndClipsRays) {
   grid.data(occupied, free, unknown);
   EXPECT_EQ(occupied, 0u);
   EXPECT_EQ(free, 0u);
+}
+
+TEST(OccupancyIntegrator, SameFrameObstacleEndpointDominatesClearingRays) {
+  OccupancyIntegrator grid(0.1, 4.0, 4.0, 0.35, 0.80, 1);
+  grid.beginFrame();
+  for (int ray = 0; ray < 20; ++ray)
+    EXPECT_TRUE(grid.raytrace(0.0, 0.0, 1.8, 0.0, true));
+  EXPECT_TRUE(grid.raytrace(0.0, 0.0, 1.05, 0.0, true));
+  grid.endFrame();
+  EXPECT_EQ(cellValue(grid, 1.05, 0.0), 100);
+}
+
+TEST(OccupancyIntegrator, ConfirmedObstacleIgnoresRayTraversalUntilGroundEndpointsClearIt) {
+  OccupancyIntegrator grid(0.1, 4.0, 4.0, 0.35, 0.80, 2);
+  for (int frame = 0; frame < 2; ++frame) {
+    grid.beginFrame();
+    EXPECT_TRUE(grid.raytrace(0.0, 0.0, 1.05, 0.0, true));
+    grid.endFrame();
+  }
+  ASSERT_EQ(cellValue(grid, 1.05, 0.0), 100);
+
+  for (int frame = 0; frame < 20; ++frame) {
+    grid.beginFrame();
+    EXPECT_TRUE(grid.raytrace(0.0, 0.0, 1.8, 0.0, true));
+    grid.endFrame();
+  }
+  EXPECT_EQ(cellValue(grid, 1.05, 0.0), 100)
+      << "a 3-D ray crossing the 2-D cell is not ground evidence";
+
+  for (int confirmation = 0; confirmation < 2; ++confirmation) {
+    grid.beginFrame();
+    EXPECT_TRUE(grid.raytrace(0.0, 0.0, 1.05, 0.0, false));
+    grid.endFrame();
+    EXPECT_EQ(cellValue(grid, 1.05, 0.0), 100);
+  }
+  grid.beginFrame();
+  EXPECT_TRUE(grid.raytrace(0.0, 0.0, 1.05, 0.0, false));
+  grid.endFrame();
+  EXPECT_EQ(cellValue(grid, 1.05, 0.0), 0);
+}
+
+TEST(OccupancyIntegrator, ObstacleEndpointResetsPendingGroundConfirmation) {
+  OccupancyIntegrator grid(0.1, 4.0, 4.0, 0.35, 0.80, 1);
+  grid.beginFrame();
+  EXPECT_TRUE(grid.raytrace(0.0, 0.0, 1.05, 0.0, true));
+  grid.endFrame();
+  ASSERT_EQ(cellValue(grid, 1.05, 0.0), 100);
+
+  for (int confirmation = 0; confirmation < 2; ++confirmation) {
+    grid.beginFrame();
+    EXPECT_TRUE(grid.raytrace(0.0, 0.0, 1.05, 0.0, false));
+    grid.endFrame();
+  }
+  grid.beginFrame();
+  EXPECT_TRUE(grid.raytrace(0.0, 0.0, 1.05, 0.0, true));
+  grid.endFrame();
+  for (int confirmation = 0; confirmation < 2; ++confirmation) {
+    grid.beginFrame();
+    EXPECT_TRUE(grid.raytrace(0.0, 0.0, 1.05, 0.0, false));
+    grid.endFrame();
+  }
+  EXPECT_EQ(cellValue(grid, 1.05, 0.0), 100);
+}
+
+TEST(OccupancyIntegrator, RequiresExplicitFrameBoundaries) {
+  OccupancyIntegrator grid(0.1, 4.0, 4.0, 0.35, 0.80, 1);
+  EXPECT_THROW(grid.raytrace(0.0, 0.0, 1.0, 0.0, true), std::logic_error);
+  EXPECT_THROW(grid.endFrame(), std::logic_error);
 }
 
 TEST(DoorWallRecognizer, RequiresFreeRaysTracksOpeningAndObservesClose) {

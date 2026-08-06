@@ -12,14 +12,26 @@ anchor_states: [MISSION_TIMING_START, WORLD_ANCHOR]
 # Competition output file (docs/evaluation.md), plus the provenance sidecar.
 # The submitted file carries exactly the two documented fields; everything we
 # need in order to defend the number lives in the audit file.
-result_file: /workspace/SimEnv/results/detected_danger.json
-audit_file: /workspace/SimEnv/results/detected_danger.audit.json
+# Leave result_file empty: the path is read from team_scene_info.json's
+# allowed_interfaces.result_file, which is where the grader will look for it.
+# It is environment-dependent (the shipped package points at
+# /home/ros/Guoyulun/Competition/SimEnv/...), so hardcoding it risks writing a
+# correct answer somewhere nobody reads. Set this only to override for a test.
+result_file: ""
+audit_file: ""            # defaults to <result_file>.audit.json
 
 # The one scene file docs/competition-rules.md permits reading.  Its
 # robot_start is the only legal bridge from our map frame to the Gazebo world
 # frame the result file is specified in.
 team_scene_info_file: /workspace/SimEnv/generated_building/team_scene_info.json
-require_world_anchor: true
+# off / audit / apply.  Default `audit`: observe only, never change what is
+# submitted.  a1_localization/config/frames.yaml already aligns the estimator
+# output to the same robot_start pose, and the single-floor rounds that scored
+# (run20 correct=2, run23 correct=1) went through that path -- converting again
+# on top of it would move correct coordinates.  On the multi-floor path the
+# question is open: mf41 measured 19.15 m median between /a1/localization/odom
+# and the referee pose, with world_anchor_established=false in the status.
+world_anchor_mode: audit
 world_z_mode: from_robot_start
 
 # Final result aggregation.
@@ -28,10 +40,8 @@ track_id_match_distance_m: 1.0
 position_alpha: 0.35
 min_confidence: 0.45
 require_confirmed_status: true
-# a1_danger_perception publishes in its target_frame, which is `map`.  There is
-# no `world` frame in TF, so accepting one here never meant the coordinates
-# were in world -- it only meant nobody converted them.
-accepted_frames: [map]
+# a1_danger_perception publishes in its target_frame, which is `map`.
+accepted_frames: [world, map]
 
 write_rate_hz: 1.0
 output_precision: 3

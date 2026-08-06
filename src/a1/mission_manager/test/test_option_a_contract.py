@@ -133,13 +133,114 @@ class OptionAContractTest(unittest.TestCase):
         self.assertNotIn("self.advance_map_checked", body)
         self.assertNotIn("self.travel_to_map_checked", body)
 
-    def test_upper_exploration_returns_to_c_and_return_has_no_step_policy(self):
+    def test_upper_exploration_holds_endpoint_and_mission_returns_via_c(self):
         explore_body = self.method_source("explore_floor")
+        complete_body = self.method_source(
+            "complete_upper_floor_and_return_to_a")
         return_body = self.method_source(
             "return_upper_floor_over_traversed_segments")
-        self.assertIn("goal.LEGACY_RETURN_TO_START", explore_body)
-        self.assertIn("goal.STAY_ON_FLOOR if main_entrance", explore_body)
-        self.assertIn("entry_error > self.nav_arrival_band", explore_body)
+        self.assertIn("goal.completion_mode = goal.STAY_ON_FLOOR", explore_body)
+        self.assertIn("endpoint_to_entry_m", explore_body)
+        self.assertNotIn("entry_error > self.nav_arrival_band", explore_body)
+        self.assertIn("achieved.header.frame_id != entry.header.frame_id",
+                      explore_body)
+        explore_call = complete_body.index(
+            "self.explore_floor(floor, entry, False)")
+        return_to_c_call = complete_body.index("self.navigate(\n                staging,")
+        retrace_call = complete_body.index(
+            "self.return_upper_floor_over_traversed_segments(")
+        self.assertLess(explore_call, return_to_c_call)
+        self.assertLess(return_to_c_call, retrace_call)
+        self.assertIn("entry_error > self.nav_arrival_band", return_body)
+
+    def test_endpoint_to_c_stages_on_c_position_with_the_c_to_b_bearing(self):
+        """mf49: C's own yaw points away from B, so using it turns twice."""
+        body = self.method_source("complete_upper_floor_and_return_to_a")
+        self.assertIn("staging = copy.deepcopy(entry)", body)
+        # Position comes from entry (the deep copy), heading from C->B.
+        self.assertIn("point_b.pose.position.y - entry.pose.position.y", body)
+        self.assertIn("point_b.pose.position.x - entry.pose.position.x", body)
+        self.assertIn("set_yaw(staging.pose.orientation", body)
+        self.assertNotIn("staging.pose.position.x =", body)
+        self.assertNotIn("staging.pose.position.y =", body)
+        # The declared entry pose must survive untouched: the measured C-B
+        # geometry check downstream is stated against its axis.
+        self.assertNotIn("set_yaw(entry.pose.orientation", body)
+        self.assertNotIn(
+            'self.navigate(entry, "floor %d return to corridor point C" '
+            '% floor)', body)
+
+    def test_every_goal_waits_for_the_shared_move_base_to_go_idle(self):
+        """mf51 floor 2: the explorer had not finished handing move_base back."""
+        navigate_body = self.method_source("navigate")
+        settle_body = self.method_source("settle_move_base_handover")
+        # The handshake must precede send_goal, not merely exist.
+        settle_call = navigate_body.index("self.settle_move_base_handover(")
+        send_goal = navigate_body.index("self.move.send_goal(goal)")
+        self.assertLess(settle_call, send_goal)
+        # PENDING/ACTIVE/PREEMPTING/RECALLING are the states that corrupt the
+        # SimpleActionClient if a new goal lands on top of them.
+        self.assertIn("busy = (0, 1, 6, 7)", settle_body)
+        self.assertIn("self.move.cancel_all_goals()", settle_body)
+        # Idle client must cost nothing, and a client that never had a goal
+        # must not raise out of the guard itself.
+        self.assertIn("if state not in busy:", settle_body)
+        self.assertIn("except Exception:", settle_body)
+        # Bounded on both clocks, like every other wait in this node.
+        self.assertIn("self.move_handover_timeout_sim", settle_body)
+        self.assertIn("self.move_handover_timeout_wall", settle_body)
+        self.assertIn("MOVE_BASE_HANDOVER", settle_body)
+        # It is a handshake only: no goal, tolerance or envelope may change.
+        self.assertNotIn("send_goal", settle_body)
+        self.assertNotIn("cmd_vel", settle_body)
+
+    def test_demo_stops_at_floor_zero_unless_the_real_return_is_enabled(self):
+        """The 2.3/3.5 m tail is a placeholder, not a return-to-start."""
+        body = self.method_source("run")
+        gate = body.index("if not self.final_return_to_start:")
+        rebuild = body.index("entrance_inside = self.make_pose(")
+        self.assertLess(gate, rebuild)
+        # The hardcoded offsets must sit behind the gate, not in front of it.
+        self.assertIn("2.3 * fx", body[rebuild:])
+        self.assertIn("3.5 * fx", body[rebuild:])
+        self.assertNotIn("2.3 * fx", body[:gate])
+        # A run without the return leg must not silently publish a number that
+        # reads like the PDF's "explore fully AND return to start" figure.
+        early = body[gate:rebuild]
+        self.assertIn("MISSION_COMPLETE", early)
+        self.assertIn("return_to_start_performed=False", early)
+        self.assertIn("does NOT include a return leg", early)
+        self.assertIn("return_to_start_performed=True", body[rebuild:])
+
+    def test_return_alignment_precedes_the_c_to_b_goal_and_never_translates(self):
+        return_body = self.method_source(
+            "return_upper_floor_over_traversed_segments")
+        align_body = self.method_source("align_return_bearing_in_place")
+        align_call = return_body.index(
+            "self.align_return_bearing_in_place(")
+        goal_call = return_body.index("self.navigate(\n            point_b")
+        self.assertLess(align_call, goal_call)
+        # C is re-verified AFTER the turn, not only before it.
+        self.assertIn("settled_entry_error > self.nav_arrival_band",
+                      return_body)
+        self.assertIn("settled_heading_error > self.return_align_tolerance",
+                      return_body)
+        self.assertLess(align_call, return_body.index("settled_entry_error"))
+        # Rotation only, on its own parameter block, with both clocks bounded.
+        self.assertNotIn("command.linear", align_body)
+        self.assertNotIn("self.navigate", align_body)
+        self.assertIn("command.angular.z = math.copysign", align_body)
+        self.assertIn("self.return_align_timeout_sim", align_body)
+        self.assertIn("self.return_align_timeout_wall", align_body)
+        self.assertIn("self.return_align_max_speed", align_body)
+        self.assertNotIn("self.opening_turn_max_speed", align_body)
+        self.assertIn("UPPER_FLOOR_RETURN_ALIGNMENT", align_body)
+        self.assertIn("UPPER_FLOOR_RETURN_ALIGNMENT_READY", align_body)
+        # Every exit path -- success, timeout, exception -- leaves the
+        # behavior channel at zero, because it outranks navigation.
+        self.assertIn("finally:", align_body)
+        finally_block = align_body[align_body.index("finally:"):]
+        self.assertIn("self.behavior_cmd_pub.publish(Twist())", finally_block)
         self.assertNotIn("travel_to_map_checked", self.methods)
         self.assertNotIn("advance_map_checked", return_body)
         self.assertNotIn("return_minimum_goal", self.source)

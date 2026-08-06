@@ -36,7 +36,8 @@ class RuntimeTest(unittest.TestCase):
         sensor=TransformStamped();sensor.header.stamp=stamp;sensor.header.frame_id="odom";sensor.child_frame_id="laser_livox";sensor.transform.translation.z=0.5;sensor.transform.rotation.w=1
         base=TransformStamped();base.header.stamp=stamp;base.header.frame_id="odom";base.child_frame_id="base";base.transform.translation.z=0.5;base.transform.rotation.w=1
         self.tf.sendTransform([sensor,base])
-    def frame(self, stamp=None, floor_sensor_z=-0.5, publish_tf=True):
+    def frame(self, stamp=None, floor_sensor_z=-0.5, publish_tf=True,
+              include_obstacle=True, extra_points=()):
         stamp=stamp or rospy.Time.now()
         if publish_tf:self.send_tf(stamp)
         od=Odometry();od.header.stamp=stamp;od.header.frame_id="odom";od.child_frame_id="base";od.pose.pose.position.z=0.5;od.pose.pose.orientation.w=1;self.odom_pub.publish(od)
@@ -46,8 +47,22 @@ class RuntimeTest(unittest.TestCase):
             for iy in range(-10,11):
                 x=ix*0.12;y=iy*0.12
                 if math.hypot(x,y)>0.5: pts.append((x,y,floor_sensor_z,1.0))
-        pts += [(2.0,y,0.0,2.0) for y in (-.2,-.1,0,.1,.2)]
+        if include_obstacle:
+            pts += [(2.0,y,0.0,2.0) for y in (-.2,-.1,0,.1,.2)]
+        pts.extend(extra_points)
         msg=point_cloud2.create_cloud(Header(stamp=stamp,frame_id="laser_livox"),fields,pts);self.cloud_pub.publish(msg);return stamp
+    @staticmethod
+    def map_value(message, x, y):
+        col=int(math.floor((x-message.info.origin.position.x)/message.info.resolution))
+        row=int(math.floor((y-message.info.origin.position.y)/message.info.resolution))
+        if row<0 or col<0 or row>=message.info.height or col>=message.info.width:return None
+        return message.data[row*message.info.width+col]
+    def wait_new_map(self, previous_count, timeout=3):
+        end=time.time()+timeout
+        while time.time()<end and not rospy.is_shutdown():
+            if len(self.maps)>previous_count:return self.maps[-1]
+            time.sleep(.03)
+        self.fail("fresh map not published")
     def wait_state(self,name,timeout=8):
         end=time.time()+timeout
         while time.time()<end and not rospy.is_shutdown():
@@ -71,6 +86,30 @@ class RuntimeTest(unittest.TestCase):
         while time.time()<end and (not self.maps or 100 not in self.maps[-1].data or 0 not in self.maps[-1].data):
             self.frame();time.sleep(.12)
         self.assertTrue(self.maps);self.assertEqual(self.maps[-1].header.frame_id,"odom");self.assertEqual(len(self.maps[-1].data),self.maps[-1].info.width*self.maps[-1].info.height);self.assertIn(100,self.maps[-1].data);self.assertIn(0,self.maps[-1].data)
+        self.assertEqual(self.map_value(self.maps[-1],2.0,0.0),100)
+
+        # A 3-D ray can pass above a low obstacle while crossing the same 2-D
+        # cell. Twenty fresh frames of such ray traversal must not erase a
+        # formally confirmed obstacle column.
+        before=len(self.maps)
+        for _ in range(20):
+            self.frame(
+                include_obstacle=False,
+                extra_points=((3.0,0.0,-0.5,3.0),),
+            );time.sleep(.04)
+        persisted=self.wait_new_map(before)
+        self.assertEqual(self.map_value(persisted,2.0,0.0),100)
+
+        # The cell may still clear dynamically, but only after the configured
+        # number of actual near-floor endpoints land in that exact cell.
+        before=len(self.maps)
+        for _ in range(3):
+            self.frame(
+                include_obstacle=False,
+                extra_points=((2.0,0.0,-0.5,3.0),),
+            );time.sleep(.08)
+        cleared=self.wait_new_map(before)
+        self.assertEqual(self.map_value(cleared,2.0,0.0),0)
         # The real chain publishes the raw cloud before FAST-LIO can publish
         # odometry/TF for the same stamp. A short inversion of arrival order
         # must be queued and processed with the exact transform, not rejected.

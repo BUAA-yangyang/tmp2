@@ -53,6 +53,11 @@ filter:
   # Obstacles above 14 cm remain marked; the low sill is emitted on the
   # clearing/ground channel.
   ground_clearance: 0.14
+  # Only returns close to the estimated floor are allowed to demote a cell that
+  # the formal OccupancyGrid has already confirmed occupied. Returns in the
+  # traversable 5--14 cm band stay on the costmap clearing cloud (preserving the
+  # sill policy) but are not evidence that an entire 2-D obstacle column is free.
+  map_ground_clearing_max_height: 0.05
   maximum_obstacle_height: 1.50
   voxel_leaf_size: 0.05
 grid:
@@ -94,6 +99,10 @@ grid:
   p_free: 0.35
   p_occupied: 0.80
   minimum_observations: 2
+  # An occupied cell is released only after this many actual near-floor
+  # endpoints have landed in that exact cell. Ray traversal alone cannot clear
+  # it because a 3-D ray may pass above a low obstacle in the same 2-D column.
+  occupied_clear_confirmations: 3
 door_wall:
   enabled: true
   extraction_cell_size: 0.08

@@ -20,9 +20,11 @@ from a1_exploration.frontier import (
     nearest_known_free_anchor,
     occupancy_content_fingerprint,
     point_in_polygon,
+    point_in_room_source_keepout,
     point_in_start_aligned_scope,
     polygon_mask,
     record_failure,
+    room_source_keepout_mask,
     segment_corridor_mask,
     start_aligned_scope_mask,
     transform_local_polygon,
@@ -450,6 +452,63 @@ class FrontierCoreTest(unittest.TestCase):
                 *limits
             )
         )
+
+    def test_room_source_keepout_rotates_and_excludes_only_room_side(self):
+        inward = (math.sqrt(0.5), math.sqrt(0.5))
+        door = (0.5, -0.5)
+        self.assertTrue(
+            point_in_room_source_keepout(
+                door[0] + inward[0], door[1] + inward[1],
+                door, inward, 1.70, 1.20,
+            )
+        )
+        self.assertFalse(
+            point_in_room_source_keepout(
+                door[0] - 0.01 * inward[0], door[1] - 0.01 * inward[1],
+                door, inward, 1.70, 1.20,
+            )
+        )
+        lateral = (-inward[1], inward[0])
+        self.assertTrue(
+            point_in_room_source_keepout(
+                door[0] + 1.70 * inward[0] + 1.20 * lateral[0],
+                door[1] + 1.70 * inward[1] + 1.20 * lateral[1],
+                door, inward, 1.70, 1.20,
+            )
+        )
+        self.assertFalse(
+            point_in_room_source_keepout(
+                door[0] + 1.71 * inward[0],
+                door[1] + 1.71 * inward[1],
+                door, inward, 1.70, 1.20,
+            )
+        )
+
+    def test_room_source_keepout_mask_matches_point_predicate(self):
+        spec = GridSpec(8, 8, 0.5, -2.0, -2.0)
+        mask = room_source_keepout_mask(
+            spec, door_xy=(0.0, 0.0), inward_xy=(0.0, 2.0),
+            depth_m=1.0, half_width_m=0.5,
+        )
+        for row in range(spec.height):
+            for col in range(spec.width):
+                x, y = spec.cell_to_world((row, col))
+                self.assertEqual(
+                    bool(mask[row, col]),
+                    point_in_room_source_keepout(
+                        x, y, (0.0, 0.0), (0.0, 2.0), 1.0, 0.5
+                    ),
+                )
+
+    def test_room_source_keepout_rejects_invalid_geometry(self):
+        with self.assertRaises(ValueError):
+            point_in_room_source_keepout(
+                0.0, 0.0, (0.0, 0.0), (0.0, 0.0), 1.0, 1.0
+            )
+        with self.assertRaises(ValueError):
+            room_source_keepout_mask(
+                self.spec, (0.0, 0.0), (1.0, 0.0), float("nan"), 1.0
+            )
 
 
 class MapMarginMaskTest(unittest.TestCase):

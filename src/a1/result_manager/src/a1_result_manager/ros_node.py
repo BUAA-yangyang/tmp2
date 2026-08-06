@@ -12,6 +12,7 @@ from std_msgs.msg import String
 from a1_navigation_interfaces.msg import DangerDetection, DangerDetectionArray
 
 from a1_result_manager.scoring import (
+    RUNNING,
     MissionClock,
     WorldAnchor,
     distance,
@@ -46,31 +47,46 @@ class ResultManagerNode:
       number as the time to finish full coverage *and return to the start*, so
       it is bounded by two explicit mission events on the sim clock, not by
       when this process happened to start and get killed on the wall clock.
-    * the coordinate frame.  The result file is specified in the Gazebo
-      ``world`` frame; our perception publishes in our own SLAM ``map`` frame,
-      and no world frame exists in TF.  The only permitted bridge is
-      team_scene_info.json's ``robot_start``, applied at the instant the robot
-      is standing on it.  An unanchored detection is withheld rather than
-      written in the wrong frame -- a wrong coordinate is not a near miss, it
-      is a miss *and* a false alarm, so it costs twice.
+    * the coordinate frame, but only to *observe* it by default.  The result
+      file is specified in the Gazebo ``world`` frame.  a1_localization already
+      carries a fixed-start world alignment built from the same robot_start
+      pose (localization/config/frames.yaml), and the single-floor rounds that
+      scored went through it, so this node does not convert on top of that --
+      ``world_anchor_mode`` defaults to ``audit``, which records what an
+      independent anchor would have produced without changing what is
+      submitted.  Flip it to ``apply`` only once it is settled which frame
+      actually reaches the detections; mf41 measured 19.15 m median between
+      /a1/localization/odom and the referee pose with
+      ``world_anchor_established: false`` in the localization status, so on the
+      multi-floor path that question is open.
     """
 
     def __init__(self) -> None:
         self.detections_topic = str(rospy.get_param("~detections_topic", "/danger_perception/detections"))
         self.mission_status_topic = str(rospy.get_param("~mission_status_topic", "/a1/mission_manager/status"))
-        self.result_file = Path(str(rospy.get_param("~result_file", "/workspace/SimEnv/results/detected_danger.json")))
-        self.audit_file = Path(str(rospy.get_param("~audit_file", "") or
-                                   self.result_file.with_suffix(".audit.json")))
         self.team_scene_info_file = Path(str(rospy.get_param(
             "~team_scene_info_file",
             "/workspace/SimEnv/generated_building/team_scene_info.json")))
+        self._scene_info = self._load_scene_info()
+
+        # Where to hand the answer in.  This path is environment-dependent --
+        # the shipped package says /home/ros/Guoyulun/Competition/SimEnv/... and
+        # our container says /workspace/SimEnv/... -- and team_scene_info.json
+        # carries it precisely so it does not have to be guessed.  A hardcoded
+        # path that does not match the grader's writes a perfect answer where
+        # nobody looks, and every log line still reads normal.
+        self.result_file = Path(str(rospy.get_param("~result_file", ""))
+                                or self._scene_result_file()
+                                or "/workspace/SimEnv/results/detected_danger.json")
+        self.audit_file = Path(str(rospy.get_param("~audit_file", "") or
+                                   self.result_file.with_suffix(".audit.json")))
 
         self.merge_distance_m = float(rospy.get_param("~merge_distance_m", 1.0))
         self.track_id_match_distance_m = float(rospy.get_param("~track_id_match_distance_m", self.merge_distance_m))
         self.position_alpha = float(rospy.get_param("~position_alpha", 0.35))
         self.min_confidence = float(rospy.get_param("~min_confidence", 0.45))
         self.require_confirmed_status = bool(rospy.get_param("~require_confirmed_status", True))
-        self.accepted_frames = _as_string_list(rospy.get_param("~accepted_frames", ["map"]))
+        self.accepted_frames = _as_string_list(rospy.get_param("~accepted_frames", ["world", "map"]))
         self.write_rate_hz = float(rospy.get_param("~write_rate_hz", 1.0))
         self.output_precision = int(rospy.get_param("~output_precision", 3))
         self.log_throttle_s = float(rospy.get_param("~log_throttle_s", 2.0))
@@ -79,7 +95,20 @@ class ResultManagerNode:
         self.timing_stop_states = _as_string_list(rospy.get_param("~timing_stop_states", ["MISSION_COMPLETE"]))
         self.timing_abort_states = _as_string_list(rospy.get_param("~timing_abort_states", ["MISSION_FAILED"]))
         self.anchor_states = _as_string_list(rospy.get_param("~anchor_states", ["MISSION_TIMING_START", "WORLD_ANCHOR"]))
-        self.require_world_anchor = bool(rospy.get_param("~require_world_anchor", True))
+        # off    : write detection positions through untouched (legacy behaviour)
+        # audit  : write them through untouched, but record in the audit file
+        #          what the anchor WOULD have produced
+        # apply  : convert, and withhold anything from an unanchored generation
+        #
+        # Default is `audit`, not `apply`.  a1_localization already carries a
+        # fixed-start world alignment keyed on the same robot_start pose
+        # (localization/config/frames.yaml), and the single-floor runs that
+        # scored -- run20 correct=2, run23 correct=1 -- did so through that
+        # path.  Converting a second time on top of it would move correct
+        # coordinates.  Until it is settled which frame actually reaches the
+        # detections, this node must not change what gets submitted; it only
+        # has to make the discrepancy visible.
+        self.world_anchor_mode = str(rospy.get_param("~world_anchor_mode", "audit"))
         self.world_z_mode = str(rospy.get_param("~world_z_mode", "from_robot_start"))
 
         self._sources: List[ResultSource] = []
@@ -108,9 +137,9 @@ class ResultManagerNode:
         rospy.on_shutdown(self._write_result_file)
         rospy.loginfo(
             "a1_result_manager started: clock=sim detections=%s status=%s "
-            "result=%s audit=%s accepted_frames=%s require_world_anchor=%s",
+            "result=%s audit=%s accepted_frames=%s world_anchor_mode=%s",
             self.detections_topic, self.mission_status_topic, self.result_file,
-            self.audit_file, self.accepted_frames, self.require_world_anchor,
+            self.audit_file, self.accepted_frames, self.world_anchor_mode,
         )
 
     # -- clock -------------------------------------------------------------
@@ -211,7 +240,7 @@ class ResultManagerNode:
             self.log_throttle_s,
             "result_manager received=%d accepted=%d final_sources=%d anchored=%d",
             len(msg.detections), accepted, len(self._sources),
-            len(self._anchored_positions()),
+            len(self._submitted_positions()),
         )
 
     def _is_usable_detection(self, detection: DangerDetection) -> bool:
@@ -287,25 +316,32 @@ class ResultManagerNode:
         return best_source
 
     # -- output ------------------------------------------------------------
-    def _anchored_positions(self) -> List[Position]:
+    def _submitted_positions(self) -> List[Position]:
+        if self.world_anchor_mode != "apply":
+            return [source.position for source in self._sources]
         positions: List[Position] = []
         for source in self._sources:
             anchor = self._anchors.get(source.generation)
-            if anchor is None:
-                if not self.require_world_anchor:
-                    positions.append(source.position)
-                continue
-            positions.append(anchor.apply(source.position))
+            if anchor is not None:
+                positions.append(anchor.apply(source.position))
         return positions
 
+    def _anchored_position(self, source: ResultSource) -> Optional[Position]:
+        anchor = self._anchors.get(source.generation)
+        return None if anchor is None else anchor.apply(source.position)
+
     def _withheld_sources(self) -> List[ResultSource]:
-        if not self.require_world_anchor:
+        if self.world_anchor_mode != "apply":
             return []
         return [source for source in self._sources
                 if source.generation not in self._anchors]
 
     def _timer_callback(self, _event) -> None:
-        if self._dirty:
+        # While the clock runs, rewrite unconditionally.  Writing only on
+        # `_dirty` left the audit file frozen at whatever the elapsed time was
+        # when the last detection arrived, so a healthy run in progress looked
+        # like a stalled clock (mf44 showed elapsed_s 0.21 ten minutes in).
+        if self._dirty or self._clock.state == RUNNING:
             self._write_result_file()
             self._dirty = False
 
@@ -313,7 +349,7 @@ class ResultManagerNode:
         now_s = self._now_s()
         self._write_json(self.result_file,
                          official_payload(self._clock.elapsed(now_s),
-                                          self._anchored_positions(),
+                                          self._submitted_positions(),
                                           self.output_precision))
         self._write_json(self.audit_file, self._audit_json(now_s))
 
@@ -345,11 +381,13 @@ class ResultManagerNode:
             "return_to_start": self._return or None,
             "world_frame": {
                 "robot_start": self._world_start,
+                "result_file_source": (
+                    "team_scene_info" if self._scene_result_file() else "fallback"),
                 "world_z_mode": self.world_z_mode,
                 "expected_sphere_z": [0.15, 2.75, 5.35],
                 "team_scene_info_file": str(self.team_scene_info_file),
                 "anchored_generations": sorted(self._anchors),
-                "require_world_anchor": self.require_world_anchor,
+                "world_anchor_mode": self.world_anchor_mode,
                 "withheld_source_count": len(withheld),
                 "withheld_generations": sorted({s.generation for s in withheld}),
             },
@@ -358,10 +396,13 @@ class ResultManagerNode:
                     "id": source.source_id,
                     "generation": source.generation,
                     "map_position": [round(v, self.output_precision) for v in source.position],
-                    "world_position": (
+                    "submitted_position": [round(v, self.output_precision)
+                                           for v in source.position]
+                    if self.world_anchor_mode != "apply" else None,
+                    "anchor_would_give": (
                         [round(v, self.output_precision)
-                         for v in self._anchors[source.generation].apply(source.position)]
-                        if source.generation in self._anchors else None),
+                         for v in self._anchored_position(source)]
+                        if self._anchored_position(source) else None),
                     "confidence": round(source.confidence, 3),
                     "observations": source.observations,
                     "first_seen_s": round(source.first_seen_s, 2),
@@ -371,16 +412,26 @@ class ResultManagerNode:
             ],
         }
 
-    def _load_world_start(self) -> Optional[dict]:
+    def _load_scene_info(self) -> dict:
         """team_scene_info.json is the one scene file the rules let us read
         (docs/competition-rules.md: 允许读取).  danger_truth.json and the layout
         files are referee-only and are never touched here."""
         try:
-            data = json.loads(self.team_scene_info_file.read_text(encoding="utf-8"))
+            return json.loads(self.team_scene_info_file.read_text(encoding="utf-8"))
         except Exception as exc:
             rospy.logwarn("Could not read %s: %s", self.team_scene_info_file, exc)
-            return None
-        start = data.get("robot_start")
+            return {}
+
+    def _scene_result_file(self) -> Optional[str]:
+        path = self._scene_info.get("allowed_interfaces", {}).get("result_file")
+        if isinstance(path, str) and path.strip():
+            rospy.loginfo("result file comes from %s: %s",
+                          self.team_scene_info_file, path)
+            return path.strip()
+        return None
+
+    def _load_world_start(self) -> Optional[dict]:
+        start = self._scene_info.get("robot_start")
         if not isinstance(start, dict) or "x" not in start or "y" not in start:
             rospy.logwarn("%s has no usable robot_start", self.team_scene_info_file)
             return None

@@ -1,0 +1,36 @@
+<launch>
+  <arg name="output" default="/workspace/SimEnv/results/mission_video/mission_video.mp4"/>
+  <arg name="width" default="1280"/>
+  <arg name="height" default="720"/>
+  <arg name="fps" default="8.0"/>
+  <arg name="duration_s" default="0.0"/>
+  <arg name="mission_timeout_s" default="600.0"/>
+  <arg name="first_person_topic" default="/danger_perception/debug/detections_image"/>
+  <arg name="first_person_fallback_topic" default="/real_sense/rgb/image_raw"/>
+  <arg name="third_person_topic" default="/a1/third_person/image_raw"/>
+  <arg name="map_topic" default="/a1/floor_mapping/map"/>
+  <arg name="odom_topic" default="/a1/localization/odom"/>
+  <arg name="exploration_status_topic" default="/a1/exploration/status"/>
+  <arg name="mission_status_topic" default="/a1/mission_manager/status"/>
+  <arg name="danger_detections_topic" default="/danger_perception/detections"/>
+
+  <node pkg="a1_navigation_tests"
+        type="mission_video_recorder.py"
+        name="mission_video_recorder"
+        output="screen">
+    <param name="output" value="$(arg output)"/>
+    <param name="width" value="$(arg width)"/>
+    <param name="height" value="$(arg height)"/>
+    <param name="fps" value="$(arg fps)"/>
+    <param name="duration_s" value="$(arg duration_s)"/>
+    <param name="mission_timeout_s" value="$(arg mission_timeout_s)"/>
+    <param name="first_person_topic" value="$(arg first_person_topic)"/>
+    <param name="first_person_fallback_topic" value="$(arg first_person_fallback_topic)"/>
+    <param name="third_person_topic" value="$(arg third_person_topic)"/>
+    <param name="map_topic" value="$(arg map_topic)"/>
+    <param name="odom_topic" value="$(arg odom_topic)"/>
+    <param name="exploration_status_topic" value="$(arg exploration_status_topic)"/>
+    <param name="mission_status_topic" value="$(arg mission_status_topic)"/>
+    <param name="danger_detections_topic" value="$(arg danger_detections_topic)"/>
+  </node>
+</launch>

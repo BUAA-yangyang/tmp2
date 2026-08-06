@@ -56,6 +56,7 @@ catkin_install_python(PROGRAMS
   scripts/single_floor_gazebo_acceptance.py
   scripts/safe_stop_short_test.py
   scripts/stability_bag_analyzer.py
+  scripts/mission_video_recorder.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 
 install(PROGRAMS

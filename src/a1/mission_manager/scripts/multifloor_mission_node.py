@@ -176,10 +176,56 @@ class MultiFloorMission:
             "/a1/localization/reinitialize", Trigger)
         self.clear_costmaps = rospy.ServiceProxy(
             "/move_base/clear_costmaps", Empty)
+        # A navigation goal's budget is a physical question -- how long that
+        # manoeuvre takes the robot -- so it is spent in sim seconds.  The wall
+        # clock only bounds a stalled /clock.
+        #
+        # It used to be wall-only, which made the budget a function of machine
+        # load.  mf46 ran at RTF 0.238 and its 180 wall s bought 42.8 sim s;
+        # the elevator lobby approach measured 33.6 sim s and cleared it by 9 s.
+        # mf47 ran with RViz at RTF 0.186, the same 180 s bought 33.5 sim s,
+        # and the mission died at 16.5 s on that same working manoeuvre.
         self.nav_timeout = float(rospy.get_param(
-            "~mission/navigation_timeout_wall", 180.0))
+            "~mission/navigation_timeout_sim", 90.0))
+        self.nav_timeout_wall_factor = float(rospy.get_param(
+            "~mission/navigation_timeout_wall_factor", 10.0))
+        # One floor's exploration budget. How long a floor takes is a physical
+        # question, so it is spent in SIM seconds; the wall clock only bounds a
+        # stalled /clock, exactly like navigation_timeout_sim above.
+        #
+        # This was wall-only at 1800 s and mf56 died on it: floor 2 exploration
+        # got 209 sim s out of that budget because the RTF in that stretch was
+        # about 0.12 (another simulation was sharing the machine), while floor 1
+        # had needed 226.8 sim s minutes earlier at RTF ~0.25. A budget that
+        # buys a different amount of robot behaviour depending on what else the
+        # grading machine happens to be running is not a budget.
         self.action_timeout = float(rospy.get_param(
-            "~mission/action_timeout_wall", 1800.0))
+            "~mission/action_timeout_sim", 600.0))
+        self.action_timeout_wall_factor = float(rospy.get_param(
+            "~mission/action_timeout_wall_factor", 10.0))
+        if self.action_timeout <= 0.0 or self.action_timeout_wall_factor < 1.0:
+            raise ValueError("action timeout budget must be positive")
+        # The tail of run() rebuilds a "probably the start pose" point from the
+        # floor-zero elevator plus two hardcoded offsets (2.3 m and 3.5 m).
+        # That is not a return-to-start implementation, it is a placeholder --
+        # and it has never once executed, because no round has reached it.
+        # Until the real return exists (see OPTIMIZATION_BACKLOG section 2: it
+        # needs T_g from the elevator car to express robot_start in the current
+        # localization generation), the demo ends when the car reaches floor
+        # zero.  Turning this on before that work lands would walk the robot
+        # toward a fabricated coordinate.
+        self.final_return_to_start = bool(rospy.get_param(
+            "~mission/final_return_to_start", False))
+        # How long to wait for the shared /move_base action client to become
+        # idle again after ExploreFloor hands it back.  See
+        # settle_move_base_handover().
+        self.move_handover_timeout_sim = float(rospy.get_param(
+            "~mission/move_base_handover_timeout_sim", 5.0))
+        self.move_handover_timeout_wall = float(rospy.get_param(
+            "~mission/move_base_handover_timeout_wall", 20.0))
+        if (self.move_handover_timeout_sim <= 0.0 or
+                self.move_handover_timeout_wall <= 0.0):
+            raise ValueError("move_base handover timeouts must be positive")
         self.elevator_id = rospy.get_param(
             "~mission/elevator_id", "elevator_main")
         self.min_width = float(rospy.get_param(
@@ -374,6 +420,34 @@ class MultiFloorMission:
                 self.opening_turn_max_speed > 0.80 or
                 self.opening_turn_tolerance <= 0.0):
             raise ValueError("invalid upper-floor opening-alignment parameters")
+        # The return alignment at corridor point C deliberately gets its OWN
+        # envelope rather than borrowing the opening-alignment one.  They are
+        # two different manoeuvres in two different places, and tuning the
+        # in-car opening turn must never silently change what happens at C --
+        # where mf49 fell.  The defaults are the opening turn's measured-good
+        # numbers, which is a starting point, not a shared identity.
+        self.return_align_max_speed = float(rospy.get_param(
+            "~elevator/return_alignment/turn_max_speed", 0.80))
+        self.return_align_min_speed = float(rospy.get_param(
+            "~elevator/return_alignment/turn_min_speed", 0.55))
+        self.return_align_gain = float(rospy.get_param(
+            "~elevator/return_alignment/turn_gain", 1.40))
+        self.return_align_tolerance = float(rospy.get_param(
+            "~elevator/return_alignment/turn_tolerance", 0.12))
+        self.return_align_timeout_wall = float(rospy.get_param(
+            "~elevator/return_alignment/turn_timeout_wall", 30.0))
+        self.return_align_timeout_sim = float(rospy.get_param(
+            "~elevator/return_alignment/turn_timeout_sim", 10.0))
+        self.return_align_settle_wall = float(rospy.get_param(
+            "~elevator/return_alignment/turn_settle_wall", 0.5))
+        if (self.return_align_min_speed <= 0.0 or
+                self.return_align_max_speed < self.return_align_min_speed or
+                self.return_align_max_speed > 0.80 or
+                self.return_align_tolerance <= 0.0 or
+                self.return_align_timeout_sim <= 0.0 or
+                self.return_align_timeout_wall <= 0.0 or
+                self.return_align_settle_wall < 0.0):
+            raise ValueError("invalid upper-floor return-alignment parameters")
         # try_freeze_elevator's upper-floor branch still reads these three.
         # Their definitions were dropped when the width-based gate was removed,
         # leaving live code referencing missing attributes: any doorway with a
@@ -392,6 +466,17 @@ class MultiFloorMission:
             "~elevator/upper_return_staging_tolerance", 0.60))
         self.upper_return_heading_tolerance = float(rospy.get_param(
             "~elevator/upper_return_heading_tolerance", 0.35))
+        # How far short of the in-car A plane a healthy MoveBase stop may land.
+        # Derived, not guessed: DWA latches anywhere within its 0.45 m
+        # xy_goal_tolerance of A_safe, and A_safe is only 0.40 m past A, so the
+        # worst legal shortfall is 0.05 m.  See enter_upper_floor_car_from_lobby.
+        self.upper_transfer_plane_tolerance = float(rospy.get_param(
+            "~elevator/upper_transfer_plane_tolerance", 0.10))
+        if not (0.0 < self.upper_transfer_plane_tolerance <
+                self.upper_transfer_safe_inset):
+            raise ValueError(
+                "A-plane tolerance must be positive and smaller than the "
+                "inward safety inset")
         if (self.upper_return_staging_tolerance <= 0.45 or
                 self.upper_return_heading_tolerance <= 0.0):
             raise ValueError(
@@ -1188,6 +1273,53 @@ class MultiFloorMission:
                              center.y - oy * self.car_depth, yaw_in)
         return lobby, threshold, car
 
+    def settle_move_base_handover(self, label):
+        """Take the shared /move_base back cleanly before sending our own goal.
+
+        frontier_explorer and this node drive the SAME move_base action
+        server.  The instant ExploreFloor returns, move_base can still be
+        PREEMPTING the explorer's last goal while our SimpleActionClient's
+        simple state has already gone DONE.  Sending a goal into that window
+        corrupts the client state machine: wait_for_result() returns
+        immediately and get_state() answers ACTIVE(1) -- which navigate()
+        then reports as "move_base returned a terminal state".
+
+        mf51 died exactly there on floor 2 (715.582 FLOOR_COMPLETE -> same-ms
+        goal -> "Received comm state PREEMPTING when in simple state DONE" ->
+        716.584 failed state=1).  Floor 1 logged the IDENTICAL actionlib error
+        at 311.684 and happened to survive, so this is timing luck rather than
+        a floor-specific defect.  ACTIVE is not a terminal state; seeing it in
+        that branch is the tell.
+
+        This adds a handshake only.  No goal, tolerance or safety envelope
+        changes; when the client is already idle it is a no-op.
+        """
+        busy = (0, 1, 6, 7)  # PENDING, ACTIVE, PREEMPTING, RECALLING
+        try:
+            state = self.move.get_state()
+        except Exception:  # noqa: BLE001 - no goal has ever been sent
+            return
+        if state not in busy:
+            return
+        self.move.cancel_all_goals()
+        deadline_sim = (rospy.Time.now() +
+                        rospy.Duration(self.move_handover_timeout_sim))
+        deadline_wall = time.monotonic() + self.move_handover_timeout_wall
+        while (rospy.Time.now() < deadline_sim
+               and time.monotonic() < deadline_wall
+               and not rospy.is_shutdown()):
+            if self.move.get_state() not in busy:
+                self.emit("MOVE_BASE_HANDOVER",
+                          "shared move_base returned to idle before %s"
+                          % label,
+                          entry_state=int(state),
+                          exit_state=int(self.move.get_state()))
+                return
+            time.sleep(0.05)
+        raise MissionFailure(
+            "shared move_base never left state=%d within %.0f sim s before %s"
+            % (self.move.get_state(), self.move_handover_timeout_sim, label))
+
     def navigate(self, target, label):
         """Drive to a pose, giving up only when the robot stops closing on it.
 
@@ -1206,16 +1338,24 @@ class MultiFloorMission:
         improved, so this fires -- before wz reaches the guard ceiling and the
         attitude diverges.
         """
+        # Never send a goal into a move_base that is still winding down the
+        # previous one -- ours or the explorer's. This is a no-op whenever the
+        # client is already idle.
+        self.settle_move_base_handover(label)
         self.emit("NAVIGATING", label, x=target.pose.position.x,
                   y=target.pose.position.y)
         goal = MoveBaseGoal(target_pose=target)
         self.move.send_goal(goal)
         goal_yaw = yaw_of(target.pose.orientation)
-        deadline = time.monotonic() + self.nav_timeout
+        deadline_sim = rospy.Time.now() + rospy.Duration(self.nav_timeout)
+        wall_budget = self.nav_timeout * self.nav_timeout_wall_factor
+        deadline_wall = time.monotonic() + wall_budget
         best_distance = float("inf")
         best_yaw_error = float("inf")
         improved_wall = time.monotonic()
-        while time.monotonic() < deadline and not rospy.is_shutdown():
+        while (rospy.Time.now() < deadline_sim
+               and time.monotonic() < deadline_wall
+               and not rospy.is_shutdown()):
             if self.move.wait_for_result(rospy.Duration(0.2)):
                 if self.move.get_state() == 3:
                     return
@@ -1266,20 +1406,41 @@ class MultiFloorMission:
                           x=now.pose.position.x, y=now.pose.position.y)
         state = self.move.get_state()
         self.move.cancel_goal()
-        raise MissionFailure("navigation %s failed state=%d" % (label, state))
+        if rospy.Time.now() >= deadline_sim:
+            reason = "sim budget %.0f s expired" % self.nav_timeout
+        elif time.monotonic() >= deadline_wall:
+            # With a live clock the sim budget always fires first, so reaching
+            # this means /clock stopped advancing.
+            reason = ("wall backstop %.0f s expired with the sim budget "
+                      "unspent; /clock may have stalled" % wall_budget)
+        else:
+            reason = "move_base returned a terminal state"
+        raise MissionFailure("navigation %s failed state=%d (%s)"
+                             % (label, state, reason))
 
     def explore_floor(self, floor, entry, main_entrance):
         goal = ExploreFloorGoal()
         goal.floor_id = floor
         goal.entry_mode = (goal.LEGACY_MAIN_ENTRANCE if main_entrance
                            else goal.ALREADY_AT_FLOOR_ENTRY)
-        # F0 must remain at its exploration endpoint so mission_manager can
-        # approach the independently localized elevator. Upper-floor actions
-        # start at the achieved main-corridor point C; use the action's formal
-        # verified-return contract so success means the robot is back at C,
-        # not merely stopped at an arbitrary exploration endpoint.
-        goal.completion_mode = (goal.STAY_ON_FLOOR if main_entrance
-                                else goal.LEGACY_RETURN_TO_START)
+        # Every floor holds its exploration endpoint and the mission owns every
+        # return. F0's endpoint lets mission_manager approach the independently
+        # localized elevator; the upper floors hand back to
+        # complete_upper_floor_and_return_to_a(), which first navigates the held
+        # endpoint back to corridor point C and then retraces measured C->B->A
+        # segments into the car.
+        #
+        # LEGACY_RETURN_TO_START used to be chosen here for its verified-return
+        # contract, but that contract is the single-floor one: execute_return()
+        # walks the indoor entry anchor AND THEN the outdoor start pose, and on
+        # floor 1 that pose is outside the building on floor 0. mf46 was the
+        # first round ever to reach real upper-floor exploration -- every
+        # earlier round ran upper_floor_special_test_mode, which skips
+        # explore_floor entirely -- and it died exactly there:
+        # "RETURNING: returning to outdoor start pose" -> return failed:
+        # position_error=0.370 m, yaw_error=0.736 rad. The mission's own
+        # elevator return, one line further down, never got to run.
+        goal.completion_mode = goal.STAY_ON_FLOOR
         goal.target_coverage_ratio = 0.80
         goal.timeout_s = 0.0
         goal.floor_entry_pose = copy.deepcopy(entry)
@@ -1295,30 +1456,52 @@ class MultiFloorMission:
                 yaw, entry.header.frame_id)
         self.emit("EXPLORE_FLOOR", "dispatching reusable floor transaction")
         self.explore.send_goal(goal)
-        deadline = time.monotonic() + self.action_timeout
-        while time.monotonic() < deadline and not rospy.is_shutdown():
+        deadline_sim = rospy.Time.now() + rospy.Duration(self.action_timeout)
+        action_wall_budget = (
+            self.action_timeout * self.action_timeout_wall_factor)
+        deadline = time.monotonic() + action_wall_budget
+        while (rospy.Time.now() < deadline_sim
+               and time.monotonic() < deadline
+               and not rospy.is_shutdown()):
             if self.explore.wait_for_result(rospy.Duration(0.5)):
                 result = self.explore.get_result()
                 if result and result.success:
+                    completion_extra = {}
                     if not main_entrance:
                         achieved = self.current_pose()
+                        if achieved.header.frame_id != entry.header.frame_id:
+                            raise MissionFailure(
+                                "floor %d ExploreFloor endpoint frame %r does "
+                                "not match entry point C frame %r" %
+                                (floor, achieved.header.frame_id,
+                                 entry.header.frame_id))
                         entry_error = math.hypot(
                             achieved.pose.position.x - entry.pose.position.x,
                             achieved.pose.position.y - entry.pose.position.y)
-                        if (achieved.header.frame_id != entry.header.frame_id or
-                                entry_error > self.nav_arrival_band):
-                            raise MissionFailure(
-                                "floor %d ExploreFloor reported return success "
-                                "but finished %.2f m from entry point C" %
-                                (floor, entry_error))
+                        completion_extra = {
+                            "endpoint_to_entry_m": entry_error,
+                            "endpoint_x": achieved.pose.position.x,
+                            "endpoint_y": achieved.pose.position.y,
+                            "entry_x": entry.pose.position.x,
+                            "entry_y": entry.pose.position.y,
+                            "endpoint_frame": achieved.header.frame_id,
+                        }
                     self.emit("FLOOR_COMPLETE", result.message,
                               coverage=result.final_coverage_ratio,
-                              completion_mode=int(goal.completion_mode))
+                              completion_mode=int(goal.completion_mode),
+                              **completion_extra)
                     return
                 raise MissionFailure("floor %d exploration failed: %s" %
                                      (floor, result.message if result else "no result"))
         self.explore.cancel_goal()
-        raise MissionFailure("floor %d exploration wall timeout" % floor)
+        if rospy.Time.now() >= deadline_sim:
+            reason = "sim budget %.0f s expired" % self.action_timeout
+        else:
+            # With a live clock the sim budget always fires first.
+            reason = ("wall backstop %.0f s expired with the sim budget "
+                      "unspent; /clock may have stalled" % action_wall_budget)
+        raise MissionFailure(
+            "floor %d exploration timed out (%s)" % (floor, reason))
 
     def enter_elevator(self, floor):
         self.wait_until(lambda: floor in self.elevator,
@@ -1675,6 +1858,77 @@ class MultiFloorMission:
         raise MissionFailure(
             "floor %d timed out turning toward the measured elevator opening"
             % floor)
+
+    def align_return_bearing_in_place(self, floor, target_yaw, label):
+        """Face a retraced return segment before its MoveBase goal is sent.
+
+        mf49 died here, and the causal chain is measured, not inferred.  Point
+        C's own orientation looks OUTWARD along the corridor, away from the
+        elevator, so MoveBase spun the robot roughly 180 degrees on arrival at
+        C and the very next goal -- C->B -- demanded the opposite heading
+        again.  Bag: yaw 85.1 deg at 621.0 s, 165.8 at 622.0, -161.9 at 623.0,
+        then back through 129.6 and 71.3 to 57.9 at 626.0.  DWA did not wait
+        for that reversal to finish; it commanded vx 0.409 m/s while wz was
+        -1.689, then vx 0.968 at wz -0.999, then vx 1.269.  The body arced off
+        the outbound-proven track by 0.32 -> 0.47 -> 0.63 -> 0.77 m, tilted
+        past 15 degrees at 625.570 and ground-truth z went 2.915 -> 0.057:
+        a foot went over the open lobby shaft edge.
+
+        So the goal is issued only from a standstill that already points down
+        the segment.  Rotation only: linear velocity is never written here, and
+        the behavior channel outranks navigation in twist_mux, so every exit
+        path re-publishes zero.  This ADDS a precondition; it does not relax
+        the DWA envelope, the obstacle margins or any safety threshold.
+        """
+        start_yaw = yaw_of(self.current_pose().pose.orientation)
+        deadline = time.monotonic() + self.return_align_timeout_wall
+        start_ros = rospy.Time.now()
+        settled_since = None
+        self.emit(
+            "UPPER_FLOOR_RETURN_ALIGNMENT",
+            "turning in place onto the %s bearing before the goal is sent"
+            % label,
+            floor=floor, start_yaw=start_yaw, target_yaw=target_yaw,
+            correction=self.angle_error(target_yaw, start_yaw))
+        try:
+            while time.monotonic() < deadline and not rospy.is_shutdown():
+                now_ros = rospy.Time.now()
+                if (now_ros >= start_ros and
+                        (now_ros - start_ros).to_sec() >
+                        self.return_align_timeout_sim):
+                    break
+                current_yaw = yaw_of(self.current_pose().pose.orientation)
+                error = self.angle_error(target_yaw, current_yaw)
+                if abs(error) <= self.return_align_tolerance:
+                    self.behavior_cmd_pub.publish(Twist())
+                    if settled_since is None:
+                        settled_since = time.monotonic()
+                    if (time.monotonic() - settled_since >=
+                            self.return_align_settle_wall):
+                        self.emit(
+                            "UPPER_FLOOR_RETURN_ALIGNMENT_READY",
+                            "settled on the %s bearing at zero linear velocity"
+                            % label,
+                            floor=floor, target_yaw=target_yaw,
+                            achieved_yaw=current_yaw,
+                            heading_error=abs(error))
+                        return current_yaw
+                else:
+                    settled_since = None
+                    command = Twist()
+                    magnitude = min(
+                        self.return_align_max_speed,
+                        max(self.return_align_min_speed,
+                            self.return_align_gain * abs(error)))
+                    command.angular.z = math.copysign(magnitude, error)
+                    self.behavior_cmd_pub.publish(command)
+                time.sleep(0.05)
+        finally:
+            for _ in range(5):
+                self.behavior_cmd_pub.publish(Twist())
+                time.sleep(0.02)
+        raise MissionFailure(
+            "floor %d timed out aligning onto the %s bearing" % (floor, label))
 
     def actively_scan_upper_floor_elevator(self, floor):
         """Observe the complete car enclosure before classifying its opening.
@@ -2136,11 +2390,28 @@ class MultiFloorMission:
         lateral_error = abs(
             -achieved_from_b_x * math.sin(ab_bearing) +
             achieved_from_b_y * math.cos(ab_bearing))
-        if inward_progress < ab_distance:
+        # The A-plane postcondition must be stated against what MoveBase
+        # actually guarantees, or it can fail on a healthy entry.
+        #
+        # DWA finishes anywhere within xy_goal_tolerance (0.45 m) of A_safe and
+        # then latches (latch_xy_goal_tolerance: true), while A_safe sits only
+        # upper_transfer_safe_inset (0.40 m) beyond A.  0.40 < 0.45, so a
+        # perfectly legal stop can land up to 0.05 m SHORT of the A plane --
+        # the check was arithmetically unsatisfiable in the worst case, and
+        # whether a round passed came down to where DWA happened to latch.
+        # mf59 proved it: floor 1 cleared the plane, floor 2 missed it by
+        # 0.02 m after all three floors had been explored.
+        #
+        # So admit the shortfall MoveBase is allowed to produce, and no more.
+        # This stays far inside the failure this check exists for: mf37 was
+        # 0.361 m short, left the base only ~0.26 m inside the opening and
+        # rolled 96 degrees when the car moved.
+        plane_tolerance = self.upper_transfer_plane_tolerance
+        if inward_progress < ab_distance - plane_tolerance:
             raise MissionFailure(
                 "floor %d MoveBase accepted A_safe while still %.2f m short "
-                "of the original in-car A plane" %
-                (floor, ab_distance - inward_progress))
+                "of the original in-car A plane (tolerance %.2f m)" %
+                (floor, ab_distance - inward_progress, plane_tolerance))
         self.emit("ELEVATOR_CAR_ENTRY_CONTINUOUS_READY",
                   "continuous B-to-A_safe entry passed the original in-car "
                   "A plane",
@@ -2153,11 +2424,12 @@ class MultiFloorMission:
                                                    point_a, point_b):
         """Return over measured C->B->A topology without distance stepping.
 
-        ExploreFloor's verified-return mode owns arbitrary endpoint->C motion.
-        This method only reverses the two achieved straight segments used on
-        ingress: B->C along the selected corridor, then A->B through the car
-        opening. Their lengths come from current-session poses, not step-size
-        policy. The B->A sill segment has its own scoped speed floor.
+        The caller owns arbitrary endpoint->C motion with an explicit
+        navigate(entry) goal. This method verifies that postcondition, then
+        reverses the two achieved straight segments used on ingress: B->C
+        along the selected corridor, then A->B through the car opening. Their
+        lengths come from current-session poses, not step-size policy. The
+        B->A sill segment has its own scoped speed floor.
         """
         here = self.current_pose()
         poses = (entry, point_a, point_b)
@@ -2187,11 +2459,38 @@ class MultiFloorMission:
                 "(distance %.2f m, heading error %.1f deg)" %
                 (floor, cb_distance, math.degrees(cb_heading_error)))
 
+        # Face B from a standstill first.  Without this the C->B goal is the
+        # instant DWA has both a 4 m translation and a ~180 degree heading
+        # error to resolve, and mf49 proved it resolves them simultaneously.
+        self.align_return_bearing_in_place(
+            floor, cb_bearing, "floor %d C-to-B return" % floor)
+        settled = self.current_pose()
+        if settled.header.frame_id != entry.header.frame_id:
+            raise MissionFailure(
+                "floor %d return alignment changed pose frame from %r to %r"
+                % (floor, entry.header.frame_id, settled.header.frame_id))
+        settled_entry_error = math.hypot(
+            settled.pose.position.x - entry.pose.position.x,
+            settled.pose.position.y - entry.pose.position.y)
+        if settled_entry_error > self.nav_arrival_band:
+            raise MissionFailure(
+                "floor %d drifted to %.2f m from entry point C while aligning "
+                "onto the C-B bearing" % (floor, settled_entry_error))
+        settled_heading_error = abs(self.angle_error(
+            cb_bearing, yaw_of(settled.pose.orientation)))
+        if settled_heading_error > self.return_align_tolerance:
+            raise MissionFailure(
+                "floor %d reported return alignment but is %.1f deg off the "
+                "C-B bearing" %
+                (floor, math.degrees(settled_heading_error)))
+
         self.emit(
             "ELEVATOR_LOBBY_RETURN_CONTINUOUS",
             "reversing the previously traversed C-to-B corridor segment as "
             "one %.2f m goal" % cb_distance,
             distance=cb_distance, entry_error=entry_error,
+            settled_entry_error=settled_entry_error,
+            settled_heading_error=settled_heading_error,
             x=point_b.pose.position.x, y=point_b.pose.position.y)
         self.navigate(
             point_b,
@@ -2633,6 +2932,29 @@ class MultiFloorMission:
                       "TEST MODE: upper-floor main corridor reached")
         else:
             self.explore_floor(floor, entry, False)
+            # Return to C's POSITION, but not to C's orientation.  C's yaw is
+            # the outward corridor-ingress axis, pointing away from the
+            # elevator; handing that to MoveBase as a goal pose made it spin
+            # the robot about 180 degrees on arrival, and the C->B goal one
+            # step later demanded the opposite heading again.  mf49 measured
+            # the pair: +113 deg of rotation, then -140 deg back, with vx
+            # already at 0.41-1.27 m/s during the reversal.  Staging on the
+            # C->B bearing removes the first of the two turns entirely.
+            #
+            # The original entry pose is deliberately left untouched: it is
+            # still the declared corridor axis that
+            # return_upper_floor_over_traversed_segments() checks the measured
+            # C-B geometry against.
+            staging = copy.deepcopy(entry)
+            staging.header.stamp = rospy.Time.now()
+            set_yaw(staging.pose.orientation,
+                    math.atan2(
+                        point_b.pose.position.y - entry.pose.position.y,
+                        point_b.pose.position.x - entry.pose.position.x))
+            self.navigate(
+                staging,
+                "floor %d return to corridor point C facing lobby point B"
+                % floor)
         self.return_upper_floor_over_traversed_segments(
             floor, entry, point_a, point_b)
         self.emit("INSIDE_ELEVATOR",
@@ -2738,6 +3060,24 @@ class MultiFloorMission:
                       "floors 1 and 2 fixed exits, point-A returns, and "
                       "transfer back to floor 0 verified")
             return
+        if not self.final_return_to_start:
+            # Deliberate stop. Everything past this line navigates to a point
+            # rebuilt from the floor-zero elevator plus the hardcoded 2.3 m and
+            # 3.5 m offsets; that is a placeholder for a return-to-start that
+            # has not been implemented, and it has never executed in any round.
+            #
+            # exploration_time is therefore NOT the number the PDF defines
+            # ("完成全覆盖探索并返回出发点所需的时间"): the return leg did not
+            # happen. The event says so explicitly and the audit file carries
+            # the flag, so the figure is never mistaken for a scoreable one.
+            self.emit("MISSION_COMPLETE",
+                      "three floors explored and the car returned to floor "
+                      "zero; return-to-start is disabled so exploration_time "
+                      "does NOT include a return leg and is not comparable to "
+                      "the PDF definition",
+                      return_to_start_performed=False,
+                      return_to_start_enabled=False)
+            return
         self.wait_until(lambda: 0 in self.elevator, 20.0,
                         "floor-zero elevator after relocalization")
         lobby, threshold, _car = self.elevator_poses(0)
@@ -2779,6 +3119,8 @@ class MultiFloorMission:
                   "three floors explored; returned to the reconstructed start "
                   "anchor with a %.2f m residual (tolerance %.2f m)"
                   % (residual, tolerance),
+                  return_to_start_performed=True,
+                  return_to_start_enabled=True,
                   return_residual_m=residual,
                   return_tolerance_m=tolerance,
                   final_x=achieved.pose.position.x,

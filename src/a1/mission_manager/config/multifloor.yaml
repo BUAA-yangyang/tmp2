@@ -1,11 +1,59 @@
 mission:
+  # ⚠️ 墙钟兜底一律取仿真预算的 10 倍(容忍 RTF 低到 0.10)。它只该在 /clock 停摆时
+  # 兜底,绝不该成为主判据。实测 RTF: mf46 0.238 / mf49 0.209 / mf51 0.186 / mf53 0.165,
+  # 从未达到过任何旧值隐含的前提。旧的 factor 3.0~4.5 要求 RTF > 0.22~0.33,五个配对
+  # 无一满足,于是它们成了五颗定时炸弹——mf54 就死于 active_scan 的 90 墙钟秒在
+  # RTF 0.165 下只买到 14.85 仿真秒,360 度扫描转到 339.9 度被掐断。
+  # 加大这些值不放宽任何安全门限:它们全是停摆兜底,不是速度/倾角/障碍判据。
   floors: [0, 1, 2]
   # Production/full runs must leave this false.  The test launch explicitly
   # ties it to force_floor_complete_after_ingress for elevator-only testing.
   special_test_mode: false
   elevator_id: elevator_main
-  action_timeout_wall: 1800.0
-  navigation_timeout_wall: 180.0
+  # 一层楼探索的总预算。跑一层要多久是物理问题,所以用**仿真秒**;墙钟只兜底
+  # /clock 停摆,和上面的 navigation_timeout_sim 同一个形状。
+  #
+  # 原来是纯墙钟 1800 s,mf56 就死在这:三楼探索只从这个预算里买到 209 仿真秒,
+  # 因为那段 RTF 约 0.12(机器上还有另一份仿真在跑);而几分钟前的二楼在 RTF
+  # 约 0.25 时用掉了 226.8 仿真秒。一个「能买到多少机器人行为取决于这台机器
+  # 当时还在跑什么」的预算,不是预算。
+  #
+  # 600 仿真秒 = 实测单层最大用量(226.8 s)的 2.6 倍。
+  action_timeout_sim: 600.0
+  action_timeout_wall_factor: 10.0
+  # A navigation goal's budget is spent in SIM seconds: how long a manoeuvre
+  # takes is a physical question, not a function of how fast the grading
+  # machine happens to be.  Measured on mf46's successful round, the seven
+  # navigate() segments took 2.0-33.6 sim s (median 4.6); the elevator lobby
+  # approach is the long one at 33.6 s.  90 s is 2.7x that worst case.
+  #
+  # This used to be navigation_timeout_wall: 180.0.  At mf46's RTF 0.238 that
+  # bought 42.8 sim s and the lobby approach cleared it by 9 s.  Turning RViz
+  # on for mf47 dropped RTF to 0.186, the same 180 s bought 33.5 sim s, and the
+  # mission died on that manoeuvre after 16.5 s.
+  navigation_timeout_sim: 90.0
+  # Wall-clock backstop as a multiple of the sim budget.  It only bounds a
+  # stalled /clock: with a live clock the sim budget always fires first.
+  # 10x tolerates RTF down to 0.10.
+  navigation_timeout_wall_factor: 10.0
+  # 三楼探完、电梯回到一楼，demo 就结束。run() 尾部那段"返回出发点"是占位实现:
+  # 它从一楼电梯几何加两个写死的偏移(2.3 m / 3.5 m)重建一个"大概是起点"的位置,
+  # 而且至今一轮都没有真正执行过。真正的返航要等 OPTIMIZATION_BACKLOG 第 2 节的
+  # T_g(用电梯轿厢做跨 generation 不变量)做出来, 才能把 robot_start 换算到当前
+  # 定位代的 map 系。在那之前打开它, 等于让机器人朝一个编造的坐标走。
+  #
+  # 注意: 关掉返航时 exploration_time 不再符合 PDF 的定义(「完成全覆盖探索并
+  # 返回出发点所需的时间」), MISSION_COMPLETE 事件会显式标注 return_to_start_
+  # performed=false, 不要拿那个数去对分。
+  final_return_to_start: false
+  # 探索器和 mission 共用同一个 /move_base。ExploreFloor 一返回,move_base 可能还在
+  # PREEMPTING 探索器的上一个 goal,而我们的 SimpleActionClient 的 simple state 已经
+  # 是 DONE。此时发 goal 会让 wait_for_result() 立刻返回而 get_state() 给出 ACTIVE(1),
+  # 被 navigate() 当成终止状态。mf51 三楼死在这里(715.582 FLOOR_COMPLETE → 同毫秒发 goal
+  # → actionlib 报 PREEMPTING/DONE → 716.584 failed state=1);二楼 311.684 报了一模一样
+  # 的错却侥幸通过,所以这是时序运气不是某层特有的缺陷。下面是等它回到空闲的预算。
+  move_base_handover_timeout_sim: 5.0
+  move_base_handover_timeout_wall: 50.0
   service_timeout_wall: 15.0
   localization_recovery_timeout_wall: 45.0
   mapping_recovery_timeout_wall: 30.0
@@ -36,7 +84,7 @@ elevator:
   transfer_turn_gain: 1.80
   transfer_turn_tolerance: 0.20
   transfer_turn_timeout_sim: 20.0
-  transfer_turn_timeout_wall: 90.0
+  transfer_turn_timeout_wall: 200.0
   transfer_turn_settle_wall: 0.5
   doorway_min_width: 1.20
   # floor_mapping reports the stable wall-edge span for the 1.4 m elevator
@@ -67,6 +115,39 @@ elevator:
   # ordinary terminal error but reject a shortcut from another lobby position.
   upper_return_staging_tolerance: 0.60
   upper_return_heading_tolerance: 0.35
+  # 进轿厢后「必须越过原始 A 平面」这条后置条件的容差。
+  #
+  # 推导而非拍脑袋:DWA 在距 A_safe 的 xy_goal_tolerance(0.45 m)以内就宣布到达
+  # 并 latch(latch_xy_goal_tolerance: true),而 A_safe 只比 A 深 0.40 m。
+  # 0.40 < 0.45 ⇒ 一次完全合法的停车最多可以停在 A 平面前 **0.05 m**。
+  # 原来的判据要求严格越过 A 平面,在最坏情况下数学上就不可满足,能不能过
+  # 取决于 DWA 碰巧 latch 在哪 —— mf59 三层全探索完成后,二楼越过了、三楼差
+  # 0.02 m,整轮报废。
+  #
+  # 0.10 m 覆盖 0.05 m 的最坏合法短缺并留一倍余量,且远小于这条检查真正要防的
+  # 情形:mf37 短了 0.361 m,机身只有约 0.26 m 在开口内,电梯一动就横滚 96 度。
+  upper_transfer_plane_tolerance: 0.10
+  # In-place alignment onto a retraced return bearing, performed at corridor
+  # point C before the C->B goal is sent.  Deliberately a SEPARATE block from
+  # upper_floor/opening_alignment even though the numbers currently match:
+  # retuning the in-car opening turn must not be able to change what happens
+  # at C.  mf49 fell exactly there -- point C's own yaw looks outward along the
+  # corridor, so MoveBase turned the robot ~180 deg on arrival and the C->B
+  # goal turned it ~180 deg back, while DWA was already commanding
+  # vx 0.41-1.27 m/s (wz peak -1.698).  The body drifted 0.63 m off the
+  # outbound-proven track and a foot went over the lobby shaft edge
+  # (ground-truth z 2.915 -> 0.057 between 625.5 and 626.5 s).
+  #
+  # This is an added precondition, not a widened envelope: 0.80 rad/s stays
+  # inside the State_RL training band and the 0.55 floor clears its dead zone.
+  return_alignment:
+    turn_max_speed: 0.80
+    turn_min_speed: 0.55
+    turn_gain: 1.40
+    turn_tolerance: 0.12
+    turn_timeout_sim: 10.0
+    turn_timeout_wall: 100.0
+    turn_settle_wall: 0.5
   detection_timeout_wall: 20.0
   # Generation-local occupancy/wall/door evidence must be recent when it is
   # frozen into an elevator or corridor landmark.
@@ -117,7 +198,7 @@ upper_floor:
     # the current localization generation/session. This is perception motion,
     # not a world-coordinate shortcut; linear velocity remains exactly zero.
     active_scan_speed: 0.65
-    active_scan_timeout_wall: 90.0
+    active_scan_timeout_wall: 200.0
     active_scan_timeout_sim: 20.0
     active_scan_no_progress_wall: 15.0
     active_scan_return_tolerance: 0.20
@@ -142,7 +223,7 @@ upper_floor:
     turn_min_speed: 0.55
     turn_gain: 1.40
     turn_tolerance: 0.12
-    turn_timeout_wall: 30.0
+    turn_timeout_wall: 100.0
     turn_timeout_sim: 10.0
     turn_settle_wall: 0.5
   exit_map_wait_wall: 45.0

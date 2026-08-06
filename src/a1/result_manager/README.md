@@ -32,21 +32,26 @@
   没走完全覆盖+返航的那一轮根本没有合法的探索耗时。
 - **不跨轮累加**。旧实现会把上一轮的 `exploration_time` 读回来当起始偏移。
 
-## 坐标系
+## 坐标系(默认只观测,不改写)
 
-官方要求 world 系,`a1_danger_perception` 的 `target_frame` 是 `map`,而 TF 里
-**根本没有 world 系**。唯一合法的桥是 `generated_building/team_scene_info.json`
-的 `robot_start`(docs/competition-rules.md 明确允许读取),在机器人正站在起点上的
-那一刻和它的 map 位姿配对,得到刚体变换。
+官方要求 world 系。**`a1_localization` 已经自带定点世界对齐**
+(`localization/config/frames.yaml` 的 `world_alignment_enabled` +
+`initial_world_to_base_translation`,用的正是 `robot_start` 那组数),单层里记过分的
+那几轮(run20 correct=2、run23 correct=1)走的就是这条路。所以本节点**默认不再叠加
+一次变换** —— `world_anchor_mode: audit` 只把"独立锚点会算出什么"记进 audit 文件,
+提交出去的坐标保持原样。
 
-FAST-LIO 每次定位重初始化都会重锚,所以变换**按 localization generation 分别持有**。
-拿不到锚点的 generation 里的检测点会被**扣下不写**,而不是用错误坐标写出去 ——
-错帧坐标不是"差一点",它同时算漏报和虚警,扣两次。扣下的数量和 generation 记在
-audit 文件里。
+多层这条路上这个问题是**未决**的:mf41 实测 `/a1/localization/odom` 与裁判位姿
+中位差 **19.15 m**,定位状态里 `world_anchor_established: false`。等查清检测点最终
+落在哪个系里,再决定是否把模式翻到 `apply`。
 
-> 当前只有 generation 0(一层出发那一刻)能建立锚点。二/三层的检测点会被扣下。
-> 补齐上层锚点需要一个跨 generation 的物理不变量(电梯轿厢 world XY 逐层不变),
-> 这部分尚未实现。
+`apply` 模式下锚点**按 localization generation 分别持有**(FAST-LIO 每次重锚就失效),
+拿不到锚点的检测点会被扣下不写 —— 错帧坐标同时算漏报和虚警,扣两次。
+
+> 已知偏差:多层树 `frames.yaml` 的 z 锚是 `0.6`(Gazebo 生成高度),而单层那棵树已经
+> 修成 `0.30` 并写明原因——机器人落地站稳后实测 0.289 m,用 0.6 会让所有 world 输出
+> 高 0.366 m,competition run05 有一个源就是因此差 37 mm 掉出 1.0 m 阈值。这个修正
+> **尚未回移到多层树**。
 
 ## 事件契约
 

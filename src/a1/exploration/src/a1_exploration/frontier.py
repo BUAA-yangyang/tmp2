@@ -298,7 +298,14 @@ class NoProgressWatchdog:
         self._anchor_time = None
         self._last_time = None
 
-    def observe(self, now_s, x, y, yaw):
+    def observe(self, now_s, x, y, yaw, yaw_counts_as_progress=True):
+        """``yaw_counts_as_progress`` False 时只有平移算作进展。
+
+        原判据把原地旋转也算进展,理由是「转向目标位姿是合法进展」——那对最后
+        的对准阶段成立,但 DWA 的振荡恢复同样是原地转圈,于是 anchor 被无限
+        重置,看门狗永远不会超时。mf44 因此在 world (6.70, 18.59) 冻结 53 s,
+        期间 bounded_backout 一次都没被调用。默认值保持旧行为。
+        """
         values = (float(now_s), float(x), float(y), float(yaw))
         if not all(math.isfinite(value) for value in values):
             raise ValueError("watchdog observation must be finite")
@@ -324,7 +331,8 @@ class NoProgressWatchdog:
         elapsed = now_s - self._anchor_time
         progressed = (
             (self.distance_m > 0.0 and moved >= self.distance_m)
-            or (self.yaw_rad > 0.0 and turned >= self.yaw_rad)
+            or (yaw_counts_as_progress
+                and self.yaw_rad > 0.0 and turned >= self.yaw_rad)
         )
         if progressed:
             self._anchor = (x, y, yaw)
@@ -1240,6 +1248,33 @@ def failed_goal_state(entries, x, y, radius, now, maximum_failures):
     return "available"
 
 
+def room_frontier_rejection(
+        score, goal_x, goal_y, minimum_score, visited_goals, visited_radius,
+        failed_goals, failed_radius, now, maximum_failures):
+    """Which gate bars a room-transaction frontier, or ``None`` if none does.
+
+    Pulled out of the transaction loop so that a room which ends early can say
+    WHICH stage emptied its candidate list.  mf49's floor-1 station 5 right
+    room reported "no reachable frontier remains" after generating four raw
+    candidates and admitting three of them, and nothing in the log could
+    distinguish "scored too low" from "already visited" from "blacklisted"
+    from "the planner said no".
+
+    Reachability is deliberately NOT decided here: it needs the planner, and
+    an unavailable planner is not the same answer as an unreachable goal.
+    Returns ``"score"``, ``"visited"``, ``"history"``, or ``None``.
+    """
+    if score < minimum_score:
+        return "score"
+    if point_near(visited_goals, goal_x, goal_y, visited_radius):
+        return "visited"
+    if failed_goal_state(
+            failed_goals, goal_x, goal_y, failed_radius, now,
+            maximum_failures) != "available":
+        return "history"
+    return None
+
+
 def corridor_probe_goal_state(
         entries, x, y, radius, now, maximum_attempts):
     """Return corridor-probe history state without inventing unreachability.
@@ -1349,6 +1384,82 @@ def room_axis_bounds(
         elif delta < 0.0:
             lower = midpoint if lower is None else max(lower, midpoint)
     return lower, upper
+
+
+def _validated_room_source_keepout_geometry(
+        door_xy, inward_xy, depth_m, half_width_m):
+    values = (
+        float(door_xy[0]),
+        float(door_xy[1]),
+        float(inward_xy[0]),
+        float(inward_xy[1]),
+        float(depth_m),
+        float(half_width_m),
+    )
+    if not all(math.isfinite(value) for value in values):
+        raise ValueError("room source keep-out geometry must be finite")
+    door_x, door_y, inward_x, inward_y, depth_m, half_width_m = values
+    inward_norm = math.hypot(inward_x, inward_y)
+    if inward_norm <= 1e-9 or depth_m <= 0.0 or half_width_m <= 0.0:
+        raise ValueError(
+            "room source keep-out direction and dimensions must be positive"
+        )
+    return (
+        door_x,
+        door_y,
+        inward_x / inward_norm,
+        inward_y / inward_norm,
+        depth_m,
+        half_width_m,
+    )
+
+
+def point_in_room_source_keepout(
+        x, y, door_xy, inward_xy, depth_m, half_width_m):
+    """Whether a point lies in the source-free channel behind a room door.
+
+    This is a source-placement rule, not a collision or traversal rule.  The
+    rectangle starts at the perceived door centre and extends only into the
+    room.  Mandatory doorway transit therefore remains the caller's separate
+    responsibility.
+    """
+    if not all(math.isfinite(float(value)) for value in (x, y)):
+        raise ValueError("room source keep-out point must be finite")
+    door_x, door_y, inward_x, inward_y, depth_m, half_width_m = \
+        _validated_room_source_keepout_geometry(
+            door_xy, inward_xy, depth_m, half_width_m
+        )
+    delta_x = float(x) - door_x
+    delta_y = float(y) - door_y
+    longitudinal = delta_x * inward_x + delta_y * inward_y
+    lateral = -delta_x * inward_y + delta_y * inward_x
+    return (
+        -1e-12 <= longitudinal <= depth_m + 1e-12
+        and abs(lateral) <= half_width_m + 1e-12
+    )
+
+
+def room_source_keepout_mask(
+        spec, door_xy, inward_xy, depth_m, half_width_m):
+    """Cell-centre mask for a room door's source-free channel."""
+    if spec.width <= 0 or spec.height <= 0 or spec.resolution <= 0.0:
+        raise ValueError("invalid grid geometry")
+    door_x, door_y, inward_x, inward_y, depth_m, half_width_m = \
+        _validated_room_source_keepout_geometry(
+            door_xy, inward_xy, depth_m, half_width_m
+        )
+    rows, cols = np.indices((spec.height, spec.width), dtype=np.float64)
+    world_x = spec.origin_x + (cols + 0.5) * spec.resolution
+    world_y = spec.origin_y + (rows + 0.5) * spec.resolution
+    delta_x = world_x - door_x
+    delta_y = world_y - door_y
+    longitudinal = delta_x * inward_x + delta_y * inward_y
+    lateral = -delta_x * inward_y + delta_y * inward_x
+    return (
+        (longitudinal >= -1e-12)
+        & (longitudinal <= depth_m + 1e-12)
+        & (np.abs(lateral) <= half_width_m + 1e-12)
+    )
 
 
 def room_queue_order(candidates, completed_branches):

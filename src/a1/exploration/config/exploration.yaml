@@ -64,9 +64,23 @@ entry:
   transit_speed: 0.80
   near_field_distance: 0.70
   near_field_half_width: 0.30
-  # This is simulation time. With the 0.5 Hz map publisher, four seconds
-  # permits two fresh grids after a transient door/step return.
-  obstacle_hold_timeout: 4.0
+  # 仿真时间。等入口近场那个显式占据格消失的耐心值 —— 等待期间机器人是**停着的**,
+  # 这不是安全门限,只是愿意等多久。
+  #
+  # 旧值 4.0 的前提是「transient door/step return(瞬时的门/台阶回波)」,这个前提
+  # 不成立:主入口门是官方文档写明的**约 25 秒插值过程**(docs/doors-and-elevator.md),
+  # 而且 /set_door_state 只用 26 毫秒就返回了,根本没等门动完(mf55: 12.176 请求 →
+  # 12.202 返回)。于是机器人在门板还在移动时穿越入口,撞上近场占据格。
+  #
+  # 实测(都在门响应后约 6.3 秒发生,差别只在走位):
+  #   mf54 ✓ 15.420 TRANSIT → 20.124 穿过入口(error 0.428 m)
+  #   mf55 ✗ 14.478 TRANSIT → 18.486 撞近场障碍 → 22.678 等满 4 秒放弃
+  #   mf53 ✗ 同样死于此
+  # 三轮踩中两轮。4 秒对一扇 25 秒的门是数量级不匹配。
+  #
+  # 30 秒覆盖完整门动作并留余量;地图 0.5 Hz,这是 15 帧新栅格。代价上限是失败时
+  # 多等 30 仿真秒,而踩中一次的代价是整轮 40 分钟墙钟。
+  obstacle_hold_timeout: 30.0
   # The explorer must not consume a simulator-/scene-derived entry pose.
   # RECORD_START localization plus the robot's initial forward heading defines
   # the public entrance transit axis; the numeric offset is a mission standoff,
@@ -277,6 +291,15 @@ frontier:
     # furniture standing just inside the door and move_base burns tens of
     # seconds per attempt in abort/backout cycles.
     goal_clearance: 0.40
+    # Official source placement reserves a rectangle immediately inside every
+    # room door.  The generator uses 1.55 x +/-1.05 m for a source centre; add
+    # the 0.15 m danger-sphere radius so no part of a source can intersect it.
+    # This suppresses optional room frontiers/camera gaps only. Door-centre
+    # approach, mandatory ingress, exit and corridor probes remain executable.
+    source_keepout:
+      enabled: true
+      depth: 1.70
+      half_width: 1.20
     scan_angular_speed: 1.80
     exit_align_tolerance: 0.12
     exit_align_timeout: 10.0
@@ -304,6 +327,10 @@ navigation:
     timeout: 20.0
     distance: 0.20
     yaw: 0.35
+    # 超出这个半径,原地旋转不再算作前进。mf44 在距目标 8.18 m 处原地转了 53 s,
+    # 旋转反复重置看门狗锚点,20 s 超时永远到不了,bounded_backout 一次都没触发。
+    # 贴近目标时(<= 该半径)保持旧行为 —— 那是合法的最后对准。
+    yaw_progress_radius: 1.00
   # Keep frontier targets outside the combined standoff + move_base acceptance
   # radius. This prevents near-goal turn-in-place oscillation at the entrance.
   xy_goal_tolerance: 0.35
@@ -340,10 +367,23 @@ timeouts:
   # own deceleration/timeout rules. Keep enough wall time for that stop
   # handshake while still requiring a fresh, continuously-zero final output.
   final_zero: 8.0
-  # Current Gazebo real-time factor is about 0.3.  A factor of five leaves
-  # useful scheduling margin without turning stalled-simulation fallbacks
-  # into multi-minute waits.
-  wall_factor: 5.0
+  # 墙钟兜底相对仿真预算的倍数。它只该在 /clock 卡住时兜底,不该成为主判据。
+  #
+  # 原注释写「RTF 约 0.3,factor 5 留有余量」——这个前提从未成立。实测 RTF:
+  # mf46 0.238 / mf49 0.209 / mf51 0.186 / mf53 0.165,一次都没到过 0.3。
+  # factor 5 要求 RTF > 0.20 才能让仿真预算先到期,于是大多数轮次里墙钟兜底
+  # 反而先触发,把本来够用的等待提前掐断。mf53 就死在这里:入口占据等待的
+  # 预算是 4.0 仿真秒,而 4.0/0.165 = 24.2 墙钟秒 > 20 秒兜底,仿真时间根本
+  # 没等满就报 "entry remained explicitly occupied"。
+  #
+  # mission_manager 侧的同源问题已经修过(navigation_timeout_wall 180 →
+  # navigation_timeout_sim 90 + navigation_wall_factor 10,注释写明
+  # "10x tolerates RTF down to 0.10")。这里对齐到同一个数。
+  # 节点代码里的默认值本来就是 20.0,是这份配置把它压到了 5.0。
+  #
+  # 这不是放宽安全门限:全部 10 个使用点(等地图/入口通行/入口障碍等待/规划/
+  # backout/房间事务/出房间对齐/goal 超时)都是停摆兜底,没有一个是安全判据。
+  wall_factor: 10.0
 
 return:
   position_tolerance: 0.40

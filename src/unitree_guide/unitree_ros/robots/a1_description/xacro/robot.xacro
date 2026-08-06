@@ -280,6 +280,61 @@
                 </plugin>
             </sensor>
         </gazebo>
+
+        <!-- Optional over-shoulder camera for demo recording only. It is tied
+             to ENABLE_FRONT_CAMERA so auto.sh does not need another argument. -->
+        <link name="third_person_camera">
+            <inertial>
+                <mass value="0.001"/>
+                <origin rpy="0 0 0" xyz="0 0 0"/>
+                <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+            </inertial>
+            <visual>
+                <origin rpy="0 0 0" xyz="0 0 0"/>
+                <geometry>
+                    <box size="0.02 0.02 0.02"/>
+                </geometry>
+                <material name="black"/>
+            </visual>
+        </link>
+        <joint name="third_person_camera_joint" type="fixed">
+            <origin xyz="-1.15 0 0.62" rpy="0 0.35 0"/>
+            <parent link="base"/>
+            <child link="third_person_camera"/>
+        </joint>
+        <gazebo reference="third_person_camera">
+            <material>Gazebo/Grey</material>
+            <sensor type="camera" name="third_person_camera">
+                <always_on>true</always_on>
+                <update_rate>12.0</update_rate>
+                <camera name="third_person">
+                    <horizontal_fov>1.15</horizontal_fov>
+                    <image>
+                        <width>640</width>
+                        <height>360</height>
+                        <format>R8G8B8</format>
+                    </image>
+                    <clip>
+                        <near>0.02</near>
+                        <far>60</far>
+                    </clip>
+                </camera>
+                <plugin name="third_person_camera_controller" filename="libgazebo_ros_camera.so">
+                    <alwaysOn>true</alwaysOn>
+                    <updateRate>0.0</updateRate>
+                    <cameraName>a1/third_person</cameraName>
+                    <imageTopicName>image_raw</imageTopicName>
+                    <cameraInfoTopicName>camera_info</cameraInfoTopicName>
+                    <frameName>third_person_camera</frameName>
+                    <hackBaseline>0.07</hackBaseline>
+                    <distortionK1>0.0</distortionK1>
+                    <distortionK2>0.0</distortionK2>
+                    <distortionK3>0.0</distortionK3>
+                    <distortionT1>0.0</distortionT1>
+                    <distortionT2>0.0</distortionT2>
+                </plugin>
+            </sensor>
+        </gazebo>
     </xacro:if>
 
 

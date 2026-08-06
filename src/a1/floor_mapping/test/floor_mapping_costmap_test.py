@@ -36,7 +36,7 @@ class CostmapTest(unittest.TestCase):
         supervisor = DiagnosticStatus(values=[KeyValue("generation", "1")])
         self.loc_pub.publish(status); self.sup_pub.publish(supervisor)
 
-    def publish_frame(self, obstacle):
+    def publish_frame(self, obstacle, direct_ground_clear=False):
         stamp = rospy.Time.now()
         for parent, child, z in (("odom", "base", 0.0), ("base", "laser_livox", 0.5)):
             transform = TransformStamped(); transform.header.stamp = stamp; transform.header.frame_id = parent; transform.child_frame_id = child
@@ -44,10 +44,23 @@ class CostmapTest(unittest.TestCase):
         odom = Odometry(); odom.header = Header(stamp=stamp, frame_id="odom"); odom.child_frame_id = "base"; odom.pose.pose.position.z = 0.5; odom.pose.pose.orientation.w = 1.0; self.odom_pub.publish(odom)
         time.sleep(0.03)
         fields = [PointField("x",0,PointField.FLOAT32,1),PointField("y",4,PointField.FLOAT32,1),PointField("z",8,PointField.FLOAT32,1),PointField("intensity",12,PointField.FLOAT32,1)]
-        points = [(ix*0.12, iy*0.12, -0.5, 1.0) for ix in range(-20,31) for iy in range(-15,16) if math.hypot(ix*0.12,iy*0.12)>0.5]
+        points = [
+            (ix*0.12, iy*0.12, -0.5, 1.0)
+            for ix in range(-20,31)
+            for iy in range(-15,16)
+            if math.hypot(ix*0.12,iy*0.12)>0.5
+            and not (1.7 < ix*0.12 < 2.3 and abs(iy*0.12) < 0.3)
+        ]
         obstacle_y=[i*0.04 for i in range(-5,6)]
-        if obstacle: points += [(2.0, y, 0.0, 2.0) for y in obstacle_y]
-        else: points += [(3.0, y, -0.5, 1.0) for y in obstacle_y]
+        if obstacle:
+            points += [(2.0, y, 0.0, 2.0) for y in obstacle_y]
+        elif direct_ground_clear:
+            # Formal OccupancyGrid release requires actual near-floor
+            # endpoints in the previously occupied cells.  The dynamic
+            # costmap remains free to clear earlier from pass-through rays.
+            points += [(2.0, y, -0.5, 1.0) for y in obstacle_y]
+        else:
+            points += [(3.0, y, -0.5, 1.0) for y in obstacle_y]
         self.cloud_pub.publish(point_cloud2.create_cloud(Header(stamp=stamp, frame_id="laser_livox"), fields, points))
 
     def cell(self, grid, x, y):
@@ -76,15 +89,49 @@ class CostmapTest(unittest.TestCase):
         marked_at=time.monotonic()
         self.wait_value(100, True, 8.0)
         self.assertLess(time.monotonic()-marked_at,8.0)
+        # The costmap can mark on its first obstacle cloud, while the formal
+        # grid has an independent minimum-observation contract.  Establish an
+        # observable formal-map latch before testing how it is released.
+        end=time.time()+4.0
+        while time.time()<end and (not self.mapping_grids or self.region_max(self.mapping_grids[-1],2.0,0.0)<100):
+            self.publish_frame(True);time.sleep(.1)
+        self.assertTrue(self.mapping_grids)
+        self.assertEqual(
+            self.region_max(self.mapping_grids[-1],2.0,0.0),100,
+            "formal map never confirmed the synthetic obstacle",
+        )
         cleared_at=time.monotonic()
         self.wait_value(0, False, 6.0)
         self.assertLess(time.monotonic()-cleared_at,3.0)
         self.assertTrue(self.costmaps)
-        end=time.time()+4.0
-        while time.time()<end and (not self.mapping_grids or self.region_max(self.mapping_grids[-1],2.0,0.0)>0):
+        # A ray ending behind the old obstacle is enough for the dynamic
+        # costmap, but must not erase a persistent 2-D obstacle column from
+        # the formal map.  In 3-D that ray may still pass above a low object.
+        for _ in range(4):
             self.publish_frame(False);time.sleep(.1)
         self.assertTrue(self.mapping_grids)
-        self.assertLessEqual(self.region_max(self.mapping_grids[-1],2.0,0.0),0,"temporary obstacle persisted in cumulative grid")
+        self.assertEqual(
+            self.region_max(self.mapping_grids[-1],2.0,0.0),100,
+            "pass-through rays erased a persistent formal-map obstacle",
+        )
+
+        # The formal map is not permanent: exactly three direct near-floor
+        # endpoint frames at the same cells release the latch.  Verify the
+        # configured boundary rather than looping until an eventual pass.
+        for _ in range(2):
+            self.publish_frame(False,direct_ground_clear=True);time.sleep(.15)
+        self.assertEqual(
+            self.region_max(self.mapping_grids[-1],2.0,0.0),100,
+            "fewer than three ground confirmations released the latch",
+        )
+        self.publish_frame(False,direct_ground_clear=True)
+        end=time.time()+2.0
+        while time.time()<end and (not self.mapping_grids or self.region_max(self.mapping_grids[-1],2.0,0.0)>0):
+            time.sleep(.05)
+        self.assertLessEqual(
+            self.region_max(self.mapping_grids[-1],2.0,0.0),0,
+            "direct repeated ground evidence did not clear the formal map",
+        )
 
 
 if __name__ == "__main__":

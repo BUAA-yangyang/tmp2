@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -97,17 +98,64 @@ class OccupancyIntegrator {
   OccupancyIntegrator(double resolution, double width_m, double height_m, double p_free, double p_occupied,
                       unsigned minimum_observations,
                       double origin_x = std::numeric_limits<double>::quiet_NaN(),
-                      double origin_y = std::numeric_limits<double>::quiet_NaN())
+                      double origin_y = std::numeric_limits<double>::quiet_NaN(),
+                      unsigned occupied_clear_confirmations = 3)
       : resolution_(resolution), width_(static_cast<unsigned>(std::ceil(width_m / resolution))),
         height_(static_cast<unsigned>(std::ceil(height_m / resolution))),
         origin_x_(std::isfinite(origin_x) ? origin_x : -0.5 * width_ * resolution),
         origin_y_(std::isfinite(origin_y) ? origin_y : -0.5 * height_ * resolution),
         free_delta_(static_cast<float>(logit(p_free))), occupied_delta_(static_cast<float>(logit(p_occupied))),
-        minimum_observations_(minimum_observations) { reset(); }
+        minimum_observations_(minimum_observations),
+        occupied_clear_confirmations_(occupied_clear_confirmations) {
+    if (occupied_clear_confirmations_ < 1)
+      throw std::invalid_argument("occupied clear confirmations must be positive");
+    reset();
+  }
 
   void reset() {
     evidence_.assign(width_ * height_, std::numeric_limits<float>::quiet_NaN());
     observations_.assign(width_ * height_, 0);
+    occupied_latched_.assign(width_ * height_, 0);
+    clear_confirmations_.assign(width_ * height_, 0);
+    frame_updates_.assign(width_ * height_, kNone);
+    touched_indices_.clear();
+    frame_active_ = false;
+  }
+  void beginFrame() {
+    if (frame_active_) throw std::logic_error("occupancy frame already active");
+    frame_active_ = true;
+    touched_indices_.clear();
+  }
+  void endFrame() {
+    if (!frame_active_) throw std::logic_error("no occupancy frame is active");
+    for (const std::size_t index : touched_indices_) {
+      const uint8_t update = frame_updates_[index];
+      if (update == kOccupiedEndpoint) {
+        clear_confirmations_[index] = 0;
+        integrate(index, occupied_delta_);
+        const double probability = 1.0 / (1.0 + std::exp(-evidence_[index]));
+        if (observations_[index] >= minimum_observations_ && probability >= 0.65)
+          occupied_latched_[index] = 1;
+      } else if (occupied_latched_[index]) {
+        // A 3-D ray passing over or beside an object does not prove the whole
+        // 2-D column is empty.  Only repeated, near-floor endpoints in this
+        // exact cell may release an already-confirmed obstacle.
+        if (update == kFreeEndpoint) {
+          if (clear_confirmations_[index] != std::numeric_limits<uint16_t>::max())
+            ++clear_confirmations_[index];
+          if (clear_confirmations_[index] >= occupied_clear_confirmations_) {
+            occupied_latched_[index] = 0;
+            clear_confirmations_[index] = 0;
+            evidence_[index] = -4.0f;
+          }
+        }
+      } else if (update == kFreeRay || update == kFreeEndpoint) {
+        integrate(index, free_delta_);
+      }
+      frame_updates_[index] = kNone;
+    }
+    touched_indices_.clear();
+    frame_active_ = false;
   }
   unsigned width() const { return width_; }
   unsigned height() const { return height_; }
@@ -122,6 +170,7 @@ class OccupancyIntegrator {
   }
 
   bool raytrace(double sx, double sy, double ex, double ey, bool occupied) {
+    if (!frame_active_) throw std::logic_error("raytrace requires an active frame");
     if (!clip(sx, sy, ex, ey)) return false;
     int x0, y0, x1, y1;
     if (!worldToCell(sx, sy, x0, y0) || !worldToCell(ex, ey, x1, y1)) return false;
@@ -129,12 +178,12 @@ class OccupancyIntegrator {
     int dy = -std::abs(y1 - y0), step_y = y0 < y1 ? 1 : -1, error = dx + dy;
     int x = x0, y = y0;
     while (x != x1 || y != y1) {
-      add(x, y, free_delta_);
+      record(x, y, kFreeRay);
       const int twice = 2 * error;
       if (twice >= dy) { error += dy; x += step_x; }
       if (twice <= dx) { error += dx; y += step_y; }
     }
-    add(x1, y1, occupied ? occupied_delta_ : free_delta_);
+    record(x1, y1, occupied ? kOccupiedEndpoint : kFreeEndpoint);
     return true;
   }
 
@@ -142,6 +191,7 @@ class OccupancyIntegrator {
     std::vector<int8_t> result(evidence_.size(), -1); occupied = free = unknown = 0;
     for (std::size_t i = 0; i < evidence_.size(); ++i) {
       if (!std::isfinite(evidence_[i]) || observations_[i] < minimum_observations_) { ++unknown; continue; }
+      if (occupied_latched_[i]) { result[i] = 100; ++occupied; continue; }
       const double probability = 1.0 / (1.0 + std::exp(-evidence_[i]));
       if (probability >= 0.65) { result[i] = 100; ++occupied; }
       else if (probability <= 0.4) { result[i] = 0; ++free; }
@@ -156,14 +206,24 @@ class OccupancyIntegrator {
   }
 
  private:
+  enum FrameUpdate : uint8_t {
+    kNone = 0,
+    kFreeRay = 1,
+    kFreeEndpoint = 2,
+    kOccupiedEndpoint = 3,
+  };
   static double logit(double p) { return std::log(p / (1.0 - p)); }
   bool inside(int x, int y) const { return x >= 0 && y >= 0 && x < static_cast<int>(width_) && y < static_cast<int>(height_); }
-  void add(int x, int y, float delta) {
-    if (!inside(x, y)) return;
-    const std::size_t index = static_cast<std::size_t>(y) * width_ + x;
+  void integrate(std::size_t index, float delta) {
     if (!std::isfinite(evidence_[index])) evidence_[index] = 0.0f;
     evidence_[index] = std::max(-4.0f, std::min(4.0f, evidence_[index] + delta));
     if (observations_[index] != std::numeric_limits<uint16_t>::max()) ++observations_[index];
+  }
+  void record(int x, int y, FrameUpdate update) {
+    if (!inside(x, y)) return;
+    const std::size_t index = static_cast<std::size_t>(y) * width_ + x;
+    if (frame_updates_[index] == kNone) touched_indices_.push_back(index);
+    if (update > frame_updates_[index]) frame_updates_[index] = update;
   }
   bool clip(double& x0, double& y0, double& x1, double& y1) const {
     const double xmin = origin_x_ + 1e-6, ymin = origin_y_ + 1e-6;
@@ -187,9 +247,13 @@ class OccupancyIntegrator {
   unsigned width_, height_;
   double origin_x_, origin_y_;
   float free_delta_, occupied_delta_;
-  unsigned minimum_observations_;
+  unsigned minimum_observations_, occupied_clear_confirmations_;
   std::vector<float> evidence_;
   std::vector<uint16_t> observations_;
+  std::vector<uint8_t> occupied_latched_, frame_updates_;
+  std::vector<uint16_t> clear_confirmations_;
+  std::vector<std::size_t> touched_indices_;
+  bool frame_active_{false};
 };
 
 }  // namespace a1_floor_mapping

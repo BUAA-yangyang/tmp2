@@ -66,7 +66,9 @@ from a1_exploration.frontier import (
     room_completion_state,
     return_anchor_selection,
     room_axis_bounds,
+    room_frontier_rejection,
     room_queue_order,
+    room_source_keepout_mask,
     segment_corridor_mask,
     transform_local_polygon,
 )
@@ -293,6 +295,7 @@ class FrontierExplorer:
         self.approached_room_branches = set()
         self.room_branch_entry_poses = {}
         self.room_branch_interior_poses = {}
+        self.room_branch_door_centers = {}
         self.active_room_branch = None
         self.selected_room_branch = None
         self.selected_room_stage = None
@@ -460,6 +463,21 @@ class FrontierExplorer:
         )
         self.room_goal_extension = float(
             self.param("frontier/room_priority/goal_extension", 1.2)
+        )
+        self.room_source_keepout_enabled = bool(
+            self.param(
+                "frontier/room_priority/source_keepout/enabled", True
+            )
+        )
+        self.room_source_keepout_depth = float(
+            self.param(
+                "frontier/room_priority/source_keepout/depth", 1.70
+            )
+        )
+        self.room_source_keepout_half_width = float(
+            self.param(
+                "frontier/room_priority/source_keepout/half_width", 1.20
+            )
         )
         self.room_scan_angular_speed = float(
             self.param("frontier/room_priority/scan_angular_speed", 0.50)
@@ -837,6 +855,12 @@ class FrontierExplorer:
         self.no_progress_yaw = float(
             self.param("navigation/no_progress/yaw", 0.35)
         )
+        # Beyond this radius, turning on the spot no longer counts as progress.
+        # Close in it still does: that is the goal-yaw alignment the original
+        # rule was written for.
+        self.yaw_progress_radius = float(
+            self.param("navigation/no_progress/yaw_progress_radius", 1.00)
+        )
         # B2: how long commanded velocity must be continuously zero,
         # on ROS/sim time, after ANY non-success navigation outcome
         # (aborted/cancelled/preempted/recovery/timeout) before the
@@ -1172,6 +1196,10 @@ class FrontierExplorer:
                 self.room_door_maximum_width,
             "frontier/room_priority/door_station_tolerance":
                 self.room_door_station_tolerance,
+            "frontier/room_priority/source_keepout/depth":
+                self.room_source_keepout_depth,
+            "frontier/room_priority/source_keepout/half_width":
+                self.room_source_keepout_half_width,
             "frontier/corridor_model/minimum_width":
                 self.corridor_minimum_width,
             "frontier/corridor_model/maximum_width":
@@ -3256,6 +3284,11 @@ class FrontierExplorer:
             room_pose.pose.orientation.z, room_pose.pose.orientation.w = \
             quaternion_from_yaw(inward_yaw)
         branch = self.room_branch_key(door_longitudinal, door_lateral)
+        with self.lock:
+            if branch not in self.room_branch_door_centers:
+                self.room_branch_door_centers[branch] = (
+                    float(doorway.center.x), float(doorway.center.y)
+                )
         return branch, corridor_pose, room_pose
 
     def freeze_room_branch_geometry(
@@ -3305,6 +3338,47 @@ class FrontierExplorer:
             (current.x - start.x) * dx
             + (current.y - start.y) * dy
         ) / length
+
+    def build_room_source_keepout_mask(self, map_message, branch):
+        """Source-free room-door channel, derived from perceived geometry.
+
+        The mask is deliberately used only for optional exploration/coverage
+        targets.  Door-centre approach, mandatory room ingress, room exit and
+        corridor probes remain traversal actions and do not consult it.
+        """
+        if not self.room_source_keepout_enabled:
+            return None
+        with self.lock:
+            door_center = self.room_branch_door_centers.get(branch)
+            corridor_pose = self.room_branch_entry_poses.get(branch)
+            room_pose = self.room_branch_interior_poses.get(branch)
+        if door_center is None or corridor_pose is None or room_pose is None:
+            rospy.logwarn_throttle(
+                2.0,
+                "room %r source keep-out unavailable: frozen door geometry "
+                "is incomplete; leaving optional targets unchanged",
+                branch,
+            )
+            return None
+        start = corridor_pose.pose.position
+        finish = room_pose.pose.position
+        inward = (finish.x - start.x, finish.y - start.y)
+        try:
+            return room_source_keepout_mask(
+                self.grid_spec(map_message),
+                door_center,
+                inward,
+                self.room_source_keepout_depth,
+                self.room_source_keepout_half_width,
+            )
+        except ValueError as error:
+            rospy.logerr_throttle(
+                2.0,
+                "room %r source keep-out rejected invalid geometry: %s",
+                branch,
+                error,
+            )
+            return None
 
     def is_entry_transit_frontier(self, x, y):
         """Exclude the already traversed public doorway from exploration."""
@@ -4061,11 +4135,19 @@ class FrontierExplorer:
                 except Exception:  # noqa: BLE001 - TF hiccup is not a failure
                     current = None
                 if current is not None:
+                    # 只有已经贴近目标位置时,原地转向才是"在对准目标位姿";
+                    # 离目标还有几米却在原地转,那是振荡恢复,不是进展。
+                    goal_gap = math.hypot(
+                        target.pose.position.x - current.pose.position.x,
+                        target.pose.position.y - current.pose.position.y,
+                    )
                     progress = progress_watchdog.observe(
                         rospy.Time.now().to_sec(),
                         current.pose.position.x,
                         current.pose.position.y,
                         yaw_from_quaternion(current.pose.orientation),
+                        yaw_counts_as_progress=(
+                            goal_gap <= self.yaw_progress_radius),
                     )
                     if progress.stalled:
                         # A stall usually means the robot is physically
@@ -4245,6 +4327,16 @@ class FrontierExplorer:
             frontiers = self.room_transaction_frontiers(
                 map_message, robot_pose, branch
             )
+            # Publish what the TRANSACTION is looking at, not what the outer
+            # loop was looking at before it opened.  publish_frontiers() only
+            # ever ran in run()'s main loop, so during a room transaction RViz
+            # kept showing the pre-transaction snapshot while the room map went
+            # on updating.  The mf49 operator correctly reported "the green
+            # line does not move"; that was the display, and it made the
+            # display useless as evidence about the candidates.  An empty list
+            # is published too, so "no candidates" is visibly different from
+            # "stale candidates".
+            self.publish_frontiers(map_message, frontiers or [])
             if frontiers is None:
                 rospy.logwarn(
                     "room transaction could not bound the room; leaving"
@@ -4254,103 +4346,144 @@ class FrontierExplorer:
             now = time.monotonic()
             target = None
             chosen = None
+            planner_unavailable = False
+            rejected = {
+                "score": 0, "visited": 0, "history": 0, "unreachable": 0,
+            }
             for frontier in frontiers:
-                if frontier.score < self.room_frontier_minimum_score:
-                    continue
-                if point_near(
-                        self.visited_goals, frontier.goal_x, frontier.goal_y,
-                        self.visited_radius):
-                    continue
-                if failed_goal_state(
-                        self.failed_goals, frontier.goal_x, frontier.goal_y,
-                        self.failed_radius, now,
-                        self.maximum_failures) != "available":
+                reason = room_frontier_rejection(
+                    frontier.score, frontier.goal_x, frontier.goal_y,
+                    self.room_frontier_minimum_score,
+                    self.visited_goals, self.visited_radius,
+                    self.failed_goals, self.failed_radius, now,
+                    self.maximum_failures,
+                )
+                if reason is not None:
+                    rejected[reason] += 1
                     continue
                 candidate = self.pose_for_frontier(frame, frontier)
                 reachable = self.path_exists(robot_pose, candidate)
                 if reachable is None:
-                    time.sleep(0.1)
-                    target = None
+                    planner_unavailable = True
                     break
                 if reachable:
                     target = candidate
                     chosen = frontier
                     break
+                rejected["unreachable"] += 1
                 record_failure(
                     self.failed_goals, frontier.goal_x, frontier.goal_y,
                     self.failed_radius, now, self.failure_cooldown,
                 )
+            rospy.loginfo(
+                "ROOM_FRONTIER_SELECTION branch=%r total=%d "
+                "rejected_score=%d rejected_visited=%d "
+                "rejected_failed_or_cooling=%d unreachable=%d "
+                "planner_unavailable=%s selected=%s",
+                branch, len(frontiers), rejected["score"],
+                rejected["visited"], rejected["history"],
+                rejected["unreachable"], planner_unavailable,
+                "none" if chosen is None
+                else "(%.2f, %.2f) score=%.2f" % (
+                    chosen.goal_x, chosen.goal_y, chosen.score),
+            )
             if target is None:
-                if chosen is None and frontiers is not None:
-                    # "No frontier left" is not "the camera has seen this
-                    # room". LiDAR maps the far side of a room from the
-                    # doorway, so that area becomes known-free and stops
-                    # emitting frontiers while the camera is still 5 m away and
-                    # cannot recognise a 0.15 m source there. run18 left this
-                    # room on exactly that reasoning: source B was in the FOV
-                    # 13 times but never closer than 5.55 m, and was missed;
-                    # run14 reached 1.49 m on the same source and found it.
-                    # Require camera coverage before declaring the room proven,
-                    # and spend any remaining goals closing the largest gap.
-                    gap = (
-                        self.room_camera_gap(map_message, robot_pose, branch)
-                        if self.camera_coverage_enabled else None
+                if planner_unavailable:
+                    # A planner that cannot answer is not evidence that the
+                    # room is explored.  This used to break out with
+                    # target=None and chosen=None, land in the completion
+                    # branch below and set last_room_transaction_proven=True --
+                    # i.e. a make_plan outage could close a room nobody had
+                    # finished.  Retry instead; the transaction's own sim/wall
+                    # budget still bounds the loop, and spending it leaves the
+                    # room UNPROVEN, which is the honest answer.
+                    rospy.logwarn(
+                        "room transaction %r: make_plan is transiently "
+                        "unavailable; retrying rather than claiming the room "
+                        "is explored", branch,
                     )
-                    if gap is not None:
-                        uncovered, covered_fraction = gap
-                        if covered_fraction < self.camera_coverage_required:
-                            coverage_target = self.camera_coverage_target(
-                                map_message, robot_pose, uncovered, frame
+                    time.sleep(0.1)
+                    continue
+                # Reachability aside, say which stage emptied the list.  Every
+                # early exit used to print the same sentence whether four
+                # candidates were scored out or none was ever generated.
+                if not frontiers:
+                    exhaustion = ("no frontier candidate was generated inside "
+                                  "the room")
+                else:
+                    exhaustion = (
+                        "all %d admitted candidates were filtered "
+                        "(score=%d visited=%d history=%d unreachable=%d)"
+                        % (len(frontiers), rejected["score"],
+                           rejected["visited"], rejected["history"],
+                           rejected["unreachable"]))
+                # "No frontier left" is not "the camera has seen this
+                # room". LiDAR maps the far side of a room from the
+                # doorway, so that area becomes known-free and stops
+                # emitting frontiers while the camera is still 5 m away and
+                # cannot recognise a 0.15 m source there. run18 left this
+                # room on exactly that reasoning: source B was in the FOV
+                # 13 times but never closer than 5.55 m, and was missed;
+                # run14 reached 1.49 m on the same source and found it.
+                # Require camera coverage before declaring the room proven,
+                # and spend any remaining goals closing the largest gap.
+                gap = (
+                    self.room_camera_gap(map_message, robot_pose, branch)
+                    if self.camera_coverage_enabled else None
+                )
+                if gap is not None:
+                    uncovered, covered_fraction = gap
+                    if covered_fraction < self.camera_coverage_required:
+                        coverage_target = self.camera_coverage_target(
+                            map_message, robot_pose, uncovered, frame
+                        )
+                        if coverage_target is not None:
+                            rospy.loginfo(
+                                "room has no frontier left but only %.0f%% "
+                                "of its free area is camera-covered; "
+                                "closing the gap", 100.0 * covered_fraction,
                             )
-                            if coverage_target is not None:
-                                rospy.loginfo(
-                                    "room has no frontier left but only %.0f%% "
-                                    "of its free area is camera-covered; "
-                                    "closing the gap", 100.0 * covered_fraction,
-                                )
-                                self.transition(
-                                    "NAVIGATING",
-                                    "room camera coverage %.0f%%"
-                                    % (100.0 * covered_fraction),
-                                    coverage_target,
-                                )
-                                goals += 1
-                                self.navigate(
-                                    coverage_target,
-                                    self.room_goal_timeout,
-                                    allow_backout=False,
-                                )
-                                continue
-                        if covered_fraction < self.camera_coverage_required:
-                            # Coverage was NOT achieved -- there simply was no
-                            # reachable way to improve it this cycle. Reporting
-                            # that as proven is what let run19 close two rooms
-                            # at 17% and 25% camera coverage. Leave it unproven
-                            # so the existing unproven-room revival can come
-                            # back, and so the floor is not declared finished
-                            # on the strength of a room nobody looked at.
-                            rospy.logwarn(
-                                "room transaction leaving after %d goals with "
-                                "only %.0f%% camera coverage and no reachable "
-                                "way to improve it; NOT marking it proven",
-                                goals, 100.0 * covered_fraction,
+                            self.transition(
+                                "NAVIGATING",
+                                "room camera coverage %.0f%%"
+                                % (100.0 * covered_fraction),
+                                coverage_target,
                             )
-                            self.last_room_transaction_proven = False
-                            break
-                        rospy.loginfo(
-                            "room transaction complete after %d goals: no "
-                            "reachable frontier remains and %.0f%% of the "
-                            "room is camera-covered",
+                            goals += 1
+                            self.navigate(
+                                coverage_target,
+                                self.room_goal_timeout,
+                                allow_backout=False,
+                            )
+                            continue
+                    if covered_fraction < self.camera_coverage_required:
+                        # Coverage was NOT achieved -- there simply was no
+                        # reachable way to improve it this cycle. Reporting
+                        # that as proven is what let run19 close two rooms
+                        # at 17% and 25% camera coverage. Leave it unproven
+                        # so the existing unproven-room revival can come
+                        # back, and so the floor is not declared finished
+                        # on the strength of a room nobody looked at.
+                        rospy.logwarn(
+                            "room transaction leaving after %d goals with "
+                            "only %.0f%% camera coverage and no reachable "
+                            "way to improve it; NOT marking it proven",
                             goals, 100.0 * covered_fraction,
                         )
-                    else:
-                        rospy.loginfo(
-                            "room transaction complete after %d goals: no "
-                            "reachable frontier remains inside the room", goals,
-                        )
-                    self.last_room_transaction_proven = True
-                    break
-                continue
+                        self.last_room_transaction_proven = False
+                        break
+                    rospy.loginfo(
+                        "room transaction complete after %d goals: %s, and "
+                        "%.0f%% of the room is camera-covered",
+                        goals, exhaustion, 100.0 * covered_fraction,
+                    )
+                else:
+                    rospy.loginfo(
+                        "room transaction complete after %d goals: %s",
+                        goals, exhaustion,
+                    )
+                self.last_room_transaction_proven = True
+                break
             goals += 1
             self.transition(
                 "NAVIGATING",
@@ -4390,58 +4523,90 @@ class FrontierExplorer:
         return self.exit_room_through_mouth(branch, frame)
 
     def room_transaction_frontiers(self, map_message, robot_pose, branch):
-        """Frontiers restricted to the room the transaction is open on."""
+        """Frontiers restricted to the room the transaction is open on.
+
+        Every stage reports its cell/candidate count on ROOM_FRONTIER_PIPELINE,
+        against the identity of the map it ran on.  mf49 could not answer the
+        first question anyone asks about an early room exit -- were candidates
+        never generated, or generated and then filtered -- because the only
+        line printed was a rejection count that is silent when nothing is
+        rejected.  The map identity is included so "the grid stopped updating"
+        stops being a hypothesis and becomes an observation.
+        """
+        map_seq = int(map_message.header.seq)
+        map_stamp = map_message.header.stamp.to_sec()
         component = self.room_free_component_mask(
             map_message, branch, robot_pose
         )
         if component is None:
+            rospy.logwarn(
+                "ROOM_FRONTIER_PIPELINE branch=%r map_seq=%d map_stamp=%.3f "
+                "component=unbounded", branch, map_seq, map_stamp,
+            )
             return None
         allowed = component
         if self.roi_enabled:
             try:
                 allowed = component & self.build_roi_mask(map_message)
             except ValueError:
+                rospy.logwarn(
+                    "ROOM_FRONTIER_PIPELINE branch=%r map_seq=%d "
+                    "map_stamp=%.3f roi=invalid", branch, map_seq, map_stamp,
+                )
                 return None
-        if not allowed.any():
-            return []
         # The room component is dilated by one cell so a frontier sitting on
         # its rim is not clipped away before it can be scored.
-        candidates = extract_frontiers(
-            map_message.data,
-            self.grid_spec(map_message),
-            robot_xy=(
-                robot_pose.pose.position.x,
-                robot_pose.pose.position.y,
-            ),
-            min_frontier_length_m=self.min_frontier_length,
-            obstacle_clearance_m=self.obstacle_clearance,
-            goal_standoff_m=self.goal_standoff,
-            goal_search_radius_m=self.goal_search_radius,
-            minimum_goal_distance_m=self.room_frontier_min_distance,
-            maximum_goal_distance_m=self.max_goal_distance,
-            free_threshold=self.free_threshold,
-            occupied_threshold=self.occupied_threshold,
-            information_gain_weight=self.information_gain_weight,
-            distance_weight=self.distance_weight,
-            allowed_mask=_dilate(allowed, 1),
+        frontier_allowed = _dilate(allowed, 1)
+        source_keepout = self.build_room_source_keepout_mask(
+            map_message, branch
         )
-        # The transaction path used to apply the ROI and nothing else, so the
-        # zone rules that keep every other path out of the lobby did not run
-        # here.  History bookkeeping stays with the transaction itself.
-        now = time.monotonic()
+        keepout_cells = 0
+        if source_keepout is not None:
+            # Apply after dilation: otherwise the one-cell component-rim
+            # expansion would re-introduce exactly the keep-out frontier cells.
+            keepout_cells = int((frontier_allowed & source_keepout).sum())
+            frontier_allowed &= ~source_keepout
+        candidates = []
         admitted = []
-        for candidate in candidates:
-            ok, _cooling = self.frontier_is_admissible(
-                candidate.goal_x, candidate.goal_y, now, check_history=False
+        if frontier_allowed.any():
+            candidates = extract_frontiers(
+                map_message.data,
+                self.grid_spec(map_message),
+                robot_xy=(
+                    robot_pose.pose.position.x,
+                    robot_pose.pose.position.y,
+                ),
+                min_frontier_length_m=self.min_frontier_length,
+                obstacle_clearance_m=self.obstacle_clearance,
+                goal_standoff_m=self.goal_standoff,
+                goal_search_radius_m=self.goal_search_radius,
+                minimum_goal_distance_m=self.room_frontier_min_distance,
+                maximum_goal_distance_m=self.max_goal_distance,
+                free_threshold=self.free_threshold,
+                occupied_threshold=self.occupied_threshold,
+                information_gain_weight=self.information_gain_weight,
+                distance_weight=self.distance_weight,
+                allowed_mask=frontier_allowed,
             )
-            if ok:
-                admitted.append(candidate)
-        if len(admitted) != len(candidates):
-            rospy.loginfo(
-                "room transaction %r: %d of %d frontiers rejected by the "
-                "shared admissibility rules",
-                branch, len(candidates) - len(admitted), len(candidates),
-            )
+            # The transaction path used to apply the ROI and nothing else, so
+            # the zone rules that keep every other path out of the lobby did
+            # not run here.  History bookkeeping stays with the transaction.
+            now = time.monotonic()
+            for candidate in candidates:
+                ok, _cooling = self.frontier_is_admissible(
+                    candidate.goal_x, candidate.goal_y, now,
+                    check_history=False,
+                )
+                if ok:
+                    admitted.append(candidate)
+        rospy.loginfo(
+            "ROOM_FRONTIER_PIPELINE branch=%r map_seq=%d map_stamp=%.3f "
+            "component_cells=%d roi_allowed_cells=%d keepout_cells=%d "
+            "searched_cells=%d raw=%d shared_admissible=%d shared_rejected=%d",
+            branch, map_seq, map_stamp, int(component.sum()),
+            int(allowed.sum()), keepout_cells, int(frontier_allowed.sum()),
+            len(candidates), len(admitted), len(candidates) - len(admitted),
+        )
         return admitted
 
     def room_free_component_mask(self, map_message, branch, robot_pose):
@@ -4950,6 +5115,11 @@ class FrontierExplorer:
                 free_room &= self.build_roi_mask(map_message)
             except ValueError:
                 return None
+        source_keepout = self.build_room_source_keepout_mask(
+            map_message, branch
+        )
+        if source_keepout is not None:
+            free_room &= ~source_keepout
         total = int(free_room.sum())
         if total == 0:
             return None
@@ -5742,6 +5912,7 @@ class FrontierExplorer:
             self.approached_room_branches = set()
             self.room_branch_entry_poses = {}
             self.room_branch_interior_poses = {}
+            self.room_branch_door_centers = {}
             self.active_room_branch = None
             self.selected_room_branch = None
             self.selected_room_stage = None
@@ -5749,6 +5920,14 @@ class FrontierExplorer:
             self.remembered_room_doorways = {}
             self.corridor_model = None
             self.maximum_corridor_progress = 0.0
+            # Corridor probing is per floor.  These three were only ever
+            # initialised in __init__, so a barren-probe count earned on F0
+            # carried straight into F1 and F2.  corridor_probe_exhausted having
+            # no reader today is the only reason the carry-over has not already
+            # changed behaviour -- that is a reason to reset it, not to leave it.
+            self.corridor_probe_barren = 0
+            self.corridor_probe_exhausted = False
+            self.corridor_probe_known_before = None
             self.no_goal_evidence = NoFrontierEvidence(
                 self.empty_confirmations,
                 self.stable_no_frontier_duration,
