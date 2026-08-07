@@ -59,7 +59,9 @@ mission:
   mapping_recovery_timeout_wall: 30.0
   # Abort a MoveBase goal that produces no meaningful translation for this
   # wall-time bound. Rotation is observed but cannot re-arm the bound forever.
-  no_progress_timeout_wall: 35.0
+  # 导航看门狗量的是「机器人多久没有靠近目标」——物理问题，按仿真秒计。
+  no_progress_timeout_sim: 12.0
+  no_progress_timeout_wall: 120.0
   no_progress_distance: 0.15
   no_progress_yaw: 0.35
 startup:
@@ -67,6 +69,19 @@ startup:
   localization_timeout_wall: 300.0
   mapping_timeout_wall: 180.0
   fixed_stand_settle_sim_s: 3.0
+  # 让地面平面估计收敛之后，再冻结第 0 代的世界锚点。
+  #
+  # mf64 实测：一楼锚点在 sim 11.430 建立，而 STARTUP_MAPPING_READY 在 11.378
+  # —— floor_mapping 只跑了 **0.05 秒**，给出 floor_z = −0.193（站立高 0.193 m）；
+  # 二楼锚点在 sim 325 建立，floor_z = −0.325，与跨轮实测站立高 0.289–0.316 吻合。
+  # result_manager 每代只认第一个锚点（`if generation in self._anchors: return`），
+  # 所以取样过早的那个 floor_z 会被烙进整轮所有一楼检测点的 world z，误差 0.126 m。
+  #
+  # 有界且非致命：预算耗尽就用当时拿到的值照常建锚，行为与加这段等待之前一致。
+  floor_plane_settle_sim: 3.0
+  floor_plane_settle_wall: 30.0
+  floor_plane_samples: 4
+  floor_plane_tolerance: 0.02
 entry:
   floor0_forward_offset: 3.5
   # Fixed building: after crossing the public entrance, force one localization-
@@ -85,7 +100,42 @@ elevator:
   transfer_turn_tolerance: 0.20
   transfer_turn_timeout_sim: 20.0
   transfer_turn_timeout_wall: 200.0
+  # Deliberately still wall-clock, and deliberately still short.  This one
+  # only asks "did the heading error hold inside tolerance rather than sweeping
+  # through it".  The post-turn rebound walks that error back OUT of the
+  # 0.20 rad band (mf61 transfer 0->1 finished at 0.168 rad and then unwound
+  # 0.235 rad more), so lengthening this would re-arm the turn controller
+  # against the rebound.  Waiting for the body to stop is a different
+  # postcondition and lives in elevator/transfer_settle below, on the sim clock.
   transfer_turn_settle_wall: 0.5
+  # Hold still after the turn, before anything samples the pose that anchors
+  # the cross-generation map->world transform.
+  #
+  # mf61 referee truth: after the turn published zero, the body unwound
+  # +13.44 / -3.19 / -3.12 deg over roughly the next 6 sim s, always opposite
+  # the turn direction.  The estimator sees it too (13.44 estimated against
+  # 13.40 truth at t+6 s on transfer 0->1), so the wait can be closed on
+  # measurement instead of on faith.  13.47 deg of heading mismatch displaces a
+  # source 5 m away by 1.16 m -- past the evaluator's 1.0 m threshold, so every
+  # upper-floor detection would miss.
+  #
+  # minimum_hold_sim 2.0: on transfer 1->2 the estimator's 0.5 s yaw delta dips
+  # to 0.16 deg at t+0.5 s while 3.5 deg of unwind is still to come.  The
+  # minimum hold is what stops that fluke from ending the wait early.
+  # timeout_sim 8.0: the worst measured case (0->1) went quiet at about 3.7 s,
+  # so this is a little over 2x it -- and expiry is not a failure, the mission
+  # proceeds and publishes the residual.
+  # quiescent_yaw_deg 0.25: the measured estimator noise floor over a 0.5 s
+  # window with the body provably still is 0.016-0.153 deg across the three
+  # transfers, and at the 0.25 deg crossing there was 0.25-0.30 deg of unwind
+  # left -- an order of magnitude inside the 3.16 deg that already matched.
+  transfer_settle:
+    minimum_hold_sim: 2.0
+    minimum_hold_wall: 20.0
+    timeout_sim: 8.0
+    timeout_wall: 80.0
+    quiescent_reference_max_age_sim: 0.5
+    quiescent_yaw_deg: 0.25
   doorway_min_width: 1.20
   # floor_mapping reports the stable wall-edge span for the 1.4 m elevator
   # opening; repeated runs measure approximately 1.86-1.94 m.
@@ -191,7 +241,8 @@ upper_floor:
     # mf38 F2 produced only 5.2 sim seconds during the old 20 wall-second window;
     # all 180 opening rays were 0 m.  First wait for a short footprint-wide strip
     # to become known-free, then spend the existing budget on lobe stability.
-    map_ready_wait_wall: 45.0
+    map_ready_wait_sim: 10.0
+    map_ready_wait_wall: 100.0
     map_ready_probe: 0.10
     # The sensor cannot complete the enclosure behind a stationary body. Before
     # classifying a long-ray lobe, collect one signed 360-degree in-place scan in
@@ -200,10 +251,15 @@ upper_floor:
     active_scan_speed: 0.65
     active_scan_timeout_wall: 200.0
     active_scan_timeout_sim: 20.0
-    active_scan_no_progress_wall: 15.0
+    active_scan_no_progress_sim: 5.0
+    active_scan_no_progress_wall: 50.0
     active_scan_return_tolerance: 0.20
     active_scan_settle_wall: 0.5
-    wait_wall: 20.0
+    # mf68 死在这里：20 墙钟秒在 RTF 0.151 下只买到 3 仿真秒，而稳定检测
+    # 要 3 帧互不相同的地图，地图 0.5 Hz ⇒ 至少 6 仿真秒，先天不可能满足。
+    # 15 仿真秒 ≈ 7 帧地图，留一倍余量。
+    wait_sim: 15.0
+    wait_wall: 150.0
     max_range: 2.75
     ray_count: 180
     min_contrast: 0.80
@@ -226,7 +282,9 @@ upper_floor:
     turn_timeout_wall: 100.0
     turn_timeout_sim: 10.0
     turn_settle_wall: 0.5
-  exit_map_wait_wall: 45.0
+  # 等地图长出可通行条带：传感器积累是物理过程，按仿真秒计。
+  exit_map_wait_sim: 10.0
+  exit_map_wait_wall: 100.0
   # Was 0.85. mf20 stalled on the 6 cm floor-1 elevator sill with the command
   # chain intact: /cmd_vel peaked at 0.416 m/s and the robot moved 0.224 m in
   # 4.4 s. The same robot crossed the same band on floor 0 while ENTERING the
@@ -265,8 +323,15 @@ upper_floor:
   corridor_probe_max_range: 5.0
   corridor_minimum_run: 2.0
   corridor_run_margin: 0.60
+  # 交接前必须确认走廊双墙（门厅没有一对间距 2.2 m 的平行墙）。没确认就用同一套
+  # advance_map_checked 再往前走，预算用尽则响亮失败——换层失败可重试，而把机器人
+  # 丢在井口边交接会整轮报废（mf74/mf80 都是交接后 2 秒坠落）。
+  corridor_confirm_attempts: 3
+  corridor_confirm_step: 2.0
+  corridor_confirm_minimum_step: 0.5
   corridor_minimum_advantage: 0.40
-  corridor_map_wait_wall: 30.0
+  corridor_map_wait_sim: 8.0
+  corridor_map_wait_wall: 80.0
   corridor_entry_yaw_tolerance: 0.5
   # ExploreFloor interprets floor_entry_pose as both an ROI anchor and the
   # longitudinal/lateral room axis.  MoveBase's broad goal tolerance is not a
@@ -274,7 +339,8 @@ upper_floor:
   # after map-probed corridor ingress. Failure is bounded and falls back to the
   # selected probe axis; no simulator/layout truth is used.
   corridor_axis:
-    wait_wall: 5.0
+    wait_sim: 3.0
+    wait_wall: 30.0
     max_age_sim: 1.5
     maximum_correction: 0.65
     parallel_tolerance: 0.30

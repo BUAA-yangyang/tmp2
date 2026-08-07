@@ -62,8 +62,43 @@ entry:
   # Dedicated short-horizon entrance transit. State_RL consumes this body
   # velocity; the explorer never writes leg joint targets.
   transit_speed: 0.80
+  # 入口后的电梯侧向扫描：转到能看见电梯的航向。
+  # 「转身要多久」是物理问题 → 仿真钟主判据，墙钟 10 倍兜底。
+  # ⚠️ 这几个键原先**不在本文件里**，只有代码默认值 30.0 墙钟秒，
+  # 所以对配置文件的墙钟扫描看不见它；mf69 死于此。写进来是为了让它可见。
+  elevator_scan:
+    yaw_timeout_sim: 15.0
+    yaw_timeout_wall: 150.0
+    yaw_settle_sim: 0.3
   near_field_distance: 0.70
   near_field_half_width: 0.30
+  # 堵住时的有界横向重定心。**只在近场闸门已经拒绝通行时才可达**——那条路径
+  # 在今天是「站 30 仿真秒然后整轮失败」，所以能正常穿过的轮次一个字节都不受影响。
+  #
+  # mf62 实测：门洞净宽 **0.90 m**，探测框 ±0.30 m ⇒ 真实横向余量只有 ±0.15 m；
+  # 机器人偏心 **0.19 m**、航向 11°，探测框左前角切进门框上沿，30 秒内那 2×2 格
+  # 恒为 100 一格未变。闸门是对的——偏心 0.19 m 时机身真的会刮到门框。
+  # 而 blocked 分支只发零速并 continue，跳过了下面的航向修正，于是「由姿态偏差
+  # 造成的堵塞」永远不可能自行解除。
+  #
+  # 判据复用 entry_near_field_clear 本身（同一张栅格、同一 occupied_threshold），
+  # 只是问它「机身横向挪 d 之后你放不放行」，所以结论不可能与闸门冲突。
+  # speed 0.15 是 cmd_mux/guard 既有 max_vel_y 0.30 的一半，未新增任何包线；
+  # State_RL_test.cpp 把 linear_y 直接送进策略指令张量，这条通路本来就存在。
+  # 次数用尽后抛出的失败与今天完全一致。
+  recenter:
+    enabled: true
+    max_offset: 0.45
+    probe_step: 0.05
+    speed: 0.15
+    # 必须**严格小于** probe_step。mf64 实测：两者同为 0.05 时，搜索给出的最小
+    # 偏移就是 ±0.05，而到位判据 |remaining| <= tolerance 在第一次循环就成立，
+    # 于是 `entry recentre reached +0.000 m of +0.050 m` —— 一步没走就宣布完成，
+    # 重定心退化成空操作（mf64 两次尝试皆是）。那一轮入口能过是靠等地图更新，
+    # 不是靠重定心。0.02 给最小偏移留出 2.5 倍的分辨力。
+    tolerance: 0.02
+    max_attempts: 2
+    timeout_sim: 6.0
   # 仿真时间。等入口近场那个显式占据格消失的耐心值 —— 等待期间机器人是**停着的**,
   # 这不是安全门限,只是愿意等多久。
   #
@@ -165,8 +200,24 @@ roi:
   # Floor 0: the anchor stands just inside the public entrance, so the whole
   # floor lies ahead of it. Measured floor extent (run23/run27_04, seed
   # 382835531): 38.3 m of corridor and 16.2 m across.
-  default_local_polygon: [0.0, -8.65, 40.0, -8.65,
-                          40.0, 8.65, 0.0, 8.65]
+  # mf65 实测：这个框正在切掉全楼层 **58%** 的待探索边界。
+  #   ROI 内 free 84181 格，其中 frontier(邻接未知) 806
+  #   ROI 外 free 16224 格，其中 frontier(邻接未知) 1133  = 91.3 m2
+  # 逐房间看，component_cells 与 roi_allowed_cells 的差值是 640→1914 格
+  # (3.6→10.8 m2)，而房间面积只有 23.5–46.1 m2 —— 每个房间被切掉两成到四成，
+  # 且机器人越往深处走切得越多。切完之后房间里生成不出候选，就报
+  # no frontier candidate was generated inside the room 退出，
+  # 操作员看到的正是「没探索完就出去了」。
+  #
+  # 旧值 ±8.65 的依据是注释里的「实测 16.2 m across」，但实测可通行区域是
+  # **18.4 m** 宽(y -8.56..9.81)，装不下；而且**上层楼的框一直是 ±10.5**
+  # (elevator_entry_local_polygon)，同一栋楼一楼却窄 1.85 m，这是不一致不是设计。
+  # 后边界从 0 改到 -5：0 正好切在 entry pose 上，把入口内侧那一段也排除了。
+  #
+  # ROI 不是安全判据 —— 它只决定「允许在哪里找探索目标」，不参与避障、速度或
+  # 倾角判断，所以放大它不放宽任何安全门限；上层楼用 ±10.5 已经跑过很多轮。
+  default_local_polygon: [-5.0, -10.5, 40.0, -10.5,
+                          40.0, 10.5, -5.0, 10.5]
   # Floors 1/2: the anchor is 5 m out of the elevator, part-way down the same
   # floor, so roughly 10 m of building sits *behind* it -- including the
   # elevator lobby. Reusing the floor-0 rectangle silently excluded that
@@ -187,6 +238,34 @@ controller:
 # completion for buildings whose room count is unknown.
 floor_completion:
   completed_room_count: 4
+  # 配额未满时,楼层完成被推迟多久(仿真钟)。
+  #
+  # 这个配额此前**完全没有约束力**:room_completion_state() 算出的
+  # floor_complete 在 choose_frontier 里是被丢弃的(`_complete, revivable = ...`),
+  # 唯一的消费点是下面的 post-quota 预算 —— 也就是说配额只能让楼层更早结束,
+  # 从来不能阻止它结束。mf72 三楼因此在 **0/4 个房间**的状态下被判定探完,
+  # 用时 1.9 仿真秒,覆盖率 8.7%,三个危险源全在 20 m 以外,识别 0 分。
+  #
+  # 现在把返回值接回来当前置条件。必须有界:如果某层的房门确实识别不出来
+  # (例如 ROOMS_PER_FLOOR 与本配置不符),没有兜底就是死循环。到期后照常完成,
+  # 但会打一条 logerr 明说这层是带着未满配额收工的。
+  #
+  # 60 s 的依据:mf72 一楼二楼从第 1 个房间事务到第 4 个分别用了 183 s 和 182 s,
+  # 单个房间事务的 transaction_timeout 是 90 s。60 s 足够让一个已识别的房门
+  # 被重新调度一次,又不至于在真正无解的楼层上浪费一个时间分(60 s = 1 分)。
+  unmet_quota_grace_sim: 60.0
+  # 房间配额满足**不等于**这层探完了。
+  #
+  # mf70 实测：三楼四个房间事务全部成功、配额 4/4、楼层判定完成，而机器人
+  # 只走到 world y=19.4，三个危险源分别距它 6.60 / 12.97 / 15.06 m，
+  # **一个都没进过相机 5.5 m 的检测范围** —— 识别 1/4，prob 0.25，直接 0 分。
+  # 三楼只探了 136.6 仿真秒，二楼探了 246.4 秒。
+  #
+  # 单层树没有这个配额判据，完成条件就是「没有 frontier 了」，所以不会
+  # 在楼层还剩一大半时收工。这里恢复那个语义：配额满足后继续探到 frontier
+  # 耗尽，但给一个有界预算，避免在长尾碎片上无限消耗时间分。
+  post_quota_budget_sim: 180.0
+  post_quota_budget_wall: 1800.0
 
 frontier:
 
@@ -239,6 +318,11 @@ frontier:
   # Treat sufficiently lateral frontiers near the current door station as
   # rooms; visit robot-left first, then robot-right, then continue forward.
   room_priority:
+    # 上层楼门厅回退闸门：拒绝 entry-local longitudinal < 0 的目标。
+    # 与 mission 侧 upper_floor/corridor_confirm_* 成对生效——交接点必须先被
+    # 推进走廊，lon=0 才等于走廊口。五次坠落全在门厅段(y<7.84)，井口对 2-D
+    # 栅格是 free(0)，没有别的判据拦得住。一楼(floor_id=0)不启用：下面没有楼层。
+    lobby_keepout: true
     # --- room transaction (ported 2026-08-04) ---
     # A room is finished when no reachable frontier remains inside it. These
     # bound that search so one awkward room cannot consume the floor budget --
@@ -315,7 +399,17 @@ frontier:
   empty_confirmations: 3
   # An unchanged persistent map is also valid evidence. This is a dwell on a
   # content fingerprint, not a fixed exploration runtime.
-  stable_no_frontier_duration: 2.0
+  # 必须**显著长于** failure_cooldown(4.0)，否则冷却中的候选会被当成
+  # 「不存在的 frontier」，楼层在候选恢复之前就被判定探完。
+  #
+  # mf70 三楼实测：走廊 frontier(rolling_long 14.67 m) 在 744.33 进入冷却，
+  # 745.23 仍在，745.53 起消失，747.24 判定 EXPLORATION_DONE —— 从候选被拒到
+  # 宣布探完只用了 **2.01 仿真秒**，与旧值 2.0 完全吻合。后果：三楼只探到
+  # world y=19.4，三个危险源距机器人 6.60/12.97/15.06 m，全部在相机 5.5 m
+  # 检测上限之外，识别 1/4 → prob 0.25 → 识别 0 分。
+  #
+  # 10.0 = 2.5 倍冷却期，让冷却中的候选有机会恢复后被重新评估。
+  stable_no_frontier_duration: 10.0
   minimum_free_cells: 100
 
 navigation:
@@ -360,9 +454,20 @@ timeouts:
   # is a fault bound, not an exploration-completion rule.
   return_goal: 480.0
   map_update_wait: 2.0
-  # Keep this just above floor_mapping's 3 s input-lost threshold so a
-  # one-second PointCloud/TF scheduling blip does not abort a long return.
-  mapping_health_grace: 3.5
+  # 「建图多久没有健康证据」是物理问题，按**仿真时间**计。
+  #
+  # 旧值是纯墙钟 3.5 s，mf66 因此误杀整轮：bag 显示 60.08→71.98 期间
+  # floor_mapping 全程 MAPPING/healthy、定位全程 TRACKING/HEALTHY，
+  # **建图根本没坏**——是探索器进程在 RTF 0.151 下被 CPU 抢占，3.55 墙钟秒
+  # 没跑到回调（该轮同时开着 RViz + 前视相机 + 另一个仿真容器）。
+  # 而 3.55 墙钟秒只等于 0.54 仿真秒，机器人的物理处境毫无变化。
+  #
+  # 3.0 仿真秒 = floor_mapping status 的 15 帧（它每 0.2 仿真秒发一次），
+  # 真停更时绰绰有余；mf66 那次的 0.54 仿真秒则远不到线。
+  # 墙钟 30.0 = 10 倍，容忍 RTF 低到 0.10，且只在 /clock 停摆时才可能先到期。
+  # 节点构造时会校验这个 10 倍关系，配错直接拒绝启动。
+  mapping_health_grace_sim: 3.0
+  mapping_health_grace_wall: 30.0
   # move_base publishes zero at goal completion and cmd_mux then applies its
   # own deceleration/timeout rules. Keep enough wall time for that stop
   # handshake while still requiring a fresh, continuously-zero final output.

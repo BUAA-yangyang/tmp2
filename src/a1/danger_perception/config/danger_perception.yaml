@@ -44,11 +44,22 @@ estimate_sphere_center: true
 sphere_radius_m: 0.15
 depth_mask_erode: 1
 
-# TF and output frame. In the current simulator map is usually aligned with
-# Gazebo world. If a localization module publishes world directly, set this to
-# world.
+# TF and output frame.
+#
+# `map` was wrong here: no node in this workspace publishes a `map` frame.
+# Both costmaps use global_frame: odom, floor_mapping publishes in odom, and a
+# live TF probe during mf63 answered `"map" passed to lookupTransform argument
+# target_frame does not exist`. Every detection was therefore dropped inside
+# _transform_point() and result_manager logged received=0 for the whole run --
+# the 6976 DangerDetectionArray messages in the mf61 bag were empty.
+#
+# NOT `world` either, even though a world frame does resolve: a1_localization
+# re-pins it to robot_start at every localization generation, so on floors 1-2
+# it is off by ~20 m in xy and reports z ~0.6 on every floor. Converting to the
+# world frame is result_manager's job, through a per-generation WorldAnchor, so
+# that exactly one component owns it.
 enable_tf: true
-target_frame: map
+target_frame: odom
 tf_timeout: 0.10
 
 # Tracking and filtering.

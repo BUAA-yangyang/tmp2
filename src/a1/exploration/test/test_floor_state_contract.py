@@ -30,7 +30,8 @@ NOT_PER_FLOOR = {
     "map_message", "doorway_message", "wall_message", "mapping_status",
     "final_command", "command_freshness", "controller_ready",
     "controller_ready_stamp", "controller_ready_freshness", "safety_locked",
-    "last_mapping_healthy_wall", "map_margin_cache",
+    "last_mapping_healthy_wall", "last_mapping_healthy_sim",
+    "map_margin_cache",
     # 对外发布的状态字符串：每次 transition() 覆盖
     "state", "state_message",
     # 按**房间**重置（比按层更细）：explore_room_transaction 开头就归零，

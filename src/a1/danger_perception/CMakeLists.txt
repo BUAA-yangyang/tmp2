@@ -36,3 +36,7 @@ catkin_install_python(PROGRAMS
 install(DIRECTORY config launch
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )
+
+if(CATKIN_ENABLE_TESTING)
+  catkin_add_nosetests(test/test_launch_param_consistency.py)
+endif()

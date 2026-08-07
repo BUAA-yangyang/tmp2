@@ -206,8 +206,10 @@ class LocalizationPoseAdapterRuntimeTest(unittest.TestCase):
 
         # Small per-frame changes that evade the jump gate must still be
         # rejected when they accumulate during an explicit stationary state.
+        # 锚点在 stationary_monitor_settle 之后才建立，所以注入必须长过
+        # settle + error_window，否则测到的是「还没开始量」而不是「量不出来」。
         drift_start = rospy.Time.now() + rospy.Duration(0.3)
-        for index in range(6):
+        for index in range(9):
             self.publish_healthy_sample(
                 drift_start + rospy.Duration(index * 0.05), 1.25 + index * 0.03)
             time.sleep(0.06)

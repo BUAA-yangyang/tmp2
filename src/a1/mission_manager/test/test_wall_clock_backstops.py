@@ -151,5 +151,84 @@ class WallClockBackstopTest(unittest.TestCase):
                 % (base, WORST_MEASURED_RTF, wall, wall_buys_sim_seconds, sim))
 
 
+
+# 允许保持**纯墙钟**的预算：它们等的是墙钟事件，不是物理过程。
+# 台账 §4.1 的例外条款：「等 ROS 服务响应本来就该用墙钟，因为服务响应是墙钟
+# 事件不是物理事件」。节点重启、控制器状态切换同理——进程什么时候答应你，
+# 与仿真里的机器人走了多远无关。
+LEGITIMATE_WALL_ONLY = {
+    # 等 ROS 服务 / 节点进程
+    "mission/service_timeout",
+    "mission/localization_recovery_timeout",
+    "mission/mapping_recovery_timeout",
+    "startup/localization_timeout",
+    "startup/mapping_timeout",
+    "startup/stand_attempt_timeout",
+    "elevator/detection_timeout",
+    # 观测新鲜度门限，不是等待预算
+    "elevator/template_min_age",
+    # settle：只确认「不是扫过目标」，很短，后面都另有复检兜底。
+    # 台账 E7 记录它们仍是墙钟；A13 已在换层那处加了独立的等停机制，
+    # 所以这里保留的是确认窗口，不是等物理过程结束。
+    "elevator/transfer_turn_settle",
+    "elevator/return_alignment/turn_settle",
+    "upper_floor/opening_alignment/turn_settle",
+    "upper_floor/opening_alignment/active_scan_settle",
+}
+
+
+class OrphanWallClockTest(unittest.TestCase):
+    """每个纯墙钟预算都必须被显式认领。
+
+    这个检查是本文件原先的**盲区**：它只查「每个 _sim 有没有兜底」，
+    从不查「每个 _wall 有没有 _sim 主判据」。于是
+    upper_floor/opening_alignment/wait_wall: 20.0 这种纯墙钟预算一直没人看见，
+    直到 mf68 死在它手里——20 墙钟秒在 RTF 0.151 下只买到 3 仿真秒，而稳定
+    开口检测要 3 帧互不相同的地图、地图 0.5 Hz，至少要 6 仿真秒，
+    **先天不可能满足**。
+
+    本族到 mf68 为止已经致命 7 次（A7 A8 A9 A10 B6 + 开门对准）。每一次的
+    数值单看都合理，错的是判据用了错误的钟。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        flat = dict(_flatten(yaml.safe_load(CONFIG.read_text(encoding="utf-8"))))
+        cls.sims = {k[:-len("_sim")] for k in flat if k.endswith("_sim")}
+        cls.walls = {k[:-len("_wall")] for k in flat if k.endswith("_wall")}
+        cls.factors = {k[:-len("_wall_factor")] for k in flat
+                       if k.endswith("_wall_factor")}
+
+    def test_every_wall_only_budget_is_explicitly_claimed(self):
+        orphans = self.walls - self.sims - self.factors
+        unclaimed = sorted(orphans - LEGITIMATE_WALL_ONLY)
+        self.assertEqual(
+            unclaimed, [],
+            "这些预算只有墙钟、没有仿真钟主判据。若它等的是物理过程，"
+            "请补 X_sim 并把墙钟放到 10 倍；若它等的确实是 ROS 服务或节点"
+            "进程，请加进 LEGITIMATE_WALL_ONLY 并写明理由：\n  %s"
+            % "\n  ".join(unclaimed))
+
+    def test_the_whitelist_does_not_rot(self):
+        """白名单里的条目必须真的还存在，否则它会掩盖后来同名的新参数。"""
+        stale = sorted(LEGITIMATE_WALL_ONLY - self.walls)
+        self.assertEqual(
+            stale, [],
+            "白名单里这些键已不在配置中，请删除：%s" % stale)
+
+    def test_the_opening_alignment_budget_can_collect_three_maps(self):
+        """mf68 的具体教训：预算必须够采到 stable_samples 帧互不相同的地图。
+
+        floor_mapping 的 OccupancyGrid 实测约 0.5 Hz（每 2 仿真秒一帧）。
+        """
+        flat = dict(_flatten(yaml.safe_load(CONFIG.read_text(encoding="utf-8"))))
+        budget = float(flat["upper_floor/opening_alignment/wait_sim"])
+        samples = int(flat["upper_floor/opening_alignment/stable_samples"])
+        needed = samples * 2.0
+        self.assertGreaterEqual(
+            budget, 2.0 * needed,
+            "预算 %.1f 仿真秒采 %d 帧地图（每帧约 2 仿真秒）需要 %.1f 秒，"
+            "余量不足一倍" % (budget, samples, needed))
+
 if __name__ == "__main__":
     unittest.main()

@@ -55,6 +55,7 @@ from a1_exploration.frontier import (
     has_pending_retry,
     known_cell_count,
     known_free_path_exists,
+    path_cost_adjusted_score,
     local_plan_is_acceptable,
     map_margin_mask,
     nearest_known_free_anchor,
@@ -251,6 +252,9 @@ class FrontierExplorer:
         self.remembered_room_doorways = {}
         self.mapping_status = None
         self.last_mapping_healthy_wall = 0.0
+        # None until the first healthy status arrives: a zero here
+        # would read as 'unhealthy since sim t=0' and fail instantly.
+        self.last_mapping_healthy_sim = None
         self.final_command = None
         self.safety_locked = False
         self.controller_ready = False
@@ -292,6 +296,9 @@ class FrontierExplorer:
         self.failed_goals = []
         self.completed_room_branches = set()
         self.floor_completion_target = 0
+        # Overwritten per floor by configure_floor_completion(); the fallback
+        # keeps quota_hold_reason() safe if it is ever reached first.
+        self.unmet_quota_grace_sim = 60.0
         self.approached_room_branches = set()
         self.room_branch_entry_poses = {}
         self.room_branch_interior_poses = {}
@@ -302,6 +309,20 @@ class FrontierExplorer:
         self.selected_corridor_center_target = False
         self.maximum_corridor_progress = 0.0
         self.no_goal_evidence = None
+        # 按层：房间配额是否已满足，以及配额满足后额外探索的起点。
+        self.room_quota_satisfied = False
+        self.post_quota_started = None
+        # 按层：配额未满时,楼层完成被推迟的起点(仿真钟)。
+        self.unmet_quota_since = None
+        # 按次选择：每个候选被哪一级过滤掉了，供 FLOOR_DONE 记录使用。
+        self.selection_rejections = {}
+        self.selection_demotions = {}
+        self.selection_frontier_count = 0
+        # 上层楼门厅回退闸门。见 choose_frontier 里的长注释：它与 mission 侧的
+        # 走廊双墙确认是成对的，单独打开任何一边都无效。
+        self.lobby_keepout_enabled = bool(
+            self.param("frontier/room_priority/lobby_keepout", True))
+        self.coverage_denominator = 0
         self.make_plan_failure_since_wall = None
 
         self.base_frame = self.param("frames/base", "base")
@@ -573,6 +594,17 @@ class FrontierExplorer:
         self.maximum_failures = int(
             self.param("frontier/maximum_failures", 2)
         )
+        # 房间配额满足后，继续探索直到 frontier 耗尽，最多再花这些仿真秒。
+        # mf70 实测：三楼四个房间事务全部成功、配额满足、楼层判定完成，
+        # 而机器人只走到 y=19.4，三个危险源分别距它 6.60 / 12.97 / 15.06 m，
+        # **一个都没进过相机 5.5 m 的检测范围**——识别 1/4，prob 0.25 直接 0 分。
+        # 单层树没有配额判据，完成条件就是「没有 frontier 了」，不会这样。
+        self.post_quota_budget_sim = float(
+            self.param("floor_completion/post_quota_budget_sim", 180.0)
+        )
+        self.post_quota_budget_wall = float(
+            self.param("floor_completion/post_quota_budget_wall", 1800.0)
+        )
         self.empty_confirmations = int(
             self.param("frontier/empty_confirmations", 3)
         )
@@ -660,6 +692,27 @@ class FrontierExplorer:
         )
         self.entry_near_field_half_width = float(
             self.param("entry/near_field_half_width", 0.30)
+        )
+        self.entry_recenter_enabled = bool(
+            self.param("entry/recenter/enabled", True)
+        )
+        self.entry_recenter_max_offset = float(
+            self.param("entry/recenter/max_offset", 0.45)
+        )
+        self.entry_recenter_probe_step = float(
+            self.param("entry/recenter/probe_step", 0.05)
+        )
+        self.entry_recenter_speed = float(
+            self.param("entry/recenter/speed", 0.15)
+        )
+        self.entry_recenter_tolerance = float(
+            self.param("entry/recenter/tolerance", 0.05)
+        )
+        self.entry_recenter_max_attempts = int(
+            self.param("entry/recenter/max_attempts", 2)
+        )
+        self.entry_recenter_timeout = float(
+            self.param("entry/recenter/timeout_sim", 6.0)
         )
         self.entry_obstacle_hold_timeout = float(
             self.param("entry/obstacle_hold_timeout", 2.0)
@@ -808,9 +861,17 @@ class FrontierExplorer:
         self.map_update_wait = float(
             self.param("timeouts/map_update_wait", 2.0)
         )
-        self.mapping_health_grace = float(
-            self.param("timeouts/mapping_health_grace", 1.0)
+        self.mapping_health_grace_sim = float(
+            self.param("timeouts/mapping_health_grace_sim", 3.0)
         )
+        self.mapping_health_grace_wall = float(
+            self.param("timeouts/mapping_health_grace_wall", 30.0)
+        )
+        if self.mapping_health_grace_wall < 10.0 * self.mapping_health_grace_sim:
+            raise ValueError(
+                "mapping_health_grace_wall must be at least 10x the sim budget "
+                "so a live clock always expires first"
+            )
         self.final_zero_timeout = float(
             self.param("timeouts/final_zero", 3.0)
         )
@@ -1131,9 +1192,19 @@ class FrontierExplorer:
                 "floor_completion/completed_room_count must be non-negative"
             )
         self.floor_completion_target = target
+        grace = float(self.param(
+            "floor_completion/unmet_quota_grace_sim", 60.0
+        ))
+        if grace < 0.0:
+            raise ValueError(
+                "floor_completion/unmet_quota_grace_sim must be non-negative"
+            )
+        self.unmet_quota_grace_sim = grace
         rospy.loginfo(
-            "fixed-layout floor completion armed: target=%d distinct rooms",
+            "fixed-layout floor completion armed: target=%d distinct rooms; "
+            "an unmet quota holds completion for up to %.0f sim s",
             target,
+            grace,
         )
 
     def complete_room_branch(self, branch, proven=True):
@@ -1374,6 +1445,7 @@ class FrontierExplorer:
             self.mapping_status = message
             if self.mapping_usable(message):
                 self.last_mapping_healthy_wall = time.monotonic()
+                self.last_mapping_healthy_sim = rospy.Time.now().to_sec()
 
     def doorways_callback(self, message):
         """Keep LiDAR-derived room doors even after they leave the local view."""
@@ -1996,14 +2068,47 @@ class FrontierExplorer:
         """
         view_tolerance = float(self.param(
             "entry/elevator_scan/view_yaw_tolerance", 0.25))
-        timeout = float(self.param("entry/elevator_scan/yaw_timeout_wall", 30.0))
+        # 滞环的**进入**门限，必须严于 view_tolerance（见下方循环里的说明）。
+        enter_tolerance = float(self.param(
+            "entry/elevator_scan/enter_yaw_tolerance",
+            view_tolerance * 0.5))
+        # 机器人转不到任意精度：RL 步态有最小可实现角速度。mf78 实测，滞环
+        # 把误差从 0.25 一路推进到 **0.133** 后机身**完全静止**（current yaw
+        # 恒为 −1.418），而 enter_tolerance 是 0.125 —— 差 **0.008 rad
+        # （0.46°）**转不过去，指令 0.16 rad/s 照发不误。
+        #
+        # 只调阈值等于把卡点挪个位置：下一次可能卡在 0.18。这里改为承认能力
+        # 极限——误差在 stall_sim 内不再有实质改善，且已落在 view_tolerance
+        # 之内，就接受当前航向。它同时覆盖 mf77 那种边界横跳（误差同样长时间
+        # 不改善），所以这道兜底比滞环更根本，滞环保留用于「还在改善时别撒手」。
+        stall_sim = float(self.param(
+            "entry/elevator_scan/stall_sim", 3.0))
+        stall_epsilon = float(self.param(
+            "entry/elevator_scan/stall_epsilon", 0.005))
+        if not 0.0 < enter_tolerance <= view_tolerance:
+            raise ValueError(
+                "entry/elevator_scan/enter_yaw_tolerance (%.3f) must be "
+                "positive and no wider than view_yaw_tolerance (%.3f); "
+                "a non-strict enter gate re-creates the mf77 boundary "
+                "oscillation" % (enter_tolerance, view_tolerance))
+        # 「转到这个航向要多久」是物理问题，按仿真秒计。mf69 死在这里的纯墙钟
+        # 30.0：RTF 0.151 下只买到 4.5 仿真秒，机身还没转到位就被判不收敛。
+        # 这个键**原先在 exploration.yaml 里根本不存在**，只有代码默认值，
+        # 所以此前对配置文件的墙钟扫描扫不到它——本族的第八次。
+        budget_sim = float(self.param("entry/elevator_scan/yaw_timeout_sim", 15.0))
+        timeout = float(self.param("entry/elevator_scan/yaw_timeout_wall", 150.0))
+        settle_sim = float(self.param("entry/elevator_scan/yaw_settle_sim", 0.3))
         maximum = float(self.param("entry/elevator_scan/max_angular_speed", 0.45))
         minimum = float(self.param("entry/elevator_scan/min_angular_speed", 0.12))
-        deadline = time.monotonic() + timeout
+        started_ros, started_wall = rospy.Time.now(), time.monotonic()
         stable_since = None
+        best_error = None
+        last_improve_ros = rospy.Time.now()
         zero = Twist()
         try:
-            while not rospy.is_shutdown() and time.monotonic() < deadline:
+            while not rospy.is_shutdown() and not (
+                    (rospy.Time.now() - started_ros).to_sec() >= budget_sim
+                    or time.monotonic() - started_wall >= timeout):
                 self.check_cancel_safety_and_deadline()
                 pose = self.pose_in_frame(frame)
                 current_yaw = yaw_from_quaternion(pose.pose.orientation)
@@ -2014,11 +2119,51 @@ class FrontierExplorer:
                     "error=%.3f tolerance=%.3f",
                     target_yaw, current_yaw, error, view_tolerance,
                 )
-                if abs(error) <= view_tolerance:
+                # 滞环：**进入**用严容差，**保持**用宽容差。
+                #
+                # mf77 实测（本条的来历）：误差在 **0.23..0.27** 之间横跳，
+                # 容差恰好 0.25，15 仿真秒一次都没攒满 settle 就超时报废。
+                # 机制是原来的写法**误差一进容差就立刻发零并开始计时**，
+                # 机身惯性回弹后误差又出容差、`stable_since` 清零，如此往复：
+                # 那一段 /cmd_vel_behavior 有 42% 的时间在发非零转向指令、
+                # 58% 在发零，误差却始终停在 0.25 附近不下降。指令链路无辜——
+                # bag 里 behavior→muxed→/cmd_vel 三级同值送达，|angular.z|
+                # 最大 0.323。
+                #
+                # 与 A13（换层等停）**完全同族**：判据在误差刚进容差时就撒手，
+                # 而机身还会回弹。A13 的解法是独立等停；这里用等价的滞环——
+                # 转到 enter_tolerance(严) 以内才停手，之后只要不超出
+                # view_tolerance(宽) 就继续累计，回弹吃得下。
+                #
+                # 不放宽任何安全门限：enter_tolerance **更严**，view_tolerance
+                # 保持不变，超时预算也没动。
+                if best_error is None or abs(error) < best_error - stall_epsilon:
+                    best_error = abs(error)
+                    last_improve_ros = rospy.Time.now()
+                stalled = (
+                    last_improve_ros is not None
+                    and (rospy.Time.now() - last_improve_ros).to_sec()
+                    >= stall_sim)
+                if stable_since is None:
+                    converged = abs(error) <= enter_tolerance or (
+                        stalled and abs(error) <= view_tolerance)
+                    if converged and stalled and abs(error) > enter_tolerance:
+                        rospy.logwarn(
+                            "ELEVATOR_SCAN accepting heading error %.3f rad "
+                            "(> enter gate %.3f, within view %.3f): it has "
+                            "not improved for %.1f sim s, so this is the "
+                            "robot's practical limit, not a control fault",
+                            abs(error), enter_tolerance, view_tolerance,
+                            stall_sim)
+                else:
+                    converged = abs(error) <= view_tolerance
+                if converged:
                     if stable_since is None:
-                        stable_since = time.monotonic()
+                        stable_since = rospy.Time.now()
                     self.recovery_cmd_pub.publish(zero)
-                    if time.monotonic() - stable_since >= 0.5:
+                    # 机身稳定同样是物理过程；0.5 墙钟秒在 RTF 0.15 下只有
+                    # 0.075 仿真秒，等于没等。
+                    if (rospy.Time.now() - stable_since).to_sec() >= settle_sim:
                         return
                 else:
                     stable_since = None
@@ -2034,7 +2179,8 @@ class FrontierExplorer:
         raise ExplorationFailure(
             ExploreFloorResult.ERROR_ENTRY_TRANSIT,
             "elevator side-scan heading did not converge to %.2f rad within "
-            "%.1f wall seconds" % (target_yaw, timeout),
+            "%.1f sim s / %.1f wall s (whichever came first)"
+            % (target_yaw, budget_sim, timeout),
         )
 
     def request_entry_door_open(self, goal):
@@ -2200,6 +2346,97 @@ class FrontierExplorer:
             longitudinal += step
         return True
 
+    def entry_lateral_escape(self, pose, map_message):
+        """Smallest sideways offset that would let the near-field gate pass.
+
+        Deliberately asks the gate itself, with the same grid and the same
+        occupied_threshold, about a laterally shifted body: the answer can
+        therefore never disagree with the gate that produced the block.
+        Returns None when no offset inside the bound clears it.
+        """
+        yaw = yaw_from_quaternion(pose.pose.orientation)
+        sin_yaw, cos_yaw = math.sin(yaw), math.cos(yaw)
+        step = self.entry_recenter_probe_step
+        count = int(round(self.entry_recenter_max_offset / step))
+
+        def clears(signed):
+            probe = copy.deepcopy(pose)
+            probe.pose.position.x -= signed * sin_yaw
+            probe.pose.position.y += signed * cos_yaw
+            return self.entry_near_field_clear(probe, map_message)
+
+        clearing = [index * step for index in range(-count, count + 1)
+                    if clears(index * step)]
+        if not clearing:
+            return None
+        # Take the CENTRE of the band that clears, not the first offset that
+        # happens to.  mf67 measured why: the clearing offsets formed the band
+        # -0.29..-0.01 m, the smallest of them was -0.05, and standing 0.04 m
+        # from the band edge let ordinary tracking error re-block the gate one
+        # second later -- by which time the body was against the frame and
+        # lateral pushes moved it 0.003 m.  The band centre (-0.15) leaves
+        # 0.14 m either side.
+        nearest = min(clearing, key=abs)
+        band = [nearest]
+        for direction in (1, -1):
+            probe = nearest
+            while True:
+                probe = probe + direction * step
+                if not any(abs(value - probe) < 1e-9 for value in clearing):
+                    break
+                band.append(probe)
+        return sum(band) / len(band)
+
+    def entry_lateral_recenter(self, offset):
+        """Sidestep a measured, bounded distance. Never commands x or yaw.
+
+        mf62 stood 0.19 m off the centre of a 0.90 m doorway with the +/-0.30 m
+        near-field probe clipping the jamb, and held there for the full 30 sim s
+        before failing the round: the gate stops the body, and stopping cannot
+        reduce a lateral error, so the block was unrecoverable by construction.
+
+        State_RL consumes lateral velocity directly (State_RL_test.cpp feeds
+        linear_y into the policy command tensor) and cmd_vel_guard already
+        bounds it at max_vel_y 0.30 with max_acc_y 3.0, so this needs no new
+        envelope -- the commanded 0.15 m/s sits at half the existing limit.
+        """
+        frame = self.floor_entry_pose.header.frame_id
+        start = self.pose_in_frame(frame)
+        yaw = yaw_from_quaternion(start.pose.orientation)
+        sin_yaw, cos_yaw = math.sin(yaw), math.cos(yaw)
+        started_ros = rospy.Time.now()
+        started_wall = time.monotonic()
+        try:
+            while not rospy.is_shutdown():
+                self.check_cancel_safety_and_deadline()
+                now = self.pose_in_frame(frame)
+                dx = now.pose.position.x - start.pose.position.x
+                dy = now.pose.position.y - start.pose.position.y
+                moved = -dx * sin_yaw + dy * cos_yaw
+                remaining = offset - moved
+                if abs(remaining) <= self.entry_recenter_tolerance:
+                    rospy.loginfo(
+                        "entry recentre reached %+.3f m of %+.3f m", moved, offset)
+                    return True
+                if ((rospy.Time.now() - started_ros).to_sec()
+                        >= self.entry_recenter_timeout
+                        or time.monotonic() - started_wall
+                        >= self.entry_recenter_timeout * self.wall_factor):
+                    rospy.logwarn(
+                        "entry recentre timed out after %+.3f m of %+.3f m",
+                        moved, offset)
+                    return False
+                command = Twist()
+                command.linear.y = math.copysign(
+                    self.entry_recenter_speed, remaining)
+                self.recovery_cmd_pub.publish(command)
+                time.sleep(0.02)
+        finally:
+            for _unused in range(10):
+                self.recovery_cmd_pub.publish(Twist())
+                time.sleep(0.02)
+        return False
+
     def controlled_entry_transit(self):
         """Cross the apron and doorway with State_RL at 0.8 m/s.
 
@@ -2215,6 +2452,7 @@ class FrontierExplorer:
         started_wall = time.monotonic()
         blocked_since = None
         blocked_since_ros = None
+        recenter_attempts = 0
         zero = Twist()
         try:
             while not rospy.is_shutdown():
@@ -2251,6 +2489,29 @@ class FrontierExplorer:
                             "entry near-field explicit obstacle; holding for "
                             "a fresh map"
                         )
+                        # Only reachable from a state that is otherwise a
+                        # guaranteed failure 30 sim s later, so a run that
+                        # crosses cleanly never executes any of this.
+                        if (self.entry_recenter_enabled and recenter_attempts
+                                < self.entry_recenter_max_attempts):
+                            escape = self.entry_lateral_escape(
+                                pose, map_message)
+                            if escape is None:
+                                rospy.logwarn(
+                                    "no sideways offset within %.2f m clears "
+                                    "the entry gate; holding",
+                                    self.entry_recenter_max_offset)
+                            else:
+                                recenter_attempts += 1
+                                rospy.logwarn(
+                                    "entry recentre %d/%d: the map says %+.3f m "
+                                    "sideways clears the gate",
+                                    recenter_attempts,
+                                    self.entry_recenter_max_attempts, escape)
+                                if self.entry_lateral_recenter(escape):
+                                    blocked_since = None
+                                    blocked_since_ros = None
+                                    continue
                     elif (
                             (
                                 rospy.Time.now() - blocked_since_ros
@@ -2683,6 +2944,10 @@ class FrontierExplorer:
                 self.mapping_status, self.map_message
             )
             healthy_age = time.monotonic() - self.last_mapping_healthy_wall
+            healthy_age_sim = (
+                None if self.last_mapping_healthy_sim is None
+                else rospy.Time.now().to_sec() - self.last_mapping_healthy_sim
+            )
         if safety_locked:
             raise ExplorationFailure(
                 ExploreFloorResult.ERROR_SAFETY_STOP,
@@ -2712,10 +2977,27 @@ class FrontierExplorer:
                     "floor map identity changed during action: %r -> %r"
                     % (self.action_identity, identity),
                 )
-            if healthy_age > self.mapping_health_grace:
+            # 主判据用仿真钟。旧判据是纯墙钟 3.5 s，mf66 因此误杀了一轮：
+            # bag 显示 60.08→71.98 期间 floor_mapping 全程 MAPPING/healthy、
+            # 定位全程 TRACKING/HEALTHY，建图根本没坏——是探索器进程在
+            # RTF 0.151 下被 CPU 抢占，3.55 墙钟秒没跑到回调。而 3.55 墙钟秒
+            # 只等于 **0.54 仿真秒**，机器人的物理处境毫无变化。
+            #
+            # 「建图多久没有健康证据」是物理问题，应当按仿真时间计；按墙钟计
+            # 会让判据随评委机器的负载而变。这与 §4.1 同一条纪律，是本族第六例。
+            if (healthy_age_sim is not None
+                    and healthy_age_sim > self.mapping_health_grace_sim):
                 raise ExplorationFailure(
                     ExploreFloorResult.ERROR_MAP_LOST,
-                    "floor mapping health lost for %.2f s" % healthy_age,
+                    "floor mapping health lost for %.2f sim s" % healthy_age_sim,
+                )
+            # 兜底：/clock 停摆时仿真钟不再前进，上面那条永远不会触发，
+            # 此时只有墙钟能发现建图已经没有心跳。10 倍容忍 RTF 低到 0.10。
+            if healthy_age > self.mapping_health_grace_wall:
+                raise ExplorationFailure(
+                    ExploreFloorResult.ERROR_MAP_LOST,
+                    "floor mapping health lost for %.2f wall s with no sim "
+                    "progress (stalled /clock?)" % healthy_age,
                 )
 
     def transition(self, state, message, target=None):
@@ -3488,7 +3770,14 @@ class FrontierExplorer:
                     return candidate
         return None
 
-    def path_exists(self, start, target):
+    def request_plan(self, start, target):
+        """Shared make_plan call with the retry/unavailable policy.
+
+        Returns the pose list (possibly empty, meaning unreachable), or None
+        when the planner stayed transiently unavailable across every retry.
+        Split out of path_exists so a caller that needs the plan itself does
+        not have to duplicate this policy -- or, worse, ask for a second plan.
+        """
         last_error = None
         for attempt in range(1, self.make_plan_retry_attempts + 1):
             self.check_cancel_safety_and_deadline()
@@ -3497,7 +3786,7 @@ class FrontierExplorer:
                     start=start, goal=target, tolerance=0.20
                 )
                 self.make_plan_failure_since_wall = None
-                return len(response.plan.poses) >= 2
+                return response.plan.poses
             except rospy.ServiceException as error:
                 last_error = error
                 now = time.monotonic()
@@ -3527,10 +3816,82 @@ class FrontierExplorer:
         )
         return None
 
+    def path_exists(self, start, target):
+        """True/False reachability, or None when the planner is unavailable.
+
+        Contract unchanged: twelve call sites depend on exactly these three
+        values, so this stays a thin wrapper rather than growing a new return
+        shape.
+        """
+        poses = self.request_plan(start, target)
+        return None if poses is None else len(poses) >= 2
+
+    def planned_path_length(self, start, target):
+        """(reachable, metres) along the planner's own path.
+
+        Why this exists.  A frontier's score is
+        ``information_gain_weight * length - distance_weight * distance`` and
+        that ``distance`` is a straight line -- but the robot pays for the
+        PATH.  mf64 measured the gap: a 0.68 m fragment sat 3.66 m away in a
+        straight line and scored -0.24, clearing the -0.5 admission bar, while
+        the planner's path to it was 5.03 m.  Chasing it took the robot out of
+        the room, 6.8 m back down the corridor, and cost 22.9 sim s before
+        failing -- for 0.68 m of frontier.
+
+        The plan was already being computed and thrown away (path_exists only
+        asked whether it had two poses), so this costs no extra service call.
+
+        Returns (None, None) when the planner is unavailable, which the caller
+        must not confuse with unreachable: an outage is not evidence about the
+        room.
+        """
+        poses = self.request_plan(start, target)
+        if poses is None:
+            return None, None
+        if len(poses) < 2:
+            return False, None
+        total = 0.0
+        previous = poses[0].pose.position
+        for pose in poses[1:]:
+            current = pose.pose.position
+            total += math.hypot(current.x - previous.x, current.y - previous.y)
+            previous = current
+        return True, total
+
+    def note_rejection(self, cause):
+        """Count why a frontier was discarded, for the FLOOR_DONE record.
+
+        Pure instrumentation: it changes no decision. It exists because three
+        separately written fixes (the ROI extension to -13 m, the raise of
+        stable_no_frontier_duration to 10 s, and the room quota) were each
+        inert for a different reason, and nothing in eight rounds of logs could
+        have told anyone. Establishing that mf72's floor 2 lost every candidate
+        to one geometric rule required replaying a bag frame offline. It should
+        be readable in mission.log.
+        """
+        self.selection_rejections[cause] = (
+            self.selection_rejections.get(cause, 0) + 1
+        )
+
+    def note_demotion(self, cause):
+        """Count a candidate the room/corridor geometry ranked late.
+
+        A demotion is not a rejection: the candidate stays eligible and is
+        still dispatched if nothing ahead of it works.  Kept separate in the
+        FLOOR_DONE record so "the floor genuinely has nothing left" can never
+        again be confused with "the geometry ranked everything late".
+        """
+        self.selection_demotions[cause] = (
+            self.selection_demotions.get(cause, 0) + 1
+        )
+
     def choose_frontier(self, map_message, robot_pose, frontiers):
         self.selected_room_branch = None
         self.selected_room_stage = None
         self.selected_corridor_center_target = False
+        self.selection_rejections = {}
+        self.selection_demotions = {}
+        self.selection_frontier_count = len(frontiers)
         now = time.monotonic()
         cooling = has_pending_retry(
             self.failed_goals, now, self.maximum_failures
@@ -3702,6 +4063,40 @@ class FrontierExplorer:
                     frontier.goal_x, frontier.goal_y
                 )
                 doorway = self.matching_room_doorway(frontier)
+                # 这三条几何规则以前是**淘汰**候选的(三个 continue)。它们编码的是
+                # **一楼**的门厅深度,量自**一楼**的 anchor;而这套 entry-local 坐标系
+                # 每层重新锚定,原点在同一栋楼的不同层之间漂 1.73 m
+                # (二楼 world y=7.51 在走廊口,三楼 y=5.78 差 1.73 m)。
+                # 判据的分辨力(横向 1.0 m)小于它输入的误差,所以在上层楼它们会
+                # **把整帧候选清空**:mf72 三楼提取到 3 条,3 条全被同一条规则杀掉,
+                # 其中主走廊那条横向 1.03 vs 阈值 1.00 —— 差 3 厘米。
+                #
+                # 现在它们只决定**先看谁**,不再决定**有没有资格**。
+                demoted = (
+                    (abs(lateral) >= self.room_lateral_threshold
+                     and longitudinal < self.room_minimum_door_longitudinal)
+                    or (abs(lateral) < self.room_lateral_threshold
+                        and longitudinal
+                        < self.maximum_corridor_progress - 0.75)
+                    or (abs(lateral) >= self.room_lateral_threshold
+                        and doorway is None)
+                )
+                if demoted:
+                    # 排在旧闸门放行过的**每一个**候选之后,所以只要本层还有普通
+                    # 候选,行为与改动前逐字节相同。
+                    #
+                    # 排序键是**沿入口轴的前进量**,**绝不用 score**:电梯厅旁边
+                    # 「最大的未知边界」结构性地就是开放竖井方向,按分数排必然先挑中它。
+                    # 实测两次:mf74 取 lat=-7.07 score=13.99、mf80 取 lat=-7.37
+                    # score=9.25,两次都走进井里,真值 z 从本层掉到一楼。
+                    # 同样两帧用这个键:mf80 改选 lon=+7.02(走廊方向),
+                    # mf72 三楼改选 lon=+3.75 lat=+1.03(正是主走廊),
+                    # 那条害人的候选分别退到第 2 和第 3(最后)。
+                    #
+                    # ⚠️ 这不是悬崖守卫。井口格在栅格里是 **0=free**(mf80 实测
+                    # 沿指令线段 29/29 全 free),任何基于 2-D 栅格的判据都拦不住,
+                    # 包括 known_free_segment。这里只是不再主动朝它去。
+                    return (5, 0, -longitudinal, abs(lateral))
                 nearby_room = (
                     doorway is not None
                     and longitudinal
@@ -3735,38 +4130,61 @@ class FrontierExplorer:
             # Wait for the next map/frontier instead of moving backwards for
             # a target that cannot advance exploration.
             if frontier.score < self.minimum_frontier_score:
+                self.note_rejection("score")
                 continue
             if self.room_priority_enabled and self.floor_entry_pose is not None:
                 longitudinal, lateral = self.entry_coordinates(
                     frontier.goal_x, frontier.goal_y
                 )
-                # The two large side openings at the public entrance are
-                # branch corridors, not room doors. They occupy the entrance
-                # junction station, whereas real room doors occur farther
-                # down the main corridor. Skip those junction branches in
-                # this simplified observation mode and keep advancing axially.
+                # 这三条几何规则已降级为 room_priority() 里的排序档位(见那里的
+                # 长注释)。这里只**记账**,不再 continue —— 它们决定顺序,
+                # 不决定资格。FLOOR_DONE 记录靠这些计数区分
+                # 「真的没有候选」和「候选被规则排到后面了」。
                 if (
                         abs(lateral) >= self.room_lateral_threshold
                         and longitudinal
                         < self.room_minimum_door_longitudinal):
-                    continue
-                if (
+                    self.note_demotion("lateral_gate")
+                elif (
                         abs(lateral) < self.room_lateral_threshold
                         and longitudinal
                         < self.maximum_corridor_progress - 0.75):
+                    self.note_demotion("behind_progress")
+                elif (
+                        abs(lateral) >= self.room_lateral_threshold
+                        and self.matching_room_doorway(frontier) is None):
+                    self.note_demotion("no_matching_doorway")
+                # 门厅回退闸门(上层楼专用)。
+                #
+                # 五次坠落全部落在门厅段(y<7.84)——那里楼板由三条互不相连的板
+                # 拼成,中间两条缝是贯穿的开放空洞;走廊段是 20x28 m 的完整楼板,
+                # 一次都没摔过。井口对 2-D 栅格是 free(0),没有任何既有判据拦得住。
+                #
+                # ⚠️ 这条**依赖 mission 侧把交接点推进走廊**(见
+                # exit_upper_floor_without_doorway 的走廊双墙确认)。在那之前
+                # 入口锚点本身就落在门厅里(mf72 三楼 world y=5.78,门厅到 7.84
+                # 才结束),lon=0 不是走廊口,这条规则会失效——mf81 摔在 lon=+1.5,
+                # 正是这个原因。两处必须成对存在。
+                #
+                # 也不要退回用「比最深点后退了几米」来判:实测正常楼层本来就要
+                # 回退 9.32 m(一楼)、14.18 m(二楼)进房间补漏,而三楼致命那次是
+                # 12.15 m —— 落在正中间,这个量根本分不开正常与危险。
+                if (self.lobby_keepout_enabled
+                        and self.floor_id > 0
+                        and longitudinal < 0.0):
+                    self.note_rejection("lobby_keepout")
                     continue
-                doorway = None
-                if abs(lateral) >= self.room_lateral_threshold:
-                    doorway = self.matching_room_doorway(frontier)
-                    if doorway is None:
-                        continue
+                # 下面两条留作**硬排除**:它们是正确性判据,不是房门几何的启发式。
+                # 旧的 ROOM_PRIORITY_FALLBACK 同样保留了这两条。
                 if self.is_entry_transit_frontier(
                         frontier.goal_x, frontier.goal_y):
+                    self.note_rejection("entry_transit")
                     continue
                 if (
                         abs(lateral) >= self.room_lateral_threshold
                         and self.room_branch_key(longitudinal, lateral)
                         in self.completed_room_branches):
+                    self.note_rejection("completed_branch")
                     continue
             if point_near(
                 self.visited_goals,
@@ -3774,6 +4192,7 @@ class FrontierExplorer:
                 frontier.goal_y,
                 self.visited_radius,
             ):
+                self.note_rejection("visited")
                 continue
             state = failed_goal_state(
                 self.failed_goals,
@@ -3784,9 +4203,11 @@ class FrontierExplorer:
                 self.maximum_failures,
             )
             if state == "permanent":
+                self.note_rejection("permanent")
                 continue
             if state == "cooldown":
                 cooling = True
+                self.note_rejection("cooldown")
                 continue
             target = self.pose_for_frontier(frame, frontier)
             branch = None
@@ -3867,9 +4288,34 @@ class FrontierExplorer:
             if dispatched_state == "cooldown":
                 cooling = True
                 continue
+            # ⚠️ 不要在这里加"整条直线段必须连续已知自由"的检查。
+            #
+            # 上层门厅两侧确实有贯穿 7.84 m 的开放空洞(competition_scene.world:
+            # 每层门厅由 x[-10.00,-4.94] / x[-1.10,1.10] / x[4.14,10.00] 三条
+            # 互不相连的板拼成),四次坠落全部落在电梯井侧那条里。
+            #
+            # ⚠️ 订正(mf80 实测):此前这里写"井口格是 UNKNOWN 不是 occupied,
+            # known_free_segment 是唯一拦得住的判据"——**那是错的**。取 mf80
+            # 坠落时刻的地图原帧,沿机器人→目标的指令线段采样 29 点,
+            # **29/29 都是 0 = 确定 free**。所以 known_free_segment 不是拦不住,
+            # 是**主动放行**;costmap、make_plan、DWA 同理。
+            # **任何基于 2-D 占据栅格的判据对这类坠落都无解**,加在这里也一样。
+            # 唯一还剩的证据源是深度相机点云,或 Livox 回波的 z
+            # (比当前楼面低 2.6 m 的"地面"回波是悬崖),那是 floor_mapping 的事。
+            #
+            # 离线实测(把两轮里实际下发过的 move_base 目标逐个用真实地图帧和
+            # 真实 clearance 逻辑复算):
+            #     mf72  accepted=44  rejected=30  -> 40.5% 的**已经成功**的目标会被拒
+            #     mf73  accepted=36  rejected=28  -> 43.8%
+            # 被拒的都是合法的长程走廊目标(2.5~9.0 m),它们的直线弦切过尚未建图
+            # 的格子,而实际路径是沿走廊绕过去的。把它升为通用闸门会直接毁掉
+            # 现在能正常工作的一楼和二楼。
+            #
             reachable = self.path_exists(robot_pose, target)
             if reachable is None:
                 return None, None, cooling, True
+            if not reachable:
+                self.note_rejection("no_plan")
             if reachable:
                 if branch is not None and self.active_room_branch is None:
                     self.active_room_branch = branch
@@ -3932,6 +4378,22 @@ class FrontierExplorer:
                 "left with coverage unproven", branch,
             )
             return None, None, True, False
+
+        # ROOM_PRIORITY_FALLBACK 已删除(115 行)。
+        #
+        # 它存在的唯一理由是绕过上面那三道几何闸门;闸门降级成排序档位之后,
+        # 主循环已经会考虑每一个候选,这条通道成了死代码 —— 它施加的过滤
+        # (score / entry_transit / completed_branch / visited / 失败冷却 /
+        # path_exists)主循环全都有。
+        #
+        # 而它是近 21 轮里**唯一造成过运行中坠落**的代码:
+        #   mf60-mf72 共 13 轮,它不存在,坠落 0 次
+        #   mf73 引入;它真正选中目标的 3 次里,mf74 与 mf80 两次以坠楼告终
+        # 原因是它按 -score 排序,而电梯厅「最大的未知边界」就是开放竖井方向。
+        # 前任发现 mf74 后在这里加了 known_free_segment 守卫,前提是
+        # 「井口格是 UNKNOWN」——mf80 实测那是 **free(0)**,29/29 全 free,
+        # 所以那道守卫是**主动放行**,不是拦不住。守卫随本通道一并移除:
+        # 它挡不住它要挡的东西,却有实测的误拒率。
         return None, None, cooling, False
 
     def publish_frontiers(self, map_message, frontiers):
@@ -4349,6 +4811,7 @@ class FrontierExplorer:
             planner_unavailable = False
             rejected = {
                 "score": 0, "visited": 0, "history": 0, "unreachable": 0,
+                "detour": 0,
             }
             for frontier in frontiers:
                 reason = room_frontier_rejection(
@@ -4362,11 +4825,32 @@ class FrontierExplorer:
                     rejected[reason] += 1
                     continue
                 candidate = self.pose_for_frontier(frame, frontier)
-                reachable = self.path_exists(robot_pose, candidate)
+                reachable, planned_m = self.planned_path_length(
+                    robot_pose, candidate)
                 if reachable is None:
                     planner_unavailable = True
                     break
                 if reachable:
+                    # Re-score against what the trip actually costs.  The
+                    # admission bar is unchanged; only the cost term stops
+                    # being a straight line, which it never was.  Substituting
+                    # planned_m for distance_m is exactly
+                    #   information_gain_weight * length
+                    #   - distance_weight * planned_m
+                    effective = path_cost_adjusted_score(
+                        frontier.score, frontier.distance_m, planned_m,
+                        self.distance_weight)
+                    if effective < self.room_frontier_minimum_score:
+                        rejected["detour"] += 1
+                        rospy.loginfo(
+                            "room candidate (%.2f, %.2f) len=%.2f m: straight "
+                            "%.2f m scored %.2f but the planned path is "
+                            "%.2f m, so it is worth %.2f -- below %.2f",
+                            frontier.goal_x, frontier.goal_y,
+                            frontier.length_m, frontier.distance_m,
+                            frontier.score, planned_m, effective,
+                            self.room_frontier_minimum_score)
+                        continue
                     target = candidate
                     chosen = frontier
                     break
@@ -4379,10 +4863,12 @@ class FrontierExplorer:
                 "ROOM_FRONTIER_SELECTION branch=%r total=%d "
                 "rejected_score=%d rejected_visited=%d "
                 "rejected_failed_or_cooling=%d unreachable=%d "
+                "rejected_detour=%d "
                 "planner_unavailable=%s selected=%s",
                 branch, len(frontiers), rejected["score"],
                 rejected["visited"], rejected["history"],
-                rejected["unreachable"], planner_unavailable,
+                rejected["unreachable"], rejected["detour"],
+                planner_unavailable,
                 "none" if chosen is None
                 else "(%.2f, %.2f) score=%.2f" % (
                     chosen.goal_x, chosen.goal_y, chosen.score),
@@ -5755,8 +6241,18 @@ class FrontierExplorer:
         return state
 
     def wait_for_map_update(self, previous_version):
-        deadline = time.monotonic() + self.map_update_wait
-        while not rospy.is_shutdown() and time.monotonic() < deadline:
+        # 「等一张新地图要等多久」是物理问题(建图节点按仿真时间出图),按仿真钟计,
+        # 墙钟只做停摆兜底。原先只有 time.monotonic():RTF 0.16 时 2.0 墙钟秒
+        # 只买到 0.32 仿真秒,远不到一个出图周期,于是每个选择循环几乎立即返回,
+        # 三次「无候选」确认在 ~2 仿真秒内攒满(mf72 三楼实测 1.9 s)。
+        ros_deadline = rospy.Time.now() + rospy.Duration(self.map_update_wait)
+        wall_deadline = (
+            time.monotonic() + self.map_update_wait * self.wall_factor
+        )
+        while (
+                not rospy.is_shutdown()
+                and rospy.Time.now() < ros_deadline
+                and time.monotonic() < wall_deadline):
             self.check_cancel_safety_and_deadline()
             with self.lock:
                 if (
@@ -5773,6 +6269,109 @@ class FrontierExplorer:
 
     def reset_no_goal_confirmations(self):
         self.no_goal_evidence.reset()
+        self.unmet_quota_since = None
+
+    def quota_hold_reason(self):
+        """Refuse "explored" while the floor's room quota is demonstrably unmet.
+
+        ``room_completion_state``已经算出了 floor_complete,但它的返回值在
+        choose_frontier 里是被丢弃的(``_complete, revivable = ...``),配额的
+        唯一消费点是 post-quota 预算 —— 也就是说配额只能让楼层**更早**结束,
+        从来不能阻止它结束。mf72 三楼因此在 **0/4 个房间**的状态下正常完成。
+
+        这里把那个返回值接回来当前置条件。它只会让探索继续,不会让它停止。
+
+        兜底是必须的:如果这一层的房门确实识别不出来(比如 ROOMS_PER_FLOOR 与
+        配置不符,或者几何过滤把门全滤掉了),没有兜底就是死循环。所以配额不满
+        只买到一段**有界的**额外时间,用仿真钟计。到期后照常完成,但日志会明说
+        这一层是带着未满配额收工的 —— 静默丢分变成响亮的记录。
+        """
+        if self.floor_completion_target <= 0:
+            return None
+        complete, _revivable = room_completion_state(
+            self.completed_room_branches,
+            self.unproven_room_branches,
+            self.floor_completion_target,
+            self.room_revisit_attempts,
+        )
+        if complete:
+            return None
+        now = rospy.Time.now()
+        if self.unmet_quota_since is None:
+            self.unmet_quota_since = now
+            rospy.logwarn(
+                "floor completion held: only %d/%d room transactions have "
+                "succeeded. No-frontier evidence is not proof a floor was "
+                "explored; continuing for up to %.0f sim s.",
+                len(self.completed_room_branches),
+                self.floor_completion_target,
+                self.unmet_quota_grace_sim,
+            )
+        spent = (now - self.unmet_quota_since).to_sec()
+        if spent < self.unmet_quota_grace_sim:
+            return (
+                "room quota %d/%d unmet; holding completion %.1f/%.1f sim s "
+                "while re-selecting" % (
+                    len(self.completed_room_branches),
+                    self.floor_completion_target,
+                    spent,
+                    self.unmet_quota_grace_sim,
+                )
+            )
+        rospy.logerr(
+            "FLOOR CLOSING WITH AN UNMET ROOM QUOTA: %d/%d after %.1f sim s "
+            "of continued selection. An unexplored room is exactly where an "
+            "unseen danger source would be.",
+            len(self.completed_room_branches),
+            self.floor_completion_target,
+            spent,
+        )
+        return None
+
+    def log_floor_done_record(self, map_message, evidence):
+        """One line carrying every fact the completion decision rested on.
+
+        Written because the failures of the last eight rounds were all
+        diagnosed by replaying bag frames offline -- the logs recorded the
+        *sequence* of states but never the *evidence*, so three inert fixes
+        survived unnoticed. Behaviour-free.
+        """
+        try:
+            free_cells = 0
+            if map_message is not None:
+                data = np.asarray(map_message.data, dtype=np.int16)
+                free_cells = int(
+                    np.count_nonzero((data >= 0) & (data <= self.free_threshold))
+                )
+            rejections = ", ".join(
+                "%s:%d" % (cause, count)
+                for cause, count in sorted(self.selection_rejections.items())
+            ) or "none"
+            demotions = ", ".join(
+                "%s:%d" % (cause, count)
+                for cause, count in sorted(self.selection_demotions.items())
+            ) or "none"
+            # loginfo, not logwarn: rospy WARN goes to stderr, which is buffered
+            # until the process exits when redirected to a file. A record whose
+            # entire purpose is observability must be readable while the run is
+            # still going (measured on mf80: FLOOR_DONE only appeared post-mortem).
+            rospy.loginfo(
+                "FLOOR_DONE frontiers_extracted=%d rejected{%s} demoted{%s} "
+                "free_cells=%d roi_cells=%d coverage=%.1f%% rooms=%d/%d "
+                "unproven=%d evidence=[%s]",
+                self.selection_frontier_count,
+                rejections,
+                demotions,
+                free_cells,
+                self.coverage_denominator,
+                100.0 * self.coverage,
+                len(self.completed_room_branches),
+                self.floor_completion_target,
+                len(self.unproven_room_branches),
+                evidence.get("reason", ""),
+            )
+        except Exception as error:            # never let a log kill a mission
+            rospy.logwarn("FLOOR_DONE record unavailable: %s", error)
 
     def verify_return_pose(self):
         current = self.pose_in_frame(self.start_pose.header.frame_id)
@@ -5928,8 +6527,21 @@ class FrontierExplorer:
             self.corridor_probe_barren = 0
             self.corridor_probe_exhausted = False
             self.corridor_probe_known_before = None
+            self.room_quota_satisfied = False
+            self.post_quota_started = None
+            self.unmet_quota_since = None
+            self.selection_rejections = {}
+            self.selection_demotions = {}
+            self.selection_frontier_count = 0
+            self.coverage_denominator = 0
+            # The third argument is a floor on how long the "no eligible
+            # candidate" evidence must have been continuously true, in sim
+            # seconds. Without it the distinct-content count alone closes a
+            # floor in ~2 s (mf72 floor 2: 1.9 s, 8.7 % coverage, 0/4 rooms,
+            # all three danger sources 20+ m away).
             self.no_goal_evidence = NoFrontierEvidence(
                 self.empty_confirmations,
+                self.stable_no_frontier_duration,
                 self.stable_no_frontier_duration,
             )
             self.make_plan_failure_since_wall = None
@@ -6024,6 +6636,7 @@ class FrontierExplorer:
                 self.action_identity,
             )
             self.publish_roi(initial_map)
+            self.coverage_denominator = int(allowed.sum())
             if self.roi_enabled:
                 rospy.loginfo(
                     "single-floor ROI: entry frame=%s x=%.2f y=%.2f, "
@@ -6034,7 +6647,7 @@ class FrontierExplorer:
                     self.floor_entry_pose.pose.position.y,
                     len(self.roi_local),
                     self.roi_boundary_margin,
-                    int(allowed.sum()),
+                    self.coverage_denominator,
                 )
 
             if goal.entry_mode == goal.LEGACY_MAIN_ENTRANCE:
@@ -6311,6 +6924,12 @@ class FrontierExplorer:
                         continue
                     evidence = self.register_no_goal_confirmation(version)
                     if evidence["complete"]:
+                        held = self.quota_hold_reason()
+                        if held is not None:
+                            self.transition("UPDATE_COVERAGE", held)
+                            self.wait_for_map_update(version)
+                            continue
+                        self.log_floor_done_record(map_message, evidence)
                         completion_reason = (
                             "%s; remaining targets are visited or permanently "
                             "unreachable after valid navigation attempts"
@@ -6324,6 +6943,19 @@ class FrontierExplorer:
                     self.wait_for_map_update(version)
                     continue
 
+                # 配额已满足时，额外探索有界：预算用尽就收工，避免在
+                # 长尾 frontier 上无限期消耗时间分。
+                if self.room_quota_satisfied and self.post_quota_started:
+                    spent_sim = (
+                        rospy.Time.now() - self.post_quota_started[0]).to_sec()
+                    spent_wall = time.monotonic() - self.post_quota_started[1]
+                    if (spent_sim >= self.post_quota_budget_sim
+                            or spent_wall >= self.post_quota_budget_wall):
+                        completion_reason = (
+                            "room quota met and the post-quota exploration "
+                            "budget (%.0f sim s) is spent" %
+                            self.post_quota_budget_sim)
+                        break
                 self.reset_no_goal_confirmations()
                 self.publish_target(target, "frontier_target")
                 self.transition(
@@ -6471,7 +7103,17 @@ class FrontierExplorer:
                                     )
                                 )
                                 rospy.loginfo(completion_reason)
-                                break
+                                if not self.room_quota_satisfied:
+                                    self.room_quota_satisfied = True
+                                    self.post_quota_started = (
+                                        rospy.Time.now(), time.monotonic())
+                                    rospy.logwarn(
+                                        "room quota met, but a quota is not "
+                                        "proof the floor is explored; "
+                                        "continuing until no frontier remains "
+                                        "(budget %.0f sim s)",
+                                        self.post_quota_budget_sim)
+                                    self.reset_no_goal_confirmations()
                     self.visited_goals.append(
                         (target.pose.position.x, target.pose.position.y)
                     )

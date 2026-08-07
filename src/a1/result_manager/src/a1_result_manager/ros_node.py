@@ -110,6 +110,7 @@ class ResultManagerNode:
         # has to make the discrepancy visible.
         self.world_anchor_mode = str(rospy.get_param("~world_anchor_mode", "audit"))
         self.world_z_mode = str(rospy.get_param("~world_z_mode", "from_robot_start"))
+        self.floor_height_m = float(rospy.get_param("~floor_height_m", 2.6))
 
         self._sources: List[ResultSource] = []
         self._next_source_id = 1
@@ -200,7 +201,26 @@ class ResultManagerNode:
         generation = int(body.get("mission_generation", self._generation))
         if generation in self._anchors:
             return
-        anchor = world_anchor_from_start(generation, map_pose, self._world_start)
+        # World z for this generation's base pose.  robot_start.z is the spawn
+        # DROP height (0.6), not a standing height, so using it directly lifts
+        # every reported source by ~0.3 m -- competition run05 lost a source by
+        # 37 mm that way.  floor_mapping measures the floor plane in the same
+        # odom frame the anchor is taken in, so map_z - floor_z is the standing
+        # height, and floor_index * floor_height_m is where that floor sits.
+        world_start = dict(self._world_start)
+        floor_index = body.get("floor_index")
+        floor_z = _as_optional_float(body.get("anchor_floor_z"))
+        if floor_index is not None and floor_z is not None:
+            world_start["z"] = (int(floor_index) * self.floor_height_m
+                                + (float(map_pose[2]) - floor_z))
+        elif int(body.get("floor_index") or 0) != 0:
+            # An upper floor with no floor plane measured cannot be placed in
+            # z. Withhold rather than emit a source that is both a miss and a
+            # false alarm; the evaluator charges twice for that.
+            rospy.logwarn("generation %d has no floor plane; anchor withheld",
+                          generation)
+            return
+        anchor = world_anchor_from_start(generation, map_pose, world_start)
         self._anchors[generation] = anchor
         self._dirty = True
         rospy.loginfo(

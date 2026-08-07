@@ -38,6 +38,8 @@ from elevator_exit import (
     choose_corridor_side,
     known_free_run_in_grid,
 )
+from home_frame import propagate_home_transform, inverse, transform_pose
+from transfer_settle import YawQuiescence
 from nav_msgs.msg import OccupancyGrid
 from a1_navigation_interfaces.msg import (DoorwayArray, ExploreFloorAction,
                                           ExploreFloorGoal, WallSegmentArray)
@@ -298,6 +300,14 @@ class MultiFloorMission:
             "~startup/mapping_timeout_wall", 180.0))
         self.fixed_stand_settle_sim = float(rospy.get_param(
             "~startup/fixed_stand_settle_sim_s", 3.0))
+        self.floor_plane_settle_sim = float(rospy.get_param(
+            "~startup/floor_plane_settle_sim", 3.0))
+        self.floor_plane_settle_wall = float(rospy.get_param(
+            "~startup/floor_plane_settle_wall", 30.0))
+        self.floor_plane_samples = int(rospy.get_param(
+            "~startup/floor_plane_samples", 4))
+        self.floor_plane_tolerance = float(rospy.get_param(
+            "~startup/floor_plane_tolerance", 0.02))
         self.special_test_mode = bool(rospy.get_param(
             "~mission/special_test_mode", False))
         self.transfer_turn_max_speed = float(rospy.get_param(
@@ -318,8 +328,10 @@ class MultiFloorMission:
         # Mission-side no-progress watchdog. Deliberately generous: this is a
         # fault bound to stop an unreachable goal from spinning the robot off a
         # floor, not a performance target.
+        self.exit_map_wait_sim = float(rospy.get_param(
+            "~upper_floor/exit_map_wait_sim", 10.0))
         self.exit_map_wait = float(rospy.get_param(
-            "~upper_floor/exit_map_wait_wall", 45.0))
+            "~upper_floor/exit_map_wait_wall", 100.0))
         self.exit_step_maximum = float(rospy.get_param(
             "~upper_floor/exit_step_maximum", 0.85))
         self.exit_minimum_goal = float(rospy.get_param(
@@ -338,8 +350,10 @@ class MultiFloorMission:
         # not a door direction.  On every upper floor, identify one long,
         # footprint-wide lobe in three distinct current-generation grids and
         # settle to it before locking arrival_exit_yaws.
+        self.opening_map_ready_wait_sim = float(rospy.get_param(
+            "~upper_floor/opening_alignment/map_ready_wait_sim", 10.0))
         self.opening_map_ready_wait_wall = float(rospy.get_param(
-            "~upper_floor/opening_alignment/map_ready_wait_wall", 45.0))
+            "~upper_floor/opening_alignment/map_ready_wait_wall", 100.0))
         self.opening_map_ready_probe = float(rospy.get_param(
             "~upper_floor/opening_alignment/map_ready_probe", 0.10))
         # The Livox/rear occlusion can leave the car enclosure incomplete after
@@ -352,6 +366,8 @@ class MultiFloorMission:
             "~upper_floor/opening_alignment/active_scan_timeout_wall", 90.0))
         self.opening_active_scan_timeout_sim = float(rospy.get_param(
             "~upper_floor/opening_alignment/active_scan_timeout_sim", 20.0))
+        self.opening_active_scan_no_progress_sim = float(rospy.get_param(
+            "~upper_floor/opening_alignment/active_scan_no_progress_sim", 5.0))
         self.opening_active_scan_no_progress_wall = float(rospy.get_param(
             "~upper_floor/opening_alignment/active_scan_no_progress_wall",
             15.0))
@@ -360,8 +376,10 @@ class MultiFloorMission:
             0.20))
         self.opening_active_scan_settle_wall = float(rospy.get_param(
             "~upper_floor/opening_alignment/active_scan_settle_wall", 0.5))
+        self.opening_wait_sim = float(rospy.get_param(
+            "~upper_floor/opening_alignment/wait_sim", 15.0))
         self.opening_wait_wall = float(rospy.get_param(
-            "~upper_floor/opening_alignment/wait_wall", 20.0))
+            "~upper_floor/opening_alignment/wait_wall", 150.0))
         self.opening_max_range = float(rospy.get_param(
             "~upper_floor/opening_alignment/max_range", 2.75))
         self.opening_ray_count = int(rospy.get_param(
@@ -498,12 +516,22 @@ class MultiFloorMission:
             "~upper_floor/corridor_minimum_run", 2.0))
         self.corridor_run_margin = float(rospy.get_param(
             "~upper_floor/corridor_run_margin", 0.6))
+        # 交接前必须确认走廊双墙。没确认就再走几步，用的是同一套已验证的
+        # advance_map_checked，不新增运动模式。
+        self.corridor_confirm_attempts = int(rospy.get_param(
+            "~upper_floor/corridor_confirm_attempts", 3))
+        self.corridor_confirm_step = float(rospy.get_param(
+            "~upper_floor/corridor_confirm_step", 2.0))
+        self.corridor_confirm_minimum_step = float(rospy.get_param(
+            "~upper_floor/corridor_confirm_minimum_step", 0.5))
         self.corridor_minimum_advantage = float(rospy.get_param(
             "~upper_floor/corridor_minimum_advantage", 0.40))
         self.corridor_entry_yaw_tolerance = float(rospy.get_param(
             "~upper_floor/corridor_entry_yaw_tolerance", 0.50))
+        self.corridor_map_wait_sim = float(rospy.get_param(
+            "~upper_floor/corridor_map_wait_sim", 8.0))
         self.corridor_map_wait = float(rospy.get_param(
-            "~upper_floor/corridor_map_wait_wall", 30.0))
+            "~upper_floor/corridor_map_wait_wall", 80.0))
         self.corridor_probe_max_range = float(rospy.get_param(
             "~upper_floor/corridor_probe_max_range",
             rospy.get_param("~upper_floor/corridor_forward", 5.0)))
@@ -528,16 +556,20 @@ class MultiFloorMission:
             "~elevator/recenter_minimum_displacement", 0.02))
         self.nav_arrival_band = float(rospy.get_param(
             "~mission/no_progress_arrival_band", 0.70))
+        self.nav_progress_timeout_sim = float(rospy.get_param(
+            "~mission/no_progress_timeout_sim", 12.0))
         self.nav_progress_timeout = float(rospy.get_param(
-            "~mission/no_progress_timeout_wall", 12.0))
+            "~mission/no_progress_timeout_wall", 120.0))
         self.nav_progress_distance = float(rospy.get_param(
             "~mission/no_progress_distance", 0.15))
         self.nav_progress_yaw = float(rospy.get_param(
             "~mission/no_progress_yaw", 0.35))
         self.perception_max_age_sim = float(rospy.get_param(
             "~elevator/perception_max_age_sim", 1.5))
+        self.upper_axis_wait_sim = float(rospy.get_param(
+            "~upper_floor/corridor_axis/wait_sim", 3.0))
         self.upper_axis_wait_wall = float(rospy.get_param(
-            "~upper_floor/corridor_axis/wait_wall", 5.0))
+            "~upper_floor/corridor_axis/wait_wall", 30.0))
         self.upper_axis_max_age_sim = float(rospy.get_param(
             "~upper_floor/corridor_axis/max_age_sim", 1.5))
         self.upper_axis_maximum_correction = float(rospy.get_param(
@@ -558,6 +590,40 @@ class MultiFloorMission:
                          self.on_floor_grid, queue_size=1)
         self.transfer_turn_settle = float(rospy.get_param(
             "~elevator/transfer_turn_settle_wall", 0.5))
+        # SE(2) transform from the home (first) localization generation to the
+        # current one, rebuilt at every floor change.  Identity while we are
+        # still in the generation the world anchor was taken in.
+        self.home_from_current = (0.0, 0.0, 0.0)
+        # The spawn pose expressed in the home generation; set once, when the
+        # robot is provably standing on team_scene_info.json's robot_start.
+        self.spawn_in_home = None
+        # Quiescence hold between the pre-transfer turn and ELEVATOR_CALL.
+        # Deliberately its own block rather than more transfer_turn_* knobs:
+        # "point the right way" and "have actually stopped" are two different
+        # postconditions, and mf61 satisfied the first while failing the
+        # second.  settle_body_before_elevator_call() carries the measurements.
+        self.transfer_settle_minimum_sim = float(rospy.get_param(
+            "~elevator/transfer_settle/minimum_hold_sim", 2.0))
+        self.transfer_settle_minimum_wall = float(rospy.get_param(
+            "~elevator/transfer_settle/minimum_hold_wall", 20.0))
+        self.transfer_settle_timeout_sim = float(rospy.get_param(
+            "~elevator/transfer_settle/timeout_sim", 8.0))
+        self.transfer_settle_timeout_wall = float(rospy.get_param(
+            "~elevator/transfer_settle/timeout_wall", 80.0))
+        self.transfer_settle_reference_age = float(rospy.get_param(
+            "~elevator/transfer_settle/quiescent_reference_max_age_sim", 0.5))
+        self.transfer_settle_quiescent_yaw = math.radians(float(rospy.get_param(
+            "~elevator/transfer_settle/quiescent_yaw_deg", 0.25)))
+        if (self.transfer_settle_minimum_sim < 0.0 or
+                self.transfer_settle_timeout_sim <
+                self.transfer_settle_minimum_sim or
+                self.transfer_settle_reference_age <= 0.0 or
+                self.transfer_settle_quiescent_yaw <= 0.0 or
+                self.transfer_settle_minimum_wall <=
+                self.transfer_settle_minimum_sim or
+                self.transfer_settle_timeout_wall <=
+                self.transfer_settle_timeout_sim):
+            raise ValueError("invalid elevator transfer-settle parameters")
 
     def controller_ready_cb(self, message):
         with self.lock:
@@ -926,6 +992,19 @@ class MultiFloorMission:
             message.header.stamp = rospy.Time.now()
             self.joy_pub.publish(message)
             time.sleep(0.02)
+
+    def budget_spent(self, started_ros, started_wall, sim_budget, wall_budget):
+        """预算按**仿真秒**计；墙钟只兜底 /clock 停摆，必须 >= 10 倍。
+
+        「一个物理过程可以花多久」是物理问题，不该随评委机器的负载而变。
+        这套仿真的 RTF 实测 0.12-0.29，纯墙钟预算在慢机器上会提前掐断本来
+        够用的等待——本族已经致命七次（A7/A8/A9/A10/B6，以及 mf68 死于
+        opening_alignment 的 20 墙钟秒，那在 RTF 0.15 下只买到 3 仿真秒，
+        连三帧 0.5 Hz 的地图都采不满）。
+        """
+        if (rospy.Time.now() - started_ros).to_sec() >= sim_budget:
+            return True
+        return (time.monotonic() - started_wall) >= wall_budget
 
     def wait_sim(self, seconds):
         deadline = rospy.Time.now() + rospy.Duration(seconds)
@@ -1540,6 +1619,16 @@ class MultiFloorMission:
         # still stable.  The elevator preserves body yaw during teleport, so
         # the robot arrives already looking through the target-floor doorway.
         self.turn_inside_elevator_before_transfer()
+        # The turn stops commanding as soon as the heading error first enters
+        # tolerance, and the body keeps unwinding afterwards.  Wait that out
+        # before anything samples the pose this floor change is anchored on.
+        self.settle_body_before_elevator_call()
+        # The body is now still, so this pose and the one sampled after the
+        # estimator restarts are the same physical pose -- the pair that
+        # carries the home frame across the generation boundary.
+        departure = self.current_pose()
+        source_base = (departure.pose.position.x, departure.pose.position.y,
+                       yaw_of(departure.pose.orientation))
         self.emit("ELEVATOR_CALL", "calling target floor while facing the door",
                   target_floor=target, z_before=before)
         rospy.wait_for_service("/call_elevator", timeout=15.0)
@@ -1619,6 +1708,105 @@ class MultiFloorMission:
                   source_floor=old_floor, target_floor=target,
                   z_before=before, z_after=after,
                   provisional_arrival_yaw=arrival_yaw)
+        self.publish_world_anchor(source_base, arrival, target)
+
+    def wait_for_stable_floor_plane(self):
+        """Wait until floor_mapping's ground plane stops moving.
+
+        mf64 measured the cost of not doing this: the floor-zero anchor was
+        taken 0.05 sim s after STARTUP_MAPPING_READY and froze floor_z at
+        -0.193 (a 0.193 m standing height), while the floor-1 anchor taken
+        325 s in read -0.325, matching the 0.289-0.316 measured across rounds.
+        That 0.126 m then rides on every floor-zero source for the whole run.
+
+        Bounded and non-fatal by construction: if the plane never settles we
+        anchor with whatever is available, exactly as before this existed. It
+        only ever delays MISSION_TIMING_START, and only by a few sim seconds
+        against a 60 s scoring granularity.
+        """
+        start_ros = rospy.Time.now()
+        start_wall = time.monotonic()
+        samples = []
+        while not rospy.is_shutdown():
+            elapsed_sim = max(0.0, (rospy.Time.now() - start_ros).to_sec())
+            elapsed_wall = time.monotonic() - start_wall
+            value = self.current_floor_z()
+            if value is not None:
+                samples.append(value)
+                samples = samples[-self.floor_plane_samples:]
+                if (len(samples) >= self.floor_plane_samples
+                        and max(samples) - min(samples)
+                        <= self.floor_plane_tolerance):
+                    self.emit("STARTUP_FLOOR_PLANE_READY",
+                              "ground plane settled before the world anchor",
+                              floor_z=round(value, 4),
+                              spread=round(max(samples) - min(samples), 4),
+                              waited_sim_s=round(elapsed_sim, 3))
+                    return
+            if (elapsed_sim >= self.floor_plane_settle_sim
+                    or elapsed_wall >= self.floor_plane_settle_wall):
+                self.emit("STARTUP_FLOOR_PLANE_UNSETTLED",
+                          "ground plane still moving; anchoring anyway",
+                          floor_z=None if value is None else round(value, 4),
+                          spread=(None if len(samples) < 2 else
+                                  round(max(samples) - min(samples), 4)),
+                          waited_sim_s=round(elapsed_sim, 3))
+                return
+            # Wall sleep so the wall backstop stays reachable on a stalled clock.
+            time.sleep(0.1)
+
+    def current_floor_z(self):
+        """Height of the mapped floor plane in the current odom frame.
+
+        floor_mapping measures this directly (`ground_->floorZ()`); it is the
+        only legal way to recover how tall the robot is standing, which the
+        world z needs and robot_start.z cannot give (0.6 is the spawn drop
+        height, not a standing height -- measured 0.289-0.316).
+        """
+        with self.lock:
+            if self.mapping is None:
+                return None
+            values = self.mapping[1]
+        try:
+            return float(values.get("floor_z"))
+        except (TypeError, ValueError):
+            return None
+
+    def publish_world_anchor(self, source_base, arrival, floor_index):
+        """Re-express the world anchor in the generation we just entered.
+
+        world_from_current = world_from_home * home_from_current.  The left
+        factor is result_manager's WorldAnchor, built from robot_start; this
+        supplies the right factor by chaining one pose-preserving transfer at a
+        time, then hands the result over in exactly the form the anchor already
+        accepts -- the spawn pose expressed in the new generation's frame. No
+        arithmetic changes on the result_manager side.
+
+        Emitting an anchor is deliberately unconditional: even when the z part
+        is unusable the audit file then shows what the xy transform produced,
+        which is the only way to tell a good transform from a bad one before
+        trusting it.
+        """
+        if self.spawn_in_home is None:
+            rospy.logwarn("no home spawn pose; skipping world anchor for floor %d",
+                          floor_index)
+            return
+        target_base = (arrival.pose.position.x, arrival.pose.position.y,
+                       yaw_of(arrival.pose.orientation))
+        self.home_from_current = propagate_home_transform(
+            self.home_from_current, source_base, target_base)
+        spawn_here = transform_pose(inverse(self.home_from_current),
+                                    self.spawn_in_home)
+        self.emit("WORLD_ANCHOR",
+                  "home frame carried across the floor change",
+                  anchor_x=spawn_here[0], anchor_y=spawn_here[1],
+                  anchor_z=arrival.pose.position.z,
+                  anchor_yaw=spawn_here[2],
+                  floor_index=floor_index,
+                  anchor_floor_z=self.current_floor_z(),
+                  home_from_current_x=self.home_from_current[0],
+                  home_from_current_y=self.home_from_current[1],
+                  home_from_current_yaw=self.home_from_current[2])
 
     def supervisor_running_after(self, restart_stamp, previous_generation):
         """Observe completion of the supervisor's asynchronous restart."""
@@ -1751,6 +1939,102 @@ class MultiFloorMission:
         finally:
             self.behavior_cmd_pub.publish(Twist())
         raise MissionFailure("timeout turning toward the elevator door before transfer")
+
+    def settle_body_before_elevator_call(self):
+        """Hold zero velocity until the body has actually stopped turning.
+
+        The pre-transfer turn declares itself done the moment the heading error
+        first falls inside transfer_turn_tolerance, and the body then unwinds.
+        Measured on mf61 referee truth, yaw travelled over the ~6 sim s after
+        the turn published zero:
+
+            transfer 0->1   +13.44 deg     the turn itself was -165.4 deg
+            transfer 1->2    -3.19 deg     the turn itself was +163.7 deg
+            transfer 2->0    -3.12 deg     the turn itself was +174.9 deg
+
+        always opposite the turn: an elastic unwind after decelerating from
+        about 105 deg/s.  /a1/localization/odom sees the same motion (+13.44
+        estimated against +13.40 truth at t+6 s on 0->1), so this is the body
+        moving, and it is observable without any truth topic.
+
+        Why the mission has to care.  The map->world transform for an upper
+        floor is built by expressing ONE physical pose in the outgoing
+        localization generation and the same physical pose in the incoming one.
+        The incoming generation anchors when FAST-LIO reinitialises, which mf61
+        timed at 10.9 / 10.7 / 4.1 sim s after ELEVATOR_CALL -- always after the
+        unwind has finished.  Sampling the outgoing pose at ELEVATOR_CALL, while
+        the body is still unwinding, hands that pair two different physical
+        headings: 13.47 deg on mf61.  13.47 deg displaces a source 5 m from the
+        robot by 1.16 m, past the 1.0 m matching threshold in
+        docs/evaluation.md, so every upper-floor detection would miss.
+
+        This deliberately does NOT lengthen transfer_turn_settle_wall.  That
+        value gates on "the heading error is still inside tolerance", and the
+        unwind walks the error back OUT of the 0.20 rad band -- mf61's first
+        transfer finished at 0.168 rad and then unwound 0.235 rad more.  A
+        longer hold there would re-arm the turn controller against the rebound
+        instead of waiting it out, and could spend the 20 sim s turn budget.
+        Stopping is a different postcondition from pointing, so it gets its own
+        bounded wait.
+
+        Bounded on purpose: this can expire but never fails the mission.  If the
+        body is not quiet within the budget we proceed anyway and publish the
+        residual, so a slower rebound arrives as a number in the next round
+        rather than as a silently wrong transform.
+        """
+        monitor = YawQuiescence(
+            reference_max_age_s=self.transfer_settle_reference_age,
+            quiescent_yaw=self.transfer_settle_quiescent_yaw,
+            minimum_hold_s=self.transfer_settle_minimum_sim)
+        start_ros = rospy.Time.now()
+        start_wall = time.monotonic()
+        elapsed_sim = 0.0
+        reason = "sim budget expired with the body still moving"
+        try:
+            while not rospy.is_shutdown():
+                # The behavior channel outranks navigation in twist_mux, so
+                # keep asserting zero rather than merely stopping publishing.
+                self.behavior_cmd_pub.publish(Twist())
+                elapsed_sim = max(0.0, (rospy.Time.now() - start_ros).to_sec())
+                elapsed_wall = time.monotonic() - start_wall
+                try:
+                    pose = self.current_pose()
+                    settled = monitor.observe(pose.header.stamp.to_sec(),
+                                              yaw_of(pose.pose.orientation))
+                except MissionFailure:
+                    # No pose is not the same as no motion.
+                    settled = False
+                if settled:
+                    reason = "body quiescent"
+                    break
+                if elapsed_sim >= self.transfer_settle_timeout_sim:
+                    break
+                if elapsed_wall >= self.transfer_settle_timeout_wall:
+                    reason = "wall-clock backstop fired (stalled /clock?)"
+                    break
+                if (elapsed_sim < self.transfer_settle_minimum_sim and
+                        elapsed_wall >= self.transfer_settle_minimum_wall):
+                    reason = "wall-clock backstop fired before the minimum hold"
+                    break
+                # time.sleep, not rospy.sleep: rospy.sleep follows /clock, so a
+                # stalled clock would park this loop inside the sleep and the
+                # wall-clock backstops above would never be evaluated.
+                time.sleep(0.05)
+        finally:
+            self.behavior_cmd_pub.publish(Twist())
+        self.emit(
+            "ELEVATOR_PRETRANSFER_SETTLED",
+            "held still before calling the elevator: %s" % reason,
+            hold_sim_s=round(elapsed_sim, 3),
+            hold_wall_s=round(time.monotonic() - start_wall, 3),
+            quiescent=(reason == "body quiescent"),
+            # yaw_drift_deg is the heading the old code handed to the
+            # cross-generation transform as though it had never happened.
+            yaw_drift_deg=(None if monitor.total_yaw is None
+                           else round(math.degrees(monitor.total_yaw), 3)),
+            residual_window_yaw_deg=(None if monitor.window_yaw is None
+                                     else round(math.degrees(monitor.window_yaw), 4)),
+            reference_window_sim_s=self.transfer_settle_reference_age)
 
     def mapping_healthy(self, previous_session=-1):
         with self.lock:
@@ -1947,6 +2231,7 @@ class MultiFloorMission:
         accumulated_yaw = 0.0
         best_progress = 0.0
         last_progress_wall = time.monotonic()
+        last_progress_ros = rospy.Time.now()
         deadline = time.monotonic() + self.opening_active_scan_timeout_wall
         start_ros = rospy.Time.now()
         completed = False
@@ -1984,8 +2269,11 @@ class MultiFloorMission:
                 if accumulated_yaw >= best_progress + 0.05:
                     best_progress = accumulated_yaw
                     last_progress_wall = time.monotonic()
-                elif (time.monotonic() - last_progress_wall >
-                      self.opening_active_scan_no_progress_wall):
+                    last_progress_ros = rospy.Time.now()
+                elif self.budget_spent(
+                        last_progress_ros, last_progress_wall,
+                        self.opening_active_scan_no_progress_sim,
+                        self.opening_active_scan_no_progress_wall):
                     raise MissionFailure(
                         "floor %d made no yaw progress during active opening "
                         "scan (%.1f/360.0 deg)" %
@@ -2027,9 +2315,8 @@ class MultiFloorMission:
     def align_to_upper_floor_opening(self, floor):
         """Wait for a decidable footprint, then lock one opening on three grids."""
         self.actively_scan_upper_floor_elevator(floor)
-        readiness_deadline = (
-            time.monotonic() + self.opening_map_ready_wait_wall)
-        detection_deadline = None
+        readiness_started = (rospy.Time.now(), time.monotonic())
+        detection_started = None
         ready_identity = None
         last_grid_stamp = None
         stable_identity = None
@@ -2039,11 +2326,14 @@ class MultiFloorMission:
         target_yaw = None
 
         while not rospy.is_shutdown():
-            now_wall = time.monotonic()
             if ready_identity is None:
-                if now_wall >= readiness_deadline:
+                if self.budget_spent(readiness_started[0], readiness_started[1],
+                                     self.opening_map_ready_wait_sim,
+                                     self.opening_map_ready_wait_wall):
                     break
-            elif now_wall >= detection_deadline:
+            elif self.budget_spent(detection_started[0], detection_started[1],
+                                   self.opening_wait_sim,
+                                   self.opening_wait_wall):
                 break
             pose = self.current_pose()
             identity_before = self.current_mapping_identity()
@@ -2060,7 +2350,7 @@ class MultiFloorMission:
                 if (ready_identity is not None and
                         ready_identity != identity_after):
                     ready_identity = None
-                    detection_deadline = None
+                    detection_started = None
             grid_stamp = grid.header.stamp.to_nsec()
             if grid_stamp <= 0 or grid_stamp == last_grid_stamp:
                 time.sleep(0.05)
@@ -2087,8 +2377,7 @@ class MultiFloorMission:
                     time.sleep(0.05)
                     continue
                 ready_identity = identity_after
-                detection_deadline = (
-                    time.monotonic() + self.opening_wait_wall)
+                detection_started = (rospy.Time.now(), time.monotonic())
                 stable_bearings = []
                 self.emit(
                     "ELEVATOR_OPENING_MAP_READY",
@@ -2546,10 +2835,12 @@ class MultiFloorMission:
                     % (label, self.exit_maximum_steps, advanced, distance))
             here = self.current_pose()
             remaining = distance - advanced
-            deadline = time.monotonic() + self.exit_map_wait
+            step_started = (rospy.Time.now(), time.monotonic())
             step = 0.0
             free_run = 0.0
-            while not rospy.is_shutdown() and time.monotonic() < deadline:
+            while not rospy.is_shutdown() and not self.budget_spent(
+                    step_started[0], step_started[1],
+                    self.exit_map_wait_sim, self.exit_map_wait):
                 probe_range = min(
                     step_maximum + self.exit_goal_margin,
                     max(minimum_goal + self.exit_goal_margin,
@@ -2666,10 +2957,12 @@ class MultiFloorMission:
                        required_clearance))
             here = self.current_pose()
             remaining = required_clearance - advanced
-            deadline = time.monotonic() + self.exit_map_wait
+            step_started = (rospy.Time.now(), time.monotonic())
             step = 0.0
             free_run = 0.0
-            while not rospy.is_shutdown() and time.monotonic() < deadline:
+            while not rospy.is_shutdown() and not self.budget_spent(
+                    step_started[0], step_started[1],
+                    self.exit_map_wait_sim, self.exit_map_wait):
                 probe_range = min(
                     self.exit_step_maximum + self.exit_goal_margin,
                     max(self.exit_minimum_goal + self.exit_goal_margin,
@@ -2747,13 +3040,15 @@ class MultiFloorMission:
         # Probe both perpendicular directions repeatedly while the lobby map
         # fills.  If both look equally open, direction is not proven and the
         # mission stays put instead of selecting a sign by tuple ordering.
-        deadline = time.monotonic() + self.corridor_map_wait
+        corridor_started = (rospy.Time.now(), time.monotonic())
         left_bearing = yaw_out + 0.5 * math.pi
         right_bearing = yaw_out - 0.5 * math.pi
         side = None
         left_run = right_run = 0.0
         here = self.current_pose()
-        while not rospy.is_shutdown() and time.monotonic() < deadline:
+        while not rospy.is_shutdown() and not self.budget_spent(
+                corridor_started[0], corridor_started[1],
+                self.corridor_map_wait_sim, self.corridor_map_wait):
             here = self.current_pose()
             left_run = self.known_free_run(
                 here.pose.position.x, here.pose.position.y,
@@ -2797,10 +3092,62 @@ class MultiFloorMission:
                 "floor %d corridor ingress advanced only %.2f m of a requested "
                 "%.2f m before the map stopped proving free space"
                 % (floor, achieved, requested))
-        final = self.current_pose()
-        entry = self.make_pose(final.pose.position.x, final.pose.position.y,
-                               yaw_corridor, frame)
-        entry = self.correct_upper_floor_entry_axis(entry)
+        # 交接点必须在**走廊里**，不能在门厅里。
+        #
+        # 每层门厅（y∈[0,7.85]）不是一整块地板：competition_scene.world 里它由
+        # x[-10.00,-4.94] / x[-1.10,1.10] / x[4.14,10.00] 三条互不相连的板拼成，
+        # 中间两条缝是贯穿 7.84 m 的开放空洞（楼梯井与电梯井侧）。而井口格对
+        # 2-D 栅格是 **free(0)**（mf80 实测沿指令线段 29/29 全 free），costmap、
+        # make_plan、known_free_segment 全都不反对走进去。
+        #
+        # 五次坠落全部落在 y<7.84 的门厅段，走廊段（20x28 m 完整楼板）一次都没摔过。
+        # 而三次最近的坠落都发生在**本函数把控制权交给探索器之后**：
+        #     mf74  394 EXPLORE_FLOOR -> 396 坠落（2 秒）
+        #     mf80  783 EXPLORE_FLOOR -> 785 坠落（2 秒）
+        #     mf81  798 EXPLORE_FLOOR -> 971 坠落（退回门厅）
+        # 交接点实测都在门厅里：mf72 三楼 world (0.69, 5.78)、mf80 (1.14, 6.67)
+        # ——后者机身已经探出楼板边缘 4 cm。A/B/C 分段返梯保护的是**出楼层**，
+        # 它没有失效，只是保护范围到这一刻为止，而这一刻恰好在危险区正中。
+        #
+        # 双墙走廊模型正是「我已经在走廊里」的自证据：走廊净宽 2.2 m，门厅没有
+        # 这样一对平行墙。所以把它从「一条被忽略的警告」升级为**交接前置条件**：
+        # 没确认就继续按已验证的 map-checked 分步往前走，直到确认为止；预算用尽
+        # 就**响亮地失败**（换层失败可重试），而不是把机器人丢在洞边上交接。
+        entry = None
+        for attempt in range(self.corridor_confirm_attempts + 1):
+            final = self.current_pose()
+            candidate = self.make_pose(
+                final.pose.position.x, final.pose.position.y,
+                yaw_corridor, frame)
+            entry, verified = self.correct_upper_floor_entry_axis(candidate)
+            if verified:
+                break
+            if attempt >= self.corridor_confirm_attempts:
+                raise MissionFailure(
+                    "floor %d handover refused: the corridor wall pair was "
+                    "never confirmed after %d extra map-checked advances, so "
+                    "the robot is still in the lobby where the floor slab has "
+                    "open voids on both sides" % (
+                        floor, self.corridor_confirm_attempts))
+            here = self.current_pose()
+            run = self.known_free_run(
+                here.pose.position.x, here.pose.position.y,
+                yaw_corridor, self.corridor_probe_max_range, here)
+            extra = min(self.corridor_confirm_step,
+                        max(0.0, run - self.corridor_run_margin))
+            if extra < self.corridor_confirm_minimum_step:
+                raise MissionFailure(
+                    "floor %d handover refused: corridor unconfirmed and the "
+                    "map proves only %.2f m of free space ahead (need %.2f m "
+                    "to keep advancing out of the lobby)"
+                    % (floor, run, self.corridor_confirm_minimum_step))
+            rospy.logwarn(
+                "floor %d corridor unconfirmed (attempt %d/%d); advancing a "
+                "further %.2f m before handing over to exploration",
+                floor, attempt + 1, self.corridor_confirm_attempts, extra)
+            self.advance_map_checked(
+                yaw_corridor, extra,
+                "floor %d corridor confirm" % floor, floor)
         with self.lock:
             self.floor_entry = copy.deepcopy(entry)
         self.emit("UPPER_FLOOR_MAIN_CORRIDOR",
@@ -2830,11 +3177,13 @@ class MultiFloorMission:
         stable LiDAR wall segments in this mapping session.
         """
         reference_yaw = yaw_of(declared_entry.pose.orientation)
-        deadline = time.monotonic() + self.upper_axis_wait_wall
+        axis_started = (rospy.Time.now(), time.monotonic())
         last_reason = "no wall snapshot"
         achieved = self.current_pose()
         estimate = None
-        while not rospy.is_shutdown() and time.monotonic() < deadline:
+        while not rospy.is_shutdown() and not self.budget_spent(
+                axis_started[0], axis_started[1],
+                self.upper_axis_wait_sim, self.upper_axis_wait_wall):
             achieved = self.current_pose()
             with self.lock:
                 message = copy.deepcopy(self.wall_message)
@@ -2898,7 +3247,7 @@ class MultiFloorMission:
                 y=corrected.pose.position.y,
                 yaw=reference_yaw,
             )
-            return corrected
+            return corrected, False
 
         set_yaw(corrected.pose.orientation, estimate.yaw)
         rospy.loginfo(
@@ -2922,7 +3271,7 @@ class MultiFloorMission:
             left_wall=estimate.left_id,
             right_wall=estimate.right_id,
         )
-        return corrected
+        return corrected, True
 
     def complete_upper_floor_and_return_to_a(self, floor, special_test):
         """Run the shared F1/F2 exit and staged generation-local return."""
@@ -3041,12 +3390,19 @@ class MultiFloorMission:
         # that pose in the Gazebo world frame, and pairing the two is the only
         # permitted way to put detections into the world frame the result file
         # is specified in; there is no world frame in TF.
+        # Freeze the anchor only once the ground plane has stopped moving:
+        # result_manager keeps the FIRST anchor per generation, so an early
+        # floor_z is baked into every floor-zero world z for the whole run.
+        self.wait_for_stable_floor_plane()
+        self.spawn_in_home = (spawn.pose.position.x, spawn.pose.position.y, yaw)
         self.emit("MISSION_TIMING_START",
                   "exploration clock started at the published start pose",
                   anchor_x=spawn.pose.position.x,
                   anchor_y=spawn.pose.position.y,
                   anchor_z=spawn.pose.position.z,
-                  anchor_yaw=yaw)
+                  anchor_yaw=yaw,
+                  floor_index=0,
+                  anchor_floor_z=self.current_floor_z())
         self.explore_floor(0, entry0, True)
         self.enter_elevator(0)
         self.transfer(0, 1)

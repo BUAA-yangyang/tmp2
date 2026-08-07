@@ -1,5 +1,11 @@
 <launch>
-  <arg name="target_frame" default="map"/>
+  <!-- Must match config/danger_perception.yaml: the <param> below OVERRIDES
+       the value <rosparam> loads from that file, so a change made only in the
+       yaml is silently discarded. mf64 proved it - the yaml said odom and the
+       node still logged target_frame=map, dropping every detection.
+        is not published by anything in this workspace; see the yaml for
+       why odom rather than world. -->
+  <arg name="target_frame" default="odom"/>
   <arg name="enable_tf" default="true"/>
   <arg name="publish_debug_images" default="true"/>
 

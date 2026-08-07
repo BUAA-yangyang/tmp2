@@ -140,25 +140,51 @@ class FailedGoal:
 class NoFrontierEvidence:
     """Accumulate completion evidence without counting repeated map headers.
 
-    Completion is permitted either after the configured number of distinct map
-    *contents* or after the same eligible, frontier-free content remains stable
-    for a ROS-time dwell.  Callers must not call ``observe`` while a retry is in
-    cooldown or the planner is degraded.
+    Two things must hold before a floor may be called explored:
+
+    1. Either the configured number of distinct map *contents* has produced no
+       eligible candidate, or the same content has stayed candidate-free for a
+       dwell.
+    2. A *minimum* amount of ROS time has passed since the evidence began.
+
+    (2) is not redundant.  ``version`` is a content fingerprint, and a live
+    LiDAR map differs from frame to frame even with the robot parked, so (1)
+    alone is satisfied by three consecutive selection cycles -- about two
+    simulated seconds.  Measured on mf72 floor 2: ENTERED_FLOOR at sim 735.40,
+    EXPLORATION_DONE at 737.30, with 13852 free cells against a 159876-cell ROI
+    (8.7 % coverage) and 22 m of frontier still on the map.  The floor was
+    declared explored 1.9 s after arriving on it, and the three danger sources
+    on that floor were 20.5 / 27.0 / 29.1 m away -- the whole 14-point
+    recognition score.
+
+    Why a minimum duration rather than requiring *both* (1) and the stable
+    dwell: a new distinct content resets ``stable_since``, so on a map whose
+    fingerprint changes every frame the dwell can never accumulate and the
+    floor would never complete at all.  A monotone timer since the first
+    observation cannot deadlock that way.
+
+    Callers must not call ``observe`` while a retry is in cooldown or the
+    planner is degraded.
     """
 
-    def __init__(self, distinct_required, stable_duration):
+    def __init__(self, distinct_required, stable_duration,
+                 minimum_duration=0.0):
         if int(distinct_required) < 1:
             raise ValueError("distinct_required must be positive")
         if not math.isfinite(stable_duration) or stable_duration <= 0.0:
             raise ValueError("stable_duration must be positive")
+        if not math.isfinite(minimum_duration) or minimum_duration < 0.0:
+            raise ValueError("minimum_duration must be non-negative")
         self.distinct_required = int(distinct_required)
         self.stable_duration = float(stable_duration)
+        self.minimum_duration = float(minimum_duration)
         self.reset()
 
     def reset(self):
         self.versions = []
         self.stable_since = None
         self.last_time = None
+        self.first_time = None
 
     def observe(self, version, now):
         if not math.isfinite(now) or now < 0.0:
@@ -177,6 +203,8 @@ class NoFrontierEvidence:
                 "reason": "ROS time moved backwards",
             }
         self.last_time = now
+        if self.first_time is None:
+            self.first_time = now
 
         if version not in self.versions:
             self.versions.append(version)
@@ -191,9 +219,25 @@ class NoFrontierEvidence:
         stable_complete = bool(self.versions) and (
             stable_for >= self.stable_duration
         )
-        if distinct_complete:
-            reason = "no eligible frontier on %d distinct map contents" % (
-                len(self.versions)
+        elapsed = now - self.first_time
+        long_enough = elapsed >= self.minimum_duration
+        content_complete = distinct_complete or stable_complete
+        if content_complete and not long_enough:
+            reason = (
+                "content evidence satisfied (%d distinct, stable %.2f s) but "
+                "only %.2f/%.2f ROS s of continuous frontier-free evidence; "
+                "a floor is not explored on two seconds of evidence"
+                % (
+                    len(self.versions),
+                    stable_for,
+                    elapsed,
+                    self.minimum_duration,
+                )
+            )
+        elif distinct_complete:
+            reason = (
+                "no eligible frontier on %d distinct map contents over %.2f "
+                "ROS s" % (len(self.versions), elapsed)
             )
         elif stable_complete:
             reason = (
@@ -202,18 +246,22 @@ class NoFrontierEvidence:
             )
         else:
             reason = (
-                "%d/%d distinct frontier-free map contents; stable %.2f/%.2f s"
+                "%d/%d distinct frontier-free map contents; stable %.2f/%.2f "
+                "s; elapsed %.2f/%.2f s"
                 % (
                     len(self.versions),
                     self.distinct_required,
                     stable_for,
                     self.stable_duration,
+                    elapsed,
+                    self.minimum_duration,
                 )
             )
         return {
-            "complete": distinct_complete or stable_complete,
+            "complete": content_complete and long_enough,
             "count": len(self.versions),
             "stable_for": stable_for,
+            "elapsed": elapsed,
             "reason": reason,
         }
 
@@ -1246,6 +1294,37 @@ def failed_goal_state(entries, x, y, radius, now, maximum_failures):
     if now < item.retry_after:
         return "cooldown"
     return "available"
+
+
+def path_cost_adjusted_score(score, distance_m, planned_path_m,
+                             distance_weight):
+    """Re-score a candidate against the planner's path, not the straight line.
+
+    score is information_gain_weight * length - distance_weight *
+    distance where distance is the ray from the robot to the goal. The
+    robot pays for the PATH, and the two diverge exactly where it matters --
+    around furniture and out of room mouths, which is where the tiny fragments
+    live.
+
+    mf64, floor 0, station 10 left, four candidates measured against the
+    planner's own path:
+
+        length  ray    path   ratio  score   adjusted
+        12.23   6.05   8.55   1.4x   10.72   10.09   kept
+         3.53   8.60   9.30   1.1x    1.38    1.20   kept
+         0.68   3.66   5.03   1.4x   -0.23   -0.58   REJECTED
+         5.25   5.89   7.95   1.3x    3.78    3.26   kept
+
+    That third one had already cleared the -0.5 admission bar on its ray, and
+    chasing it took the robot out of the room and 6.8 m back down the corridor
+    for 22.9 sim s before failing, to gain 0.68 m of frontier.
+
+    This changes the cost term, not the bar: nothing here makes admission
+    stricter or looser in principle, it makes it correct.
+    """
+    return float(score) - float(distance_weight) * (
+        float(planned_path_m) - float(distance_m)
+    )
 
 
 def room_frontier_rejection(

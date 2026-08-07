@@ -77,6 +77,24 @@ stationary_error_window: 1.0
 # Do not anchor the stationary monitor to FAST-LIO's final convergence
 # transient immediately after TRACKING becomes valid.
 stationary_monitor_grace: 3.0
+# 指令归零后,等机身和估计器各自安定下来再取漂移锚点。
+#
+# 七轮 bag、22 段"指令静止"区间实测(估计器 1.0 s 窗口最大位移 / 同期真值最大位移):
+#   延后 0.0 s -> p90 0.092  最大 0.351 m  |  真值最大 0.474 m
+#   延后 0.5 s -> p90 0.056  最大 0.146 m  |  真值最大 0.419 m
+#   延后 1.0 s -> p90 0.026  最大 0.049 m  |  真值最大 0.395 m
+#   延后 2.0 s -> p90 0.022  最大 0.049 m  |  真值最大 0.020 m
+#
+# 也就是说:延后 0 时,"正常"残差最大 0.351 m 是门限 0.12 的 2.9 倍 —— 这个监视器
+# 在今天不可能工作,只能误杀。mf73/mf76/mf79 三轮、更早的 mf50/mf63 两轮,整轮
+# 报废的直接原因都是它(LOST -> 换代重启 -> 丢地图 -> 建图健康丢失 -> 任务失败)。
+# mf73 实测:该 1.2 s 窗口内真值只动了 0.010 m,机器人确实完全静止。
+#
+# 1.0 s 之后正常残差上界 0.049 m,对 0.12 m 有 2.4 倍余量。这是改**采样时刻**,
+# 不是改灵敏度:stationary_translation_limit 和
+# stationary_error_requires_reinitialization 都保持原值,延后之后超过 0.12 m
+# 才真的是发散,重启仍然是正确的响应。
+stationary_monitor_settle: 1.0
 stationary_translation_limit: 0.12
 stationary_command_timeout: 0.5
 stationary_command_threshold: 0.02

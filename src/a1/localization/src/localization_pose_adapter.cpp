@@ -181,6 +181,10 @@ private:
                     stationary_error_requires_reinitialization_, true);
         pnh_.param("stationary_error_window", stationary_error_window_, 1.0);
         pnh_.param("stationary_monitor_grace", stationary_monitor_grace_, 3.0);
+        // Simulation seconds to let the body and the estimator settle after the
+        // command goes to zero, before the drift anchor is taken. Measured, not
+        // guessed -- see the block in odomCallback().
+        pnh_.param("stationary_monitor_settle", stationary_monitor_settle_, 1.0);
         pnh_.param("stationary_translation_limit", stationary_translation_limit_, 0.12);
         pnh_.param("stationary_command_timeout", stationary_command_timeout_, 0.5);
         pnh_.param("stationary_command_threshold", stationary_command_threshold_, 0.02);
@@ -192,6 +196,7 @@ private:
             clock_lost_timeout_ > clock_warn_timeout_ && initialization_samples_ > 0 &&
             max_translation_jump_ > 0.0 && max_rotation_jump_ > 0.0 &&
             stationary_error_window_ > 0.0 && stationary_monitor_grace_ >= 0.0 &&
+            stationary_monitor_settle_ >= 0.0 &&
             stationary_translation_limit_ > 0.0 &&
             stationary_command_timeout_ > 0.0 && stationary_command_threshold_ > 0.0 &&
             twist_filter_alpha_ > 0.0 && twist_filter_alpha_ <= 1.0 &&
@@ -279,7 +284,11 @@ private:
             !controller_state_received_ || controller_state_ != input->data;
         controller_state_ = input->data;
         controller_state_received_ = true;
-        if (changed) stationary_anchor_established_ = false;
+        if (changed)
+        {
+            stationary_anchor_established_ = false;
+            stationary_since_stamp_ = ros::Time();
+        }
     }
 
     void cmdVelCallback(const geometry_msgs::Twist::ConstPtr& input)
@@ -368,6 +377,7 @@ private:
         have_twist_pose_ = false;
         have_filtered_twist_ = false;
         stationary_anchor_established_ = false;
+        stationary_since_stamp_ = ros::Time();
         if (reinitialization_required) world_anchor_established_ = false;
         // Preserve the first fatal cause until the estimator process is restarted.
         // Secondary sensor timeouts after a reset must not hide CLOCK_TIME_ROLLBACK.
@@ -491,11 +501,42 @@ private:
         if (stationary_error_check_enabled_ && stationary_monitor_armed &&
             commandedStationary())
         {
+            // 指令归零 != 机身和估计器已经静止。锚点原先在收到第一条零指令的
+            // 那一帧就建立,采到的正是"刚停下"的收敛暂态,而不是发散。
+            //
+            // mf72/73/75/76/77/78/79 七轮、22 段"指令静止"区间实测,估计器在
+            // 1.0 s 窗口内的最大位移随锚点延后 tau 的变化:
+            //     tau=0.0  p90 0.092  最大 0.351      <- 门限 0.12 的 2.9 倍
+            //     tau=0.5  p90 0.056  最大 0.146
+            //     tau=1.0  p90 0.026  最大 0.049      <- 门限 0.12 的 0.41 倍
+            //     tau=2.0  p90 0.022  最大 0.049
+            // 同期真值位移在 tau=0 时最大 0.474 m、tau=2.0 时 0.020 m —— 机身
+            // 自己在零指令后还要动 1~2 秒。两个效应都在 1.0 s 内结束。
+            //
+            // 所以 tau=0 时这个监视器不可能工作:它拿 0.12 m 去量一个正常值可达
+            // 0.35 m 的量,必然误杀(mf73/mf76/mf79 三轮整轮报废,mf50/mf63 更早
+            // 两轮同因)。延后 1.0 s 后正常残差上界 0.049 m,对 0.12 m 有 2.4 倍
+            // 余量,它才第一次成为一个可用的发散检测器。
+            //
+            // ⚠️ stationary_translation_limit_ (0.12) 与
+            //    stationary_error_requires_reinitialization_ (true) 一个字节没动。
+            //    改的是判据的**采样时刻**,不是它的灵敏度 —— 延后之后超过 0.12 m
+            //    才真的是发散,重启仍然是正确的响应。
+            if (stationary_since_stamp_.isZero())
+            {
+                stationary_since_stamp_ = input->header.stamp;
+            }
+            const bool settled =
+                (input->header.stamp - stationary_since_stamp_).toSec() >=
+                stationary_monitor_settle_;
             if (!stationary_anchor_established_)
             {
-                stationary_anchor_ = odom_to_base;
-                stationary_anchor_stamp_ = input->header.stamp;
-                stationary_anchor_established_ = true;
+                if (settled)
+                {
+                    stationary_anchor_ = odom_to_base;
+                    stationary_anchor_stamp_ = input->header.stamp;
+                    stationary_anchor_established_ = true;
+                }
             }
             else if ((input->header.stamp - stationary_anchor_stamp_).toSec() >=
                      stationary_error_window_)
@@ -514,6 +555,7 @@ private:
         else
         {
             stationary_anchor_established_ = false;
+            stationary_since_stamp_ = ros::Time();
         }
         previous_pose_ = odom_to_base;
         have_previous_pose_ = true;
@@ -682,11 +724,13 @@ private:
         {
             tracking_start_stamp_ = ros::Time::now();
             stationary_anchor_established_ = false;
+            stationary_since_stamp_ = ros::Time();
         }
         else if (state_ != State::TRACKING)
         {
             tracking_start_stamp_ = ros::Time();
             stationary_anchor_established_ = false;
+            stationary_since_stamp_ = ros::Time();
         }
         ROS_INFO_STREAM("localization state=" << stateName() << " reason=" << reason_);
         publishStatus();
@@ -773,6 +817,9 @@ private:
     bool command_is_zero_{false}, stationary_anchor_established_{false};
     ros::WallTime cmd_vel_wall_time_;
     ros::Time stationary_anchor_stamp_;
+    // Sim-time stamp of the first sample of the current commanded-stationary
+    // interval. Zero means "not currently commanded stationary".
+    ros::Time stationary_since_stamp_;
     ros::Time tracking_start_stamp_;
     ros::Time twist_pose_stamp_;
     geometry_msgs::Twist filtered_twist_;
@@ -785,6 +832,7 @@ private:
     double clock_warn_timeout_{0.5}, clock_lost_timeout_{1.5};
     double max_translation_jump_{1.0}, max_rotation_jump_{1.0};
     double stationary_error_window_{1.0}, stationary_monitor_grace_{3.0};
+    double stationary_monitor_settle_{1.0};
     double stationary_translation_limit_{0.12};
     double stationary_command_timeout_{0.5}, stationary_command_threshold_{0.02};
     int initialization_samples_{5};

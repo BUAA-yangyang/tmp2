@@ -67,13 +67,20 @@ class OptionAContractTest(unittest.TestCase):
     def test_opening_waits_for_decidable_footprint_before_detection_budget(self):
         body = self.method_source("align_to_upper_floor_opening")
         scan_call = body.index("self.actively_scan_upper_floor_elevator(floor)")
-        readiness = body.index("readiness_deadline =")
+        readiness = body.index("readiness_started =")
+        # 两个预算都必须是「仿真钟主判据 + 墙钟兜底」。mf68 死于这里原先的
+        # 纯墙钟 wait_wall: 20.0 —— RTF 0.151 下只买到 3 仿真秒，而稳定开口
+        # 检测要 3 帧互不相同的地图(约 0.5 Hz)，至少 6 仿真秒，先天不可满足。
         self.assertLess(scan_call, readiness)
+        self.assertIn("self.opening_map_ready_wait_sim", body)
         self.assertIn("self.opening_map_ready_wait_wall", body)
+        self.assertIn("self.opening_wait_sim", body)
+        self.assertIn("self.opening_wait_wall", body)
+        self.assertIn("self.budget_spent(", body)
         self.assertIn("self.opening_map_ready_probe", body)
         self.assertIn("known_free_run_in_grid", body)
         self.assertIn("ELEVATOR_OPENING_MAP_READY", body)
-        self.assertIn("detection_deadline =", body)
+        self.assertIn("detection_started =", body)
         self.assertIn("ready_identity != identity_after", body)
 
     def test_opening_active_scan_is_identity_bound_bounded_and_rotation_only(self):
@@ -83,6 +90,7 @@ class OptionAContractTest(unittest.TestCase):
         self.assertIn("self.angle_error(current_yaw, previous_yaw)", body)
         self.assertIn("self.opening_active_scan_timeout_wall", body)
         self.assertIn("self.opening_active_scan_timeout_sim", body)
+        self.assertIn("self.opening_active_scan_no_progress_sim", body)
         self.assertIn("self.opening_active_scan_no_progress_wall", body)
         self.assertIn("command.angular.z = self.opening_active_scan_speed", body)
         self.assertGreaterEqual(body.count("self.behavior_cmd_pub.publish(Twist())"),

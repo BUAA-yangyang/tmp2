@@ -62,4 +62,15 @@ if(CATKIN_ENABLE_TESTING)
   catkin_add_nosetests(test/test_room_frontier_diagnostics.py)
   catkin_add_nosetests(test/test_floor_state_contract.py)
   catkin_add_nosetests(test/test_no_progress_yaw_gate.py)
+  catkin_add_nosetests(test/test_entry_recenter.py)
+  catkin_add_nosetests(test/test_path_cost_score.py)
+  catkin_add_nosetests(test/test_roi_extent.py)
+  catkin_add_nosetests(test/test_mapping_health_grace.py)
+  catkin_add_nosetests(test/test_source_wall_clocks.py)
+  # These three were written but never registered, so the build could
+  # not have caught a regression in them -- exactly what the comment
+  # above says must not happen.
+  catkin_add_nosetests(test/test_room_priority_fallback.py)
+  catkin_add_nosetests(test/test_scan_hysteresis.py)
+  catkin_add_nosetests(test/test_floor_completion_evidence.py)
 endif()
