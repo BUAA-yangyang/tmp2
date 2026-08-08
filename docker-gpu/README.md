@@ -9,7 +9,7 @@ docker run --rm -it --gpus all --name simenv-back-pawn-gpu \
   --network host \
   -e DISPLAY="${DISPLAY:-}" \
   -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
-  -v "$(pwd)/SimEnv:/workspace/SimEnv" \
+  -v "$(pwd):/workspace/SimEnv" \
   simenv-back-pawn:gpu bash
 ```
 

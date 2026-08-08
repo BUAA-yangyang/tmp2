@@ -8,7 +8,7 @@ mf82 code. Build it from this workspace:
 docker build -f docker/Dockerfile -t simenv-back-pawn:cpu .
 docker run --rm -it --name simenv-back-pawn-cpu \
   --network host \
-  -v "$(pwd)/SimEnv:/workspace/SimEnv" \
+  -v "$(pwd):/workspace/SimEnv" \
   simenv-back-pawn:cpu bash
 ```
 
