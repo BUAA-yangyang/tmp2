@@ -186,7 +186,7 @@ z 锚只值 **0.31 m 的精度，且只在一层有意义**。二层上偏差是
 | 模式开关 | `src/a1/result_manager/config/result_manager.yaml` → `world_anchor_mode` |
 | 返航硬编码 | `src/a1/mission_manager/scripts/multifloor_mission_node.py` → `run()` 尾部 |
 | 轿厢返航点 | 同上 `elevator_return_points` / `arrival_exit_yaws` |
-| 官方评分脚本 | `SimEnv/src/building_obstacles/scripts/evaulate_danger.py`（无 ROS 依赖） |
+| 官方评分脚本 | `src/building_obstacles/scripts/evaulate_danger.py`（无 ROS 依赖） |
 | 允许读取的场景文件 | `generated_building/team_scene_info.json` |
 
 ---

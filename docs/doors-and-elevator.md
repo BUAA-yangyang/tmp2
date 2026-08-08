@@ -5,7 +5,7 @@
 - `generated_building/door_config.yaml`
 - `generated_building/elevator_config.yaml`
 
-控制服务由 `building_generator_classic` 提供，并已合并到 `SimEnv/src`。正常使用 `auto.sh` 时会自动启动。
+控制服务由 `building_generator_classic` 提供，并已合并到 `src`。正常使用 `auto.sh` 时会自动启动。
 
 ## 服务接口
 

@@ -237,7 +237,7 @@ GUI=false ./auto.sh
 - `generated_building/door_config.yaml`
 - `generated_building/elevator_config.yaml`
 
-控制服务由 `building_generator_classic` 提供，当前已合并到 `SimEnv/src`。正常使用 `auto.sh` 时，脚本会在 Gazebo 启动后自动启动该服务：
+控制服务由 `building_generator_classic` 提供，当前已合并到 `src`。正常使用 `auto.sh` 时，脚本会在 Gazebo 启动后自动启动该服务：
 
 ```bash
 START_BUILDING_CONTROL=1 ./auto.sh
