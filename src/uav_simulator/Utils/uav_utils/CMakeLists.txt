@@ -93,7 +93,8 @@ install(DIRECTORY include/${PROJECT_NAME}/
 ## Add gtest based cpp test target and link libraries
 catkin_add_gtest(${PROJECT_NAME}-test src/${PROJECT_NAME}_test.cpp)
 if(TARGET ${PROJECT_NAME}-test)
-  target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME})
+  # uav_utils exposes header-only helpers; no uav_utils library is defined.
+  target_link_libraries(${PROJECT_NAME}-test ${catkin_LIBRARIES})
 endif()
 
 ## Add folders to be run by python nosetests
