@@ -147,4 +147,3 @@ upper_floor:
     turn_tolerance: 0.12
     wait_sim: 15.0
     wait_wall: 150.0
-

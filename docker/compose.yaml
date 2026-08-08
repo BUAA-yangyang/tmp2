@@ -12,4 +12,4 @@ services:
     tty: true
     working_dir: /workspace/SimEnv
     volumes:
-      - ../SimEnv:/workspace/SimEnv
+      - ..:/workspace/SimEnv

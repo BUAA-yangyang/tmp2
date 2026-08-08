@@ -235,4 +235,3 @@ trajectory:
   maximum_poses: 10000
   minimum_step: 0.05
   sample_period: 0.2
-
