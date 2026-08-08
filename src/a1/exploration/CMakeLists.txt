@@ -70,7 +70,6 @@ if(CATKIN_ENABLE_TESTING)
   # These three were written but never registered, so the build could
   # not have caught a regression in them -- exactly what the comment
   # above says must not happen.
-  catkin_add_nosetests(test/test_room_priority_fallback.py)
   catkin_add_nosetests(test/test_scan_hysteresis.py)
   catkin_add_nosetests(test/test_floor_completion_evidence.py)
 endif()

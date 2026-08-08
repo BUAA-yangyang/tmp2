@@ -1,0 +1,22 @@
+name: simenv-back-pawn-runtime
+
+# Exact local runtime used by the mf82 reference run. The image is already
+# provisioned on the host; Dockerfile-based files remain available for a
+# portable rebuild on another machine.
+services:
+  sim:
+    image: simenv:xz-runtime-snapshot-20260731
+    container_name: simenv-back-pawn
+    network_mode: host
+    command: ["sleep", "infinity"]
+    working_dir: /workspace/SimEnv
+    environment:
+      DISPLAY: ${DISPLAY:-:1}
+      NVIDIA_DRIVER_CAPABILITIES: all
+    gpus: all
+    stdin_open: true
+    tty: true
+    volumes:
+      - ..:/workspace/SimEnv
+      - /home/xiaoyi-dev/libtorch:/opt/libtorch:ro
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw

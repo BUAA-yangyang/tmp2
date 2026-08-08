@@ -22,3 +22,7 @@ source /workspace/SimEnv/devel/setup.bash
 
 For the mf82 defaults, run `source /workspace/SimEnv/config/mf82.env`
 before invoking `/workspace/SimEnv/auto.sh`.
+
+On the reference host, use `docker/runtime.compose.yaml` to start the exact
+CUDA 12.8/ROS Noetic image used by mf82. It mounts this checkout as
+`/workspace/SimEnv` and uses the independent `simenv-back-pawn` container.
