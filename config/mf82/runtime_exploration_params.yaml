@@ -1,0 +1,238 @@
+actions:
+  building_behavior: /a1/building_behavior/special
+  explore_floor: /a1/exploration/explore_floor
+  move_base: /move_base
+controller:
+  ready_freshness: 0.35
+entry:
+  anchor_search_radius: 0.6
+  axis_alignment:
+    enabled: false
+    maximum_correction_rad: 0.61
+    minimum_wall_length: 1.0
+    minimum_walls: 2
+    minimum_weight: 2.5
+    radius: 12.0
+    timeout_wall: 8.0
+  corridor_half_width: 0.75
+  door_centerline:
+    enabled: false
+    maximum_inside_depth: 2.5
+    maximum_lateral: 1.2
+    maximum_width: 2.4
+    minimum_forward: 0.4
+    minimum_inside_depth: 0.8
+    minimum_width: 1.2
+    required: false
+    target_forward_margin: 0.6
+    timeout_wall: 5.0
+  elevator_anchor_tolerance: 0.75
+  elevator_scan:
+    yaw_settle_sim: 0.3
+    yaw_timeout_sim: 15.0
+    yaw_timeout_wall: 150.0
+  inside_probe_distance: 0.75
+  minimum_new_known_cells: 20
+  near_field_distance: 0.7
+  near_field_half_width: 0.3
+  obstacle_hold_timeout: 30.0
+  plan_endpoint_tolerance: 0.6
+  plan_maximum_length_ratio: 1.5
+  plan_maximum_length_slack: 0.75
+  position_tolerance: 0.45
+  recenter:
+    enabled: true
+    max_attempts: 2
+    max_offset: 0.45
+    probe_step: 0.05
+    speed: 0.15
+    timeout_sim: 6.0
+    tolerance: 0.02
+  require_explicit_pose: false
+  speed_limit:
+    enabled: true
+    max_vel_theta: 0.01
+    max_vel_trans: 1.4
+    max_vel_x: 1.4
+    max_vel_y: 0.0
+    min_vel_theta: 0.0
+    min_vel_trans: 1.25
+    min_vel_x: 1.25
+    service_wait_wall: 3.0
+    sim_time: 0.5
+  transit_speed: 0.8
+  yaw_tolerance: 0.65
+floor_completion:
+  completed_room_count: 4
+  post_quota_budget_sim: 180.0
+  post_quota_budget_wall: 1800.0
+  unmet_quota_grace_sim: 60.0
+frames:
+  base: base
+frontier:
+  corridor_minimum_score: 1.5
+  corridor_probe:
+    clearance: 0.24
+    enabled: true
+    maximum_barren: 2
+    minimum_completed_rooms: 2
+    minimum_new_cells: 40
+    step: 3.0
+  distance_weight: 0.25
+  empty_confirmations: 3
+  entry_exclusion:
+    depth: 1.0
+    half_width: 1.25
+  failed_radius: 0.75
+  failure_cooldown: 4.0
+  free_threshold: 20
+  goal_search_radius: 0.6
+  goal_standoff: 0.35
+  information_gain_weight: 1.0
+  interstitial_zero_settle_s: 0.5
+  max_goal_distance: 9.0
+  maximum_failures: 2
+  min_goal_distance: 0.45
+  min_length: 0.35
+  minimum_free_cells: 100
+  minimum_score: 0.0
+  obstacle_clearance: 0.3
+  occupied_threshold: 65
+  relaxed_lateral_threshold: 1.6
+  room_priority:
+    backtrack: 2.0
+    completion_depth: 2.0
+    door_maximum_lateral: 2.2
+    door_maximum_width: 1.6
+    door_minimum_width: 1.0
+    door_plane_margin: 0.25
+    door_station_tolerance: 1.25
+    enabled: true
+    exit_align_timeout: 10.0
+    exit_align_tolerance: 0.12
+    exit_reobserve_time: 1.0
+    frontier_min_distance: 0.55
+    frontier_minimum_score: -0.5
+    goal_clearance: 0.4
+    goal_extension: 0.5
+    goal_timeout: 25.0
+    identity_lateral_tolerance: 1.5
+    identity_longitudinal_tolerance: 1.0
+    lateral_threshold: 1.0
+    lobby_keepout: true
+    lookahead: 5.0
+    minimum_door_longitudinal: 7.0
+    scan_angular_speed: 1.8
+    scan_clearance: 0.78
+    scan_search_distance: 2.5
+    source_keepout:
+      depth: 1.7
+      enabled: true
+      half_width: 1.2
+    station_width: 1.5
+    transaction_max_goals: 8
+    transaction_timeout: 90.0
+  stable_no_frontier_duration: 10.0
+  visited_radius: 0.7
+navigation:
+  backout:
+    max_sim_time: 2.0
+    max_steps: 1
+    speed: 0.45
+    step_distance: 0.35
+  no_progress:
+    distance: 0.2
+    timeout: 20.0
+    yaw: 0.35
+    yaw_progress_radius: 1.0
+  xy_goal_tolerance: 0.35
+planning:
+  make_plan_retry_attempts: 3
+  make_plan_retry_delay_wall: 0.15
+  make_plan_unavailable_timeout_wall: 30.0
+return:
+  anchor_body_setback: 0.3
+  anchor_margin: 0.1
+  anchor_search_radius: 0.6
+  command_freshness: 0.25
+  indoor_anchor_setback: 3.0
+  maximum_attempts: 2
+  move_base_outdoor_fallback: false
+  position_tolerance: 0.4
+  reverse_transit:
+    align_tolerance: 0.15
+    lateral_speed: 0.2
+    speed: 0.45
+    timeout: 90.0
+    yaw_speed: 0.35
+  use_entry_speed_profile: false
+  yaw_tolerance: 0.65
+  zero_settle_time: 0.5
+  zero_velocity_epsilon: 0.01
+roi:
+  boundary_margin: 0.35
+  default_entry_forward_offset: 3.5
+  default_local_polygon:
+  - -5.0
+  - -10.5
+  - 40.0
+  - -10.5
+  - 40.0
+  - 10.5
+  - -5.0
+  - 10.5
+  elevator_entry_local_polygon:
+  - -13.0
+  - -10.5
+  - 32.0
+  - -10.5
+  - 32.0
+  - 10.5
+  - -13.0
+  - 10.5
+  enabled: true
+  map_boundary_margin: 8.0
+room:
+  camera_coverage:
+    candidates: 12
+    enabled: false
+    radius: 4.5
+    required_fraction: 0.9
+  station_separation: 3.0
+services:
+  dwa_reconfigure: /move_base/DWAPlannerROS/set_parameters
+  make_plan: /move_base/make_plan
+testing:
+  force_floor_complete_after_mandatory_ingress: false
+timeouts:
+  entry_door_wall: 10.0
+  entry_map: 45.0
+  entry_plan: 15.0
+  entry_transit: 90.0
+  final_zero: 8.0
+  map_update_wait: 2.0
+  mapping_health_grace_sim: 3.0
+  mapping_health_grace_wall: 30.0
+  navigation_goal: 75.0
+  prerequisites: 30.0
+  return_goal: 480.0
+  wall_factor: 10.0
+topics:
+  controller_ready: /a1/controller_ready
+  doorways: /a1/floor_mapping/doorways
+  failed_targets: /a1/exploration/failed_targets
+  final_cmd_vel: /cmd_vel
+  frontiers: /a1/exploration/frontiers
+  map: /a1/floor_mapping/map
+  mapping_status: /a1/floor_mapping/status
+  roi: /a1/exploration/roi
+  safety_lock: /a1_cmd_mux/safety_lock
+  scope: /a1/exploration/scope
+  selected_target: /a1/exploration/selected_target
+  status: /a1/exploration/status
+  trajectory: /a1/exploration/trajectory
+trajectory:
+  maximum_poses: 10000
+  minimum_step: 0.05
+  sample_period: 0.2
+

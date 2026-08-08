@@ -1,0 +1,15 @@
+name: simenv-back-pawn
+
+services:
+  cpu:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: simenv-back-pawn:cpu
+    container_name: simenv-back-pawn-cpu
+    network_mode: host
+    stdin_open: true
+    tty: true
+    working_dir: /workspace/SimEnv
+    volumes:
+      - ../SimEnv:/workspace/SimEnv

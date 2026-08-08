@@ -1,0 +1,19 @@
+name: simenv-back-pawn-gpu
+
+services:
+  gpu:
+    build:
+      context: ..
+      dockerfile: docker-gpu/Dockerfile
+    image: simenv-back-pawn:gpu
+    container_name: simenv-back-pawn-gpu
+    network_mode: host
+    stdin_open: true
+    tty: true
+    working_dir: /workspace/SimEnv
+    environment:
+      DISPLAY: ${DISPLAY:-}
+    gpus: all
+    volumes:
+      - ../SimEnv:/workspace/SimEnv
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
